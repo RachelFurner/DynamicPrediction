@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import random
 
 import os
-import cv2
+#import cv2
 
 import tensorflow as tf
 
@@ -45,21 +45,27 @@ import pickle
 
 # Define variables for this experiment
 
-# In[ ]:
+# In[2]:
 
 
-StepSize = 1000 #number of timesteps forward which we want to predict
-SkipOver = 100
+StepSize = 10 #number of timesteps forward which we want to predict
+SkipOver = 10
 
 
 # Read in data files as Xarrays
 
-# In[ ]:
+# In[3]:
 
 
-DIR = '/Users/rachelfurner/DATA/JasminData/DynPred/'
+DIR = '/data/oceans_output/open/racfur'
 exp_list = ['4500yr_Windx0.50']
-file_names = ['state.0000000000.t001.nc']
+file_names = ['state.0000000000.t001.nc', 'state.0000340920.t001.nc', 'state.0000681840.t001.nc', 
+              'state.0001022760.t001.nc', 'state.0001363680.t001.nc', 'state.0001704600.t001.nc',
+              'state.0000170460.t001.nc', 'state.0000511380.t001.nc', 'state.0000852300.t001.nc', 
+              'state.0001193220.t001.nc', 'state.0001534140.t001.nc', 'state.0001875060.t001.nc',
+              'state.0002045520.t001.nc', 'state.0002215980.t001.nc', 'state.0002386440.t001.nc',
+              'state.0002556900.t001.nc', 'state.0002727360.t001.nc', 'state.0002897820.t001.nc',
+              'state.0003068280.t001.nc', 'state.0003238740.t001.nc']
 file_list =[]
 for exp in exp_list:
     print(exp)
@@ -82,7 +88,7 @@ print(file_list)
 # Need to amend below to loop through multiple files, so more training data, including data from different runs can be included.
 # 
 
-# In[ ]:
+# In[4]:
 
 
 training_data=[]
@@ -104,7 +110,7 @@ print(training_data[0][0].shape)
 
 # Plot two fields, 100 time steps apart
 
-# In[ ]:
+# In[5]:
 
 
 ds.Temp
@@ -113,7 +119,7 @@ ds.Temp.isel(T=0,Z=0).plot(cmap='OrRd')
 fig.savefig('start.png')
 
 
-# In[ ]:
+# In[6]:
 
 
 fig, ax = plt.subplots(ncols=1)
@@ -121,7 +127,7 @@ ds.Temp.isel(T=StepSize,Z=0).plot(cmap='OrRd')
 fig.savefig('end.png')
 
 
-# In[ ]:
+# In[7]:
 
 
 fig, ax = plt.subplots(ncols=1)
@@ -133,7 +139,7 @@ fig.savefig('diff.png')
 # 
 # If using multiple input variables pad with NaN's so the arrays are all the same size (not done above, as it changes them to arrays, and easier to leave as lists) - not needed when just looking at temp
 
-# In[ ]:
+# In[8]:
 
 
 X=[]
@@ -168,7 +174,7 @@ print(Y.shape)
 
 # Normalise data
 
-# In[ ]:
+# In[9]:
 
 
 def normalise_data(X):
@@ -180,7 +186,7 @@ print(X.shape[1:])
 
 # Trying a GP regressor for a single data point
 
-# In[ ]:
+# In[10]:
 
 
 coordx = 1
@@ -214,7 +220,7 @@ gpflow.train.ScipyOptimizer().minimize(model, disp=True)
 
 # Try a single Layer NN, with the identity (i.e. linear) as the activation function to test basic set up (persistance forecast)
 
-# In[ ]:
+# In[11]:
 
 
 model = Sequential()
@@ -384,6 +390,12 @@ model.compile(loss='mean_squared_error',
               metrics=['accuracy'])
 
 model.fit(X, Y, batch_size=128, epochs=3, validation_split=0.2)
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
