@@ -15,7 +15,13 @@
 # 4. Train the network
 # 5. Run predictions on test data and assess.
 
-# In[ ]:
+# In[2]:
+
+
+print('test')
+
+
+# In[3]:
 
 
 import xarray as xr
@@ -25,11 +31,10 @@ import matplotlib.pyplot as plt
 import random
 
 import os
-#import cv2
 
 import tensorflow as tf
 
-print(tf.__version__)
+#print(tf.__version__)
 
 from tensorflow.keras.datasets import cifar10
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -42,10 +47,12 @@ from gpflow.kernels import RBF, Periodic, ArcCosine
 
 import pickle
 
+print('imports done')
+
 
 # Define variables for this experiment
 
-# In[2]:
+# In[4]:
 
 
 StepSize = 10 #number of timesteps forward which we want to predict
@@ -54,7 +61,7 @@ SkipOver = 10
 
 # Read in data files as Xarrays
 
-# In[3]:
+# In[5]:
 
 
 DIR = '/data/oceans_output/open/racfur'
@@ -88,7 +95,7 @@ print(file_list)
 # Need to amend below to loop through multiple files, so more training data, including data from different runs can be included.
 # 
 
-# In[4]:
+# In[6]:
 
 
 training_data=[]
@@ -110,7 +117,7 @@ print(training_data[0][0].shape)
 
 # Plot two fields, 100 time steps apart
 
-# In[5]:
+# In[6]:
 
 
 ds.Temp
@@ -119,7 +126,7 @@ ds.Temp.isel(T=0,Z=0).plot(cmap='OrRd')
 fig.savefig('start.png')
 
 
-# In[6]:
+# In[7]:
 
 
 fig, ax = plt.subplots(ncols=1)
@@ -127,7 +134,7 @@ ds.Temp.isel(T=StepSize,Z=0).plot(cmap='OrRd')
 fig.savefig('end.png')
 
 
-# In[7]:
+# In[8]:
 
 
 fig, ax = plt.subplots(ncols=1)
@@ -139,7 +146,7 @@ fig.savefig('diff.png')
 # 
 # If using multiple input variables pad with NaN's so the arrays are all the same size (not done above, as it changes them to arrays, and easier to leave as lists) - not needed when just looking at temp
 
-# In[8]:
+# In[ ]:
 
 
 X=[]
@@ -159,12 +166,12 @@ Y=[]
 #        Y.append(np.pad(label.data, ((0,0),(0,1),(0,1)),'constant', constant_values=('NaN')))
 
 for feat1,feat2,label in training_data:
-        #X.append([feat1.data feat2.data])
-        X.append(feat1.data)
+        X.append([feat1.data, feat2.data])
+        #X.append(feat1.data)
         Y.append(label.data)
 
 # convert to arrays, as model wont accept a list
-#X=np.array(X).transpose(0, 2, 3, 4, 1)
+X=np.array(X).transpose(0, 2, 3, 4, 1)
 X=np.array(X)
 Y=np.array(Y)
 
@@ -174,19 +181,20 @@ print(Y.shape)
 
 # Normalise data
 
-# In[9]:
+# In[ ]:
 
 
 def normalise_data(X):
     X=tf.keras/utils.normalize(X, axis=1)
     return X
 
+print(X.shape)
 print(X.shape[1:])
 
 
 # Trying a GP regressor for a single data point
 
-# In[10]:
+# In[ ]:
 
 
 coordx = 1
@@ -202,7 +210,7 @@ for time in range(StepSize, len(ds.T.data)-StepSize, SkipOver):
           #Xnew[coordx+1,coordy,coordz],   Xnew[coordx-1,coordy,coordz],
           #Xnew[coordx+1,coordy+1,coordz], Xnew[coordx-1,coordy-1,coordz],
           #Xnew[coordx+1,coordy-1,coordz], Xnew[coordx-1,coordy+1,coordz]])
-    outputs.append([ds.Temp.isel(T=time+StepSize)[coordx+40,coordy+76,coordz+9]])
+    outputs.append([ds.Temp.isel(T=time+StepSize)[coordx,coordy,coordz]])
 
 
 inputs=np.array(inputs)
@@ -220,7 +228,7 @@ gpflow.train.ScipyOptimizer().minimize(model, disp=True)
 
 # Try a single Layer NN, with the identity (i.e. linear) as the activation function to test basic set up (persistance forecast)
 
-# In[11]:
+# In[13]:
 
 
 model = Sequential()
@@ -231,10 +239,28 @@ model.compile(loss='mean_squared_error',
               optimizer='adam',
               metrics=['accuracy'])
 
-model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.15)
+model.fit(X[:,:,:,:,1], Y, batch_size=32, epochs=3, validation_split=0.15)
 
 
 # In[ ]:
+
+
+model = Sequential()
+
+#'flatten' inputs
+model.add(Flatten())
+model.add(Activation('linear'))
+#reshape
+model.add(Reshape(Y.shape[1:]))
+
+model.compile(loss='mean_squared_error',
+              optimizer='adam',
+              metrics=['accuracy'])
+
+model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.2)
+
+
+# In[15]:
 
 
 model = Sequential()
@@ -251,62 +277,36 @@ model.compile(loss='mean_squared_error',
               optimizer='adam',
               metrics=['accuracy'])
 
-model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.15)
+model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.2)
 
 
-# ##### NN Attempt 1 - an autoencoder type approach
-# 
-# I assume that data shape is important here, and so a CNN the way to go, and have tried this with pooling layers, to get something resembling an autoencoder.  Cannot yet get the output shape to match up with the y-fields, due to the odd number of layers, and the pooling vs upscaling does not return the original shape...
-# 
-# Also, not convinced auto-encoder approach is best option here.
-# 
-
-# In[ ]:
+# In[8]:
 
 
 model = Sequential()
 
-#first downsample/encode
-model.add(Conv3D(32, (3, 3, 3), input_shape=X.shape[1:], padding='same'))
+#'flatten' inputs
+model.add(Flatten())  
+# define first hidden layer
+model.add(Dense(36036))
 model.add(Activation('relu'))
-model.add(MaxPooling3D(pool_size=(2, 2, 2), padding='same'))  # output shape 
-
-model.add(Conv3D(64, (3, 3, 3), padding='same'))             # output shape 
-model.add(Activation('relu'))
-model.add(MaxPooling3D(pool_size=(2, 2, 2), padding='same'))  # output shape 
-
-model.add(Conv3D(128, (3, 3, 3), padding='same'))             # output shape
-model.add(Activation('relu'))
-
-#Now upsample/decode
-model.add(Conv3D(128, (3, 3, 3), padding='same'))             # output shape 
-model.add(Activation('relu'))
-model.add(UpSampling3D(size=(2, 2, 2)))                       # output shape
-
-model.add(Conv3D(64, (3, 3, 3), padding='same'))              # output shape 
-model.add(Activation('relu')) 
-model.add(UpSampling3D(size=(2, 2, 2)))                       # output shape 
-
-model.add(Conv3D(1, (3, 3, 3), padding='same'))              # output shape
-model.add(Activation('relu'))
-
+#reshape
+model.add(Reshape(Y.shape[1:]))
 
 model.compile(loss='mean_squared_error',
               optimizer='adam',
               metrics=['accuracy'])
 
-#fit the model - Batch size is how much to pass at once, don't want to pass all at once. 
-#validation split - how much is train vs test data.
-model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.15)
+model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.2)
 
 
-# ##### NN attempt 2
+# ##### NN attempt 1
 # 
-# As Above fails with check, and concerns on whether I should be pooling and thus loosing some information, here I try using just conv layers - no pooling, so no longer autoencoder type set up.
+# trying using just conv layers - no pooling, so not an autoencoder type set up.
 # 
 # This runs, but results are diabolical....
 # 
-# Number of inputs = 42*78*11*2 = 72072 inputs. This is huge...
+# Number of inputs = 42 * 78 * 11 * 2 = 72072 inputs. This is huge...
 
 # In[ ]:
 
@@ -315,16 +315,16 @@ model = Sequential()
 
 model.add(Conv3D(72072, (3, 3, 3), input_shape=X.shape[1:], padding='same'))  #no shape change with padding...
 model.add(Activation('relu'))
-model.add(Conv3D(72072, (5, 5, 5), input_shape=X.shape[1:], padding='same'))
-model.add(Activation('relu'))
-model.add(Conv3D(72072, (3, 3, 3), input_shape=X.shape[1:], padding='same'))
-model.add(Activation('linear'))
+#model.add(Conv3D(72072, (5, 5, 5), input_shape=X.shape[1:], padding='same'))
+#model.add(Activation('relu'))
+#model.add(Conv3D(72072, (3, 3, 3), input_shape=X.shape[1:], padding='same'))
+#model.add(Activation('linear'))
 
 model.compile(loss='mean_squared_error',
               optimizer='adam',
               metrics=['accuracy'])
 
-model.fit(X, Y, batch_size=128, epochs=3, validation_split=0.2)
+model.fit(X, Y, batch_size=32, epochs=3, validation_split=0.2)
 
 
 # ##### NN Attemmpt 3:
@@ -346,7 +346,7 @@ model.add(Activation('relu'))
 model.add(Dense(72072))
 model.add(Activation('relu'))
 #add third layer - output payer
-model.add(Dense(72072))
+model.add(Dense(36036))
 #ouput layer should have linear activation function suitable for a regression problem
 model.add(Activation('linear'))
 #reshape
