@@ -83,49 +83,21 @@ def Lorenz96(t, state):
     return d_state
 
 
-# In[7]:
-
 # Run Lorenz integrator in batches of 1MTU and write to file
 # memory issues, so can't run all at once, and certainly can't keep in memory!
 
 t_int = 0.005
-MTUs = int(2000000/8)
-no_batches = 1000
 
 x0 = np.zeros((K)) # ??
 y0 = np.random.rand(J,K) # Random??
 z0 = np.random.rand(I,J,K) # Random??
-state0  = np.concatenate((x0,y0.reshape(J*K,),z0.reshape(I*J*K,)))
-
-filename='Lorenz_subsampledbatch.txt'
-# ensure file is empty!
-file = open(filename, 'w')
-file.close()
-
-f_step=0
-for batch in range(no_batches):
-   file = open(filename, 'a')
-   for step in range(int(MTUs/no_batches)):
-      t_start = f_step
-      t_end   = f_step+1
-      t_span  = np.arange(t_start, t_end+t_int, t_int)
-      state   = odeint(Lorenz96, state0, t_span, tfirst=True)
-      [file.write(str(state[0,k])+' ') for k in range(K)]
-      file.write('\n')
-      [file.write(str(state[1,k])+' ') for k in range(K)]
-      file.write('\n')
-      [file.write(str(state[2,k])+' ') for k in range(K)]
-      file.write('\n')
-      state0  = state[-1,:]
-      f_step = f_step+1
-   file.close()
 
 ######################
 # Run outputting every time step for first 4 MTUs to use as truth for validation/comparison.
 
 state0  = np.concatenate((x0,y0.reshape(J*K,),z0.reshape(I*J*K,)))
 
-filename='Lorenz_truthBatch.txt'
+filename='Lorenz_truthRF.txt'
 file = open(filename, 'w')
 
 t_span  = np.arange(0, 4, t_int)
