@@ -10,9 +10,10 @@ import pickle
 K = 8
 t_int = 0.005
 #n_run=int(2000000/8)
-n_run=105600
+n_run=140600
 
-
+#batch_size = 100
+batch_size = 140600
 #################################################
 
 ## Read in input-output training pairs - from here on script taken from D&B paper supplematary info, and slightly modified, as I have 2 input time steps for each training pair
@@ -109,15 +110,18 @@ opt1 = torch.optim.Adam(h1.parameters(), lr=0.001) # Use adam optimiser for now,
 
 train_loss = []
 for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
-        opt1.zero_grad()
-        estimate = x_tm1_train[:,2] + h1(x_tm1_train[:,:])
-        loss = (estimate - x_t_train[:,0]).abs().mean()  # mean absolute error
-        loss.backward()
-        train_loss.append(loss.item())
-        opt1.step()
+   for start_ix in range(0, no_samples, batch_size):
+      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
+      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+      opt1.zero_grad()
+      estimate = x_tm1_train_batch[:,2] + h1(x_tm1_train_batch[:,:])
+      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+      loss.backward()
+      train_loss.append(loss.item())
+      opt1.step()
 
 plt.plot(train_loss)
-plt.savefig('train_loss_1storderobjective.png')
+plt.savefig('trainloss_1storderobjective_'+str(n_run)+'.png')
 
 
 print('Train to second order objective')
@@ -129,15 +133,19 @@ opt2 = torch.optim.Adam(h2.parameters(), lr=0.001) # Use adam optimiser for now,
 
 train_loss2 = []
 for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
-        opt2.zero_grad()
-        estimate = x_tm1_train[:,2] + 0.5*( 3*h2(x_tm1_train[:,:]) - h2(x_tm2_train[:,:]) )
-        loss = (estimate - x_t_train[:,0]).abs().mean()  # mean absolute error
-        loss.backward()
-        train_loss2.append(loss.item())
-        opt2.step()
+   for start_ix in range(0, no_samples, batch_size):
+      x_tm2_train_batch = x_tm2_train[start_ix:start_ix+batch_size]
+      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
+      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+      opt2.zero_grad()
+      estimate = x_tm1_train_batch[:,2] + 0.5*( 3*h2(x_tm1_train_batch[:,:]) - h2(x_tm2_train_batch[:,:]) )
+      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+      loss.backward()
+      train_loss2.append(loss.item())
+      opt2.step()
     
 plt.plot(train_loss2);
-plt.savefig('train_loss_2ndorderobjective.png')
+plt.savefig('trainloss_2ndorderobjective_'+str(n_run)+'.png')
 
 # Save the NN's
 
@@ -145,5 +153,5 @@ torch.save({'h1_state_dict': h1.state_dict(),
             'h2_state_dict': h2.state_dict(),
             'opt1_state_dict': opt1.state_dict(),
             'opt2_state_dict': opt2.state_dict()
-	    }, './models.pt' )
+	    }, './models_'+str(n_run)+'.pt')
 
