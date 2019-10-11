@@ -11,7 +11,7 @@ import pickle
 K = 8
 t_int=0.005
 n_forecasts=1
-forecast_len=400
+forecast_len=4
 xi=2
 max_train = 30.0
 min_train = -20.0
@@ -23,7 +23,7 @@ file_truth = 'Lorenz_truthRF.txt'
 L95_X = np.zeros((K))
 file = open(file_truth, 'r')
 L95_X = np.array( file.readline().split( ) )
-for line in range(1,min(4,int(forecast_len/t_int))):
+for line in range(1,min(int(4/t_int),int(forecast_len/t_int))):
    L95_X = np.vstack(( L95_X, np.array( file.readline().split( ) ) ))
 print(L95_X.shape)
 
@@ -124,7 +124,8 @@ z=L95_X[0,:].reshape(1,K)
 def first_order_integrator(init, h, num_steps):
     z = init.reshape(1,K)
     for t in range(num_steps):
-        znorm = (z[-2:,:]-min_train)/(max_train-min_train)
+        #znorm = (z[-1:,:]-min_train)/(max_train-min_train)
+        znorm = z[-1:,:]
         newz = np.zeros((K))
         #xloc = 0 case
         newz[0] =  z[-1,0] + h(torch.FloatTensor( [ znorm[-1, K-2], znorm[-1,K-1], znorm[-1,0], znorm[-1,1] ] ) ).item()
@@ -135,68 +136,89 @@ def first_order_integrator(init, h, num_steps):
             newz[xloc] = z[-1,xloc] + h(torch.FloatTensor([ znorm[-1, xloc-2], znorm[-1,xloc-1], znorm[-1,xloc], znorm[-1,xloc+1] ] ) ).item()
         # xloc = K-1 case
         newz[K-1] = z[-1,K-1] + h(torch.FloatTensor([ znorm[-1, K-3], znorm[-1,K-2], znorm[-1,K-1], znorm[-1,0] ] ) ).item()
+        z_xim2.append(znorm[-1, xi-2])
+        z_xim1.append(znorm[-1, xi-1])
+        z_xi.append(znorm[-1, xi])
+        z_xip1.append(znorm[-1, xi+1])
+        h_xi.append(h(torch.FloatTensor([ znorm[-1, xi-2], znorm[-1,xi-1], znorm[-1,xi], znorm[-1,xi+1] ])))
         z=np.vstack((z, newz))
         
     return np.array(z)
 
-print(L95_X[0,:].shape)
+print(L95_X[300,:].shape)
+print(L95_X[300,:])
 
-train1test1 = first_order_integrator(L95_X[0,:], h1, int(forecast_len/t_int))
-train2test1 = first_order_integrator(L95_X[0,:], h2, int(forecast_len/t_int))
+z_xim2=[]
+z_xim1=[]
+z_xi=[]
+z_xip1=[]
+h_xi=[]
+train1test1 = first_order_integrator(L95_X[300,:], h1, int(forecast_len/t_int))
+#z_xim2=[]
+#z_xim1=[]
+#z_xi=[]
+#z_xip1=[]
+#h_xi=[]
+#train2test1 = first_order_integrator(L95_X[300,:], h2, int(forecast_len/t_int))
 
+print(train1test1.shape)
 print(forecast_len/t_int)
 
 plt.plot(L95_X[:int(forecast_len/t_int),xi])
 plt.plot(train1test1[:,xi])
-plt.plot(train2test1[:,xi])
-plt.legend(['data', '1st', '2nd'])
+#plt.plot(train2test1[:,xi])
+plt.plot(h_xi[:])
+plt.plot(z_xim2[:])
+plt.plot(z_xim1[:])
+plt.plot(z_xi[:])
+plt.plot(z_xip1[:])
+#plt.legend(['data', '1st', '2nd'])
+plt.legend(['data', '1st', 'h_xi', 'xim2', 'xim1', 'xi', 'xip1'])
 plt.title('first order integrator performance')
-plt.ylim(-30, 30)
-plt.show()
-plt.savefig('1storder_int_performance.png')
-plt.close()
-
-
-# Test in second order integrator
-
-def second_order_integrator(init, h, num_steps):
-    z = first_order_integrator(init, h, 1)
-    for t in range(num_steps-1):
-        new = np.zeros((K))
-        # xloc = 0 case
-        new[0] = ( z[-1,0] + 0.5 * 
-                 ( 3 * h(torch.FloatTensor([[[ z[-1, K-2], z[-1,K-1], z[-1,0], z[-1,1] ]]] ))
-                     - h(torch.FloatTensor([[[ z[-2, K-2], z[-2,K-1], z[-2,0], z[-2,1] ]]] )) ).item() )
-        # xloc = 1 case
-        new[1] = ( z[-1,1] + 0.5 * 
-                 ( 3 * h(torch.FloatTensor([[[ z[-1, K-1], z[-1,0], z[-1,1], z[-1,2] ]]] ))
-                     - h(torch.FloatTensor([[[ z[-2, K-1], z[-2,0], z[-2,1], z[-2,2] ]]] )) ).item() )
-        # xloc = 2 to K-2 cases
-        for xloc in range(2,K-1):
-            new[xloc] = ( z[-1,xloc] + 0.5 *
-                        ( 3 * h(torch.FloatTensor([[[ z[-1, xloc-2], z[-1,xloc-1], z[-1,xloc], z[-1,xloc+1] ]]] ))
-                            - h(torch.FloatTensor([[[ z[-2, xloc-2], z[-2,xloc-1], z[-2,xloc], z[-2,xloc+1] ]]] )) ).item() )
-        # xloc = K-1 case
-        new[K-1] = ( z[-1,K-1] + 0.5 *
-                   ( 3 * h(torch.FloatTensor([[[ z[-1, K-3], z[-1,K-2], z[-1,K-1], z[-1,0] ]]] )) 
-                       - h(torch.FloatTensor([[[ z[-2, K-3], z[-2,K-2], z[-2,K-1], z[-2,0] ]]] )) ).item() )
-         
-        z=np.vstack((z, new))
-        
-    return np.array(z)
-
-train1test2 = second_order_integrator(L95_X[0,:], h1, int(forecast_len/t_int))
-train2test2 = second_order_integrator(L95_X[0,:], h2, int(forecast_len/t_int))
-
-# Plot it..
-#plt.plot(L95_X[:int(forecast_len/t_int),xi])
-#plt.ylim(-30,30)
-plt.plot(train1test2[:,xi])
-plt.plot(train2test2[:,xi])
-plt.legend(['data', '1st', '2nd']);
-plt.title('second order integrator performance');
 #plt.ylim(-30, 30)
-plt.show()
 plt.savefig('1storder_int_performance.png')
+plt.show()
 plt.close()
 
+
+## Test in second order integrator
+#
+#def second_order_integrator(init, h, num_steps):
+#    z = first_order_integrator(init, h, 1)
+#    for t in range(num_steps-1):
+#        new = np.zeros((K))
+#        # xloc = 0 case
+#        new[0] = ( z[-1,0] + 0.5 * 
+#                 ( 3 * h(torch.FloatTensor([[[ z[-1, K-2], z[-1,K-1], z[-1,0], z[-1,1] ]]] ))
+#                     - h(torch.FloatTensor([[[ z[-2, K-2], z[-2,K-1], z[-2,0], z[-2,1] ]]] )) ).item() )
+#        # xloc = 1 case
+#        new[1] = ( z[-1,1] + 0.5 * 
+#                 ( 3 * h(torch.FloatTensor([[[ z[-1, K-1], z[-1,0], z[-1,1], z[-1,2] ]]] ))
+#                     - h(torch.FloatTensor([[[ z[-2, K-1], z[-2,0], z[-2,1], z[-2,2] ]]] )) ).item() )
+#        # xloc = 2 to K-2 cases
+#        for xloc in range(2,K-1):
+#            new[xloc] = ( z[-1,xloc] + 0.5 *
+#                        ( 3 * h(torch.FloatTensor([[[ z[-1, xloc-2], z[-1,xloc-1], z[-1,xloc], z[-1,xloc+1] ]]] ))
+#                            - h(torch.FloatTensor([[[ z[-2, xloc-2], z[-2,xloc-1], z[-2,xloc], z[-2,xloc+1] ]]] )) ).item() )
+#        # xloc = K-1 case
+#        new[K-1] = ( z[-1,K-1] + 0.5 *
+#                   ( 3 * h(torch.FloatTensor([[[ z[-1, K-3], z[-1,K-2], z[-1,K-1], z[-1,0] ]]] )) 
+#                       - h(torch.FloatTensor([[[ z[-2, K-3], z[-2,K-2], z[-2,K-1], z[-2,0] ]]] )) ).item() )
+#         
+#        z=np.vstack((z, new))
+#        
+#    return np.array(z)
+#
+#train1test2 = second_order_integrator(L95_X[0,:], h1, int(forecast_len/t_int))
+#train2test2 = second_order_integrator(L95_X[0,:], h2, int(forecast_len/t_int))
+#
+## Plot it..
+#plt.plot(L95_X[:int(forecast_len/t_int),xi])
+#plt.plot(train1test2[:,xi])
+#plt.plot(train2test2[:,xi])
+#plt.legend(['data', '1st', '2nd']);
+#plt.title('second order integrator performance');
+##plt.ylim(-30, 30)
+#plt.savefig('2ndorder_int_performance.png')
+#plt.close()
+#
