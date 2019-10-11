@@ -11,8 +11,8 @@ import pickle
 K = 8
 t_int=0.005
 n_forecasts=1
-forecast_len=0.3
-xi=1
+forecast_len=400
+xi=2
 max_train = 30.0
 min_train = -20.0
 
@@ -23,7 +23,7 @@ file_truth = 'Lorenz_truthRF.txt'
 L95_X = np.zeros((K))
 file = open(file_truth, 'r')
 L95_X = np.array( file.readline().split( ) )
-for line in range(1,int(forecast_len/t_int)):
+for line in range(1,min(4,int(forecast_len/t_int))):
    L95_X = np.vstack(( L95_X, np.array( file.readline().split( ) ) ))
 print(L95_X.shape)
 
@@ -51,7 +51,7 @@ opt2 = torch.optim.SGD(h2.parameters(), lr=0.1)
 #	   './models.pt' )
 
 
-checkpoint = torch.load('./models_test.pt')
+checkpoint = torch.load('./models_140600.pt')
 h1.load_state_dict(checkpoint['h1_state_dict'])
 h2.load_state_dict(checkpoint['h2_state_dict'])
 opt1.load_state_dict(checkpoint['opt1_state_dict'])
@@ -189,13 +189,13 @@ train1test2 = second_order_integrator(L95_X[0,:], h1, int(forecast_len/t_int))
 train2test2 = second_order_integrator(L95_X[0,:], h2, int(forecast_len/t_int))
 
 # Plot it..
-plt.plot(L95_X[:int(forecast_len/t_int),xi])
-plt.ylim(-30,30)
+#plt.plot(L95_X[:int(forecast_len/t_int),xi])
+#plt.ylim(-30,30)
 plt.plot(train1test2[:,xi])
 plt.plot(train2test2[:,xi])
 plt.legend(['data', '1st', '2nd']);
 plt.title('second order integrator performance');
-plt.ylim(-30, 30)
+#plt.ylim(-30, 30)
 plt.show()
 plt.savefig('1storder_int_performance.png')
 plt.close()

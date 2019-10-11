@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import pickle
+from torch.utils.data import Dataset, DataLoader
+
 
 K = 8
 t_int = 0.005
@@ -13,7 +15,7 @@ t_int = 0.005
 n_run=140600
 
 #batch_size = 100
-batch_size = 140600
+#batch_size = 140600
 #################################################
 
 ## Read in input-output training pairs - from here on script taken from D&B paper supplematary info, and slightly modified, as I have 2 input time steps for each training pair
@@ -86,6 +88,50 @@ print('no samples ; ',+no_samples)
 
 ## Back to RF coding....
 
+# Store data at Dataset
+class LorenzTrainingsDataset(Dataset):
+    """Lorenz Training dataset."""
+
+    def __init__(self, transform=None):
+        """
+        Args:
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        self.transform = transform 
+
+    def __len__(self):
+        return x_t_train.shape[0]
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+	
+	# For now, just copy in already calculated values... should move calc/reading in to here.
+        x_tm2 = x_tm2_train[idx,:]
+        x_tm1 = x_tm1_train[idx,:]
+        x_t   = x_t_train[idx,:]
+
+        sample = {'tminus2': x_tm2, 'tminus1': x_tm1, 't': x_t}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+# instantiate the dataset
+train_dataset = LorenzTrainingsDataset()
+
+
+
+for i in range(5):
+    sample = train_dataset[i]
+
+    print(i, sample['tminus2'].shape, sample['tminus1'].shape, sample['t'])
+
+trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True, num_workers=4)
+
+
 # ### Set up NN's
 
 # Define two matching sequential NNs
@@ -105,21 +151,33 @@ no_epochs=200
 print('Train to first order objective')
 
 opt1 = torch.optim.Adam(h1.parameters(), lr=0.001) # Use adam optimiser for now, as simple to set up for first run
-#opt1 = torch.optim.SGD(h1.parameters(), lr=0.1)  # Stochastic gradient descent as optimiser
 # should I be setting a 'scheduler' and add a call to scheduler.step() ?
 
 train_loss = []
 for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
-   for start_ix in range(0, no_samples, batch_size):
-      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
-      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+   for i, data in enumerate(trainloader, 0):
+      # get the inputs
+      tminus2, tminus1, t = data
       opt1.zero_grad()
-      estimate = x_tm1_train_batch[:,2] + h1(x_tm1_train_batch[:,:])
-      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+      estimate = sample['tminus1'][2] + h1(sample['tminus1'][:])
+      loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
       loss.backward()
       train_loss.append(loss.item())
       opt1.step()
 
+#train_loss = []
+#for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
+#   for start_ix in range(0, no_samples, batch_size):
+#      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
+#      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+#      opt1.zero_grad()
+#      estimate = x_tm1_train_batch[:,2] + h1(x_tm1_train_batch[:,:])
+#      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+#      loss.backward()
+#      train_loss.append(loss.item())
+#      opt1.step()
+
+plt.figure()
 plt.plot(train_loss)
 plt.savefig('trainloss_1storderobjective_'+str(n_run)+'.png')
 
@@ -133,17 +191,30 @@ opt2 = torch.optim.Adam(h2.parameters(), lr=0.001) # Use adam optimiser for now,
 
 train_loss2 = []
 for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
-   for start_ix in range(0, no_samples, batch_size):
-      x_tm2_train_batch = x_tm2_train[start_ix:start_ix+batch_size]
-      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
-      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+   for i, data in enumerate(trainloader, 0):
+      # get the inputs
+      tminus2, tminus1, t = data
       opt2.zero_grad()
-      estimate = x_tm1_train_batch[:,2] + 0.5*( 3*h2(x_tm1_train_batch[:,:]) - h2(x_tm2_train_batch[:,:]) )
-      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+      estimate = sample['tminus1'][2] + 0.5*( 3*h2(sample['tminus1'][:]) - h2(sample['tminus2'][:]) )
+      loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
       loss.backward()
       train_loss2.append(loss.item())
       opt2.step()
+
+#train_loss2 = []
+#for epoch in range(no_epochs):  # in D&B paper the NN's were trained for at least 200 epochs....
+#   for start_ix in range(0, no_samples, batch_size):
+#      x_tm2_train_batch = x_tm2_train[start_ix:start_ix+batch_size]
+#      x_tm1_train_batch = x_tm1_train[start_ix:start_ix+batch_size]
+#      x_t_train_batch   = x_t_train[start_ix:start_ix+batch_size]
+#      opt2.zero_grad()
+#      estimate = x_tm1_train_batch[:,2] + 0.5*( 3*h2(x_tm1_train_batch[:,:]) - h2(x_tm2_train_batch[:,:]) )
+#      loss = (estimate - x_t_train_batch[:,0]).abs().mean()  # mean absolute error
+#      loss.backward()
+#      train_loss2.append(loss.item())
+#      opt2.step()
     
+plt.figure()
 plt.plot(train_loss2);
 plt.savefig('trainloss_2ndorderobjective_'+str(n_run)+'.png')
 
