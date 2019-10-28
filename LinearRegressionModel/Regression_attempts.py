@@ -119,15 +119,18 @@ nxt_outputs_te2 = []
 for z in range(1,40,10):
     for x in range(2,7,3):
         for y in range(2,74,10):
-            for time in range(0, tr_split_index, 20):
+            #for time in range(0, tr_split_index, 20):
+            for time in range(0, tr_split_index, 500):
                 inputs_tr.append([ds_var.isel(T=time)[z,y+y_offset,x+x_offset] for x_offset in halo_list for y_offset in halo_list])
                 nxt_outputs_tr.append([ds_var.isel(T=time+StepSize)[z,y,x]])
                 
-            for time in range(tr_split_index, te_split_index, 50):
+            #for time in range(tr_split_index, te_split_index, 50):
+            for time in range(tr_split_index, te_split_index, 1000):
                 inputs_te1.append([ds_var.isel(T=time)[z,y+y_offset,x+x_offset] for x_offset in halo_list for y_offset in halo_list])
                 nxt_outputs_te1.append([ds_var.isel(T=time+StepSize)[z,y,x]])
 
-            for time in range(te_split_index, len(ds.T.data)-StepSize, 100):
+            #for time in range(te_split_index, len(ds.T.data)-StepSize, 100):
+            for time in range(te_split_index, len(ds.T.data)-StepSize, 2000):
                 inputs_te2.append([ds_var.isel(T=time)[z,y+y_offset,x+x_offset] for x_offset in halo_list for y_offset in halo_list])
                 nxt_outputs_te2.append([ds_var.isel(T=time+StepSize)[z,y,x]])
                 
@@ -517,15 +520,26 @@ plt.savefig('../../regression_plots/'+exp_name+'_norm_predictedVtruth_nxt_diffas
 #-----------------------------
 # Run random forest regressor
 #-----------------------------
-Rf_nxt = RandomForestRegressor()
-Rf_nxt = Rf_nxt.fit(norm_inputs_tr, norm_nxt_outputs_tr)
 
-rf_predicted_nxt1 = Rf_nxt.predict(norm_inputs_te1)
+n_estimators_set=[10,50,100,200]
+max_depth_set = [None,2,3,4,7,10]
+
+parameters = [{'max_depth': max_depth_set}, {'n_estimators':n_estimators_set}]
+n_folds=5
+
+Rf_nxt = RandomForestRegressor()
+Rf_nxt_cv = GridSearchCV(Rf_nxt, parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+Rf_nxt_cv.fit(norm_inputs_tr, norm_nxt_outputs_tr)
+
+results = Rf_nxt_cv.cv_results_
+best_params=Rf_nxt_cv.best_params_
+
+rf_predicted_nxt1 = Rf_nxt_cv.predict(norm_inputs_te1)
 rf_nxt1_r2 = r2_score(norm_nxt_outputs_te1, rf_predicted_nxt1)
 rf_nxt1_maxer = metrics.max_error(norm_nxt_outputs_te1, rf_predicted_nxt1)
 rf_nxt1_mse = metrics.mean_squared_error(norm_nxt_outputs_te1, rf_predicted_nxt1)
 
-rf_predicted_nxt2 = Rf_nxt.predict(norm_inputs_te2)
+rf_predicted_nxt2 = Rf_nxt_cv.predict(norm_inputs_te2)
 rf_nxt2_r2 = r2_score(norm_nxt_outputs_te2, rf_predicted_nxt2)
 rf_nxt2_maxer = metrics.max_error(norm_nxt_outputs_te2, rf_predicted_nxt2)
 rf_nxt2_mse = metrics.mean_squared_error(norm_nxt_outputs_te2, rf_predicted_nxt2)
@@ -535,15 +549,26 @@ rf_nxt2_mse = metrics.mean_squared_error(norm_nxt_outputs_te2, rf_predicted_nxt2
 # Run gradient boosting regressor
 #---------------------------------
 
-gbr_nxt = GradientBoostingRegressor()
-gbr_nxt = gbr_nxt.fit(norm_inputs_tr, norm_nxt_outputs_tr)
+max_depth_set = [2,3,4,7,10,15]
+n_estimators_set = [50,75,100,150]
+learning_rate_set = [0.05, 0.1, 0.2]
 
-gbr_predicted_nxt1 = gbr_nxt.predict(norm_inputs_te1)
+parameters = [{'max_depth': max_depth_set}, {'n_estimators':n_estimators_set}, {'learning_rate':learning_rate_set}]
+n_folds=5
+
+gbr_nxt = GradientBoostingRegressor()
+gbr_nxt_cv = GridSearchCV(gbr_nxt, parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+gbr_nxt_cv.fit(norm_inputs_tr, norm_nxt_outputs_tr)
+
+results = gbr_nxt_cv.cv_results_
+best_params=gbr_nxt_cv.best_params_
+
+gbr_predicted_nxt1 = gbr_nxt_cv.predict(norm_inputs_te1)
 gbr_nxt1_r2 = r2_score(norm_nxt_outputs_te1, gbr_predicted_nxt1)
 gbr_nxt1_maxer = metrics.max_error(norm_nxt_outputs_te1, gbr_predicted_nxt1)
 gbr_nxt1_mse = metrics.mean_squared_error(norm_nxt_outputs_te1, gbr_predicted_nxt1)
 
-gbr_predicted_nxt2 = gbr_nxt.predict(norm_inputs_te2)
+gbr_predicted_nxt2 = gbr_nxt_cv.predict(norm_inputs_te2)
 gbr_nxt2_r2 = r2_score(norm_nxt_outputs_te2, gbr_predicted_nxt2)
 gbr_nxt2_maxer = metrics.max_error(norm_nxt_outputs_te2, gbr_predicted_nxt2)
 gbr_nxt2_mse = metrics.mean_squared_error(norm_nxt_outputs_te2, gbr_predicted_nxt2)
@@ -553,15 +578,25 @@ gbr_nxt2_mse = metrics.mean_squared_error(norm_nxt_outputs_te2, gbr_predicted_nx
 # Run MLP NN regressor
 #---------------------------------
 
-mlp_nxt = MLPRegressor()
-mlp_nxt = mlp_nxt.fit(norm_inputs_tr, norm_nxt_outputs_tr)
+hidden_layer_sizes_set = [(50,), (50,50), (50,50,50), (100,), (100,100), (100,100,100), (100,100,100,100), (200,), (200,200), (200,200,200)]
+alpha_set = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
 
-mlp_predicted_nxt1 = mlp_nxt.predict(norm_inputs_te1)
+parameters = [{'alpha': alpha_set}, {'hidden_layer_sizes': hidden_layer_sizes_set}]
+n_folds=5
+
+mlp_nxt = MLPRegressor()
+mlp_nxt_cv = GridSearchCV(mlp_nxt, parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+mlp_nxt_cv.fit(norm_inputs_tr, norm_nxt_outputs_tr)
+
+results = mlp_nxt_cv.cv_results_
+best_params=mlp_nxt_cv.best_params_
+
+mlp_predicted_nxt1 = mlp_nxt_cv.predict(norm_inputs_te1)
 mlp_nxt1_r2 = r2_score(norm_nxt_outputs_te1, mlp_predicted_nxt1)
 mlp_nxt1_maxer = metrics.max_error(norm_nxt_outputs_te1, mlp_predicted_nxt1)
 mlp_nxt1_mse = metrics.mean_squared_error(norm_nxt_outputs_te1, mlp_predicted_nxt1)
 
-mlp_predicted_nxt2 = mlp_nxt.predict(norm_inputs_te2)
+mlp_predicted_nxt2 = mlp_nxt_cv.predict(norm_inputs_te2)
 mlp_nxt2_r2 = r2_score(norm_nxt_outputs_te2, mlp_predicted_nxt2)
 mlp_nxt2_maxer = metrics.max_error(norm_nxt_outputs_te2, mlp_predicted_nxt2)
 mlp_nxt2_mse = metrics.mean_squared_error(norm_nxt_outputs_te2, mlp_predicted_nxt2)
@@ -885,7 +920,8 @@ print('')
 #print('tend lr mean squared error ; ', tnd2_mse)
 #
 file=open('../../regression_plots/'+exp_name+'.txt',"w+")
-file.write('Validation Period 1:')
+file.write('Validation Period 1: \n')
+file.write('\n')
 file.write('next persistance r2 score %.10f; \n' % pers_nxt1_r2)
 file.write('next persistance max error %.10f; \n' % pers_nxt1_maxer)
 file.write('next persistance mean squared error %.10f; \n' % pers_nxt1_mse)
@@ -921,7 +957,10 @@ file.write('\n')
 #file.write('tend lr mean squared error %.10f; \n' % tnd1_mse)
 #file.write('tend lr rms error %.10f; \n' % np.sqrt(tnd1_mse))
 #file.write('\n')
-file.write('Validation Period 2:')
+file.write('--------------------------------------------------------')
+file.write('\n')
+file.write('Validation Period 2:\n')
+file.write('\n')
 file.write('next persistance r2 score %.10f; \n' % pers_nxt2_r2)
 file.write('next persistance max error %.10f; \n' % pers_nxt2_maxer)
 file.write('next persistance mean squared error %.10f; \n' % pers_nxt2_mse)
