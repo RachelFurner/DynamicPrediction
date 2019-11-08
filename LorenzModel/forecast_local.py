@@ -10,6 +10,10 @@ from keras.optimizers import rmsprop, SGD, Adagrad, Adadelta
 import json
 import matplotlib.pyplot as plt
 
+import torch
+import torch.nn as nn
+import pickle
+
 #from eccodes import *
 
 #file = open('./input.dat', 'r') 
@@ -25,14 +29,29 @@ n_steps = int(4/0.005 - 1)   # no of steps per forecast
 
 print('Load Network')
 
-model1 = Sequential()
-model1.add(Dense(4, input_dim=4, activation='tanh'))
-model1.add(Dense(20, activation='tanh'))
-model1.add(Dense(20, activation='tanh'))
-model1.add(Dense(1, activation='tanh'))
+#model1 = Sequential()
+#model1.add(Dense(4, input_dim=4, activation='tanh'))
+#model1.add(Dense(20, activation='tanh'))
+#model1.add(Dense(20, activation='tanh'))
+#model1.add(Dense(1, activation='tanh'))
+#
+#model1.compile(loss='mean_absolute_error', optimizer='SGD', metrics=['mae'])
+#model1.load_weights('./weights', by_name=False)
+#
+model1 = nn.Sequential(nn.Linear(4 , 20), nn.Tanh(),
+                   nn.Linear(20, 20), nn.Tanh(),
+                   nn.Linear(20, 20), nn.Tanh(),
+                   nn.Linear(20, 1))
 
-model1.compile(loss='mean_absolute_error', optimizer='SGD', metrics=['mae'])
-model1.load_weights('./weights', by_name=False)
+opt1 = torch.optim.Adam(model1.parameters(), lr=0.1)
+
+checkpoint = torch.load('./models_20728.pt')
+model1.load_state_dict(checkpoint['h1_state_dict'])
+opt1.load_state_dict(checkpoint['opt1_state_dict'])
+
+model1.eval()
+
+
 
 max_train = 30.0
 min_train = -20.0
@@ -95,7 +114,8 @@ for i in range(n_forecasts):
             n3=(k+1)%8
             state_n[k,3] = state[n3]
         state_n = 2.0*(state_n-min_train)/(max_train-min_train)-1.0
-        out1 = model1.predict(state_n,batch_size=1)
+        #out1 = model1.predict(state_n,batch_size=1)
+        out1 = model1(torch.FloatTensor(state_n))
         if j==0: 
             out0 = out1
         if j==1: 
