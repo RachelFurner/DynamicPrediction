@@ -40,8 +40,8 @@ def Lorenz96(t, state):
     # unpack input array
     x=state[0:K]
     y=state[K:J*K+K]
-    z=state[J*K+K:I*J*K+J*K+K]
     y=y.reshape(J,K)
+    z=state[J*K+K:I*J*K+J*K+K]
     z=z.reshape(I,J,K)
     
     # compute state derivatives
@@ -86,47 +86,21 @@ def Lorenz96(t, state):
 
 
 ######################
-# Run outputting every time step (t_int) for first 16 MTUs to use as truth for validation/comparison.
+# Run outputting every time step (t_int), in batches of 20 MTUs
 
 state0  = np.concatenate((x0,y0.reshape(J*K,),z0.reshape(I*J*K,)))
 
-filename='Lorenz_truth.txt'
+filename='Lorenz_full.txt'
 file = open(filename, 'w')
-
-t_span  = np.arange(0, 16., t_int)
-state   = odeint(Lorenz96, state0, t_span, tfirst=True)
-for t in range(len(t_span)):
-   [file.write(str(state[t,k])+' ') for k in range(K)]
-   file.write('\n')
-
 file.close()
 
-## Run Lorenz integrator and write data to file
-## Output every MTU, rather than every t_int, so we have 'independant'(ish) samples
-#MTUs = 2000000 
-##MTUs = 4 #small set for testing!
-#
-#filename='Lorenz_training_set.txt'
-## ensure file is empty
-#file = open(filename, 'w')
-#file.close()
-#
-#f_step=0
-#for step in range(MTUs):
-#   # run Lorenz integrator for 1MTU
-#   t_start = f_step
-#   t_end   = f_step+1
-#   t_span  = np.arange(t_start, t_end+t_int, t_int)
-#   state   = odeint(Lorenz96, state0, t_span, tfirst=True)
-#   # write to the file the 1st, 2nd, 3rd t_int outputs
-#   file = open(filename, 'a')
-#   [file.write(str(state[0,k])+' ') for k in range(K)]
-#   file.write('\n')
-#   [file.write(str(state[1,k])+' ') for k in range(K)]
-#   file.write('\n')
-#   [file.write(str(state[2,k])+' ') for k in range(K)]
-#   file.write('\n')
-#   file.close()
-#   # take last t_int values and save for input for next MTU
-#   state0  = state[-1,:]
-#   f_step = f_step+1
+t_span  = np.arange(0, 20.+t_int, t_int)
+
+for i in range(10000):
+   state   = odeint(Lorenz96, state0, t_span, tfirst=True)
+   file = open(filename, 'a')
+   for t in range(len(t_span)-1):
+      [file.write(str(state[t,k])+' ') for k in range(K)]
+      file.write('\n')
+   file.close()
+   state0=state[-1,:]
