@@ -14,12 +14,12 @@ from torch.utils.data import Dataset, DataLoader
 
 K = 8
 t_int = 0.005
-n_run=1000 
+n_run=52320
 
 #################################################
 
 ## Read in input-output training pairs 
-file_train = 'Lorenz_training_set.txt'
+file_train = 'Lorenz_full.txt'
 
 data_list_tm5 = []
 data_list_tm4 = []
@@ -41,6 +41,8 @@ for i in range(n_run):
     data_list_tm1.append(a_str.split())
     a_str = file.readline()
     data_list_t.append(a_str.split())
+    for i in range(100-6):  # skip so we take every 100th set of training data
+       a_str = file.readline()
 file.close()
 
 x_tm5_in_train = np.array(data_list_tm5)
@@ -107,19 +109,6 @@ del(x_t_in_train)
 max_train = 30.0
 min_train = -20.0
 
-#x_tm5_train_norm = torch.FloatTensor(2.0*(x_tm5_train-min_train)/(max_train-min_train)-1.0)
-#x_tm4_train_norm = torch.FloatTensor(2.0*(x_tm4_train-min_train)/(max_train-min_train)-1.0)
-#x_tm3_train_norm = torch.FloatTensor(2.0*(x_tm3_train-min_train)/(max_train-min_train)-1.0)
-#x_tm2_train_norm = torch.FloatTensor(2.0*(x_tm2_train-min_train)/(max_train-min_train)-1.0)
-#x_tm1_train_norm = torch.FloatTensor(2.0*(x_tm1_train-min_train)/(max_train-min_train)-1.0)
-#
-#x_tm5_train = torch.FloatTensor(x_tm5_train)
-#x_tm4_train = torch.FloatTensor(x_tm4_train)
-#x_tm3_train = torch.FloatTensor(x_tm3_train)
-#x_tm2_train = torch.FloatTensor(x_tm2_train)
-#x_tm1_train = torch.FloatTensor(x_tm1_train)
-#x_t_train   = torch.FloatTensor(x_t_train)
-
 x_tm5_train = torch.FloatTensor(2.0*(x_tm5_train-min_train)/(max_train-min_train)-1.0)
 x_tm4_train = torch.FloatTensor(2.0*(x_tm4_train-min_train)/(max_train-min_train)-1.0)
 x_tm3_train = torch.FloatTensor(2.0*(x_tm3_train-min_train)/(max_train-min_train)-1.0)
@@ -156,17 +145,8 @@ class LorenzTrainingsDataset(Dataset):
         x_tm3 = x_tm3_train[idx,:]
         x_tm2 = x_tm2_train[idx,:]
         x_tm1 = x_tm1_train[idx,:]
-
-        #x_tm5_norm = x_tm5_train_norm[idx,:]
-        #x_tm4_norm = x_tm4_train_norm[idx,:]
-        #x_tm3_norm = x_tm3_train_norm[idx,:]
-        #x_tm2_norm = x_tm2_train_norm[idx,:]
-        #x_tm1_norm = x_tm1_train_norm[idx,:]
-
         x_t   = x_t_train[idx,:]
 
-        #sample = {'tminus5': x_tm5, 'tminus4': x_tm4, 'tminus3': x_tm3, 'tminus2': x_tm2, 'tminus1': x_tm1, 't': x_t,
-        #          'tminus5_norm': x_tm5_norm, 'tminus4_norm': x_tm4_norm, 'tminus3_norm': x_tm3_norm, 'tminus2_norm': x_tm2_norm, 'tminus1_norm': x_tm1_norm}
         sample = {'tminus5': x_tm5, 'tminus4': x_tm4, 'tminus3': x_tm3, 'tminus2': x_tm2, 'tminus1': x_tm1, 't': x_t}
 
         if self.transform:
@@ -184,63 +164,142 @@ trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle
 
 # Define matching sequential NNs
 
-h1 = nn.Sequential(nn.Linear( 4, 20), nn.Tanh(), 
+h_AB1 = nn.Sequential(nn.Linear( 4, 20), nn.Tanh(), 
                    nn.Linear(20, 20), nn.Tanh(), 
                    nn.Linear(20, 20), nn.Tanh(), 
                    nn.Linear(20, 1))
-h2 = pickle.loads(pickle.dumps(h1))
+h_AB2 = pickle.loads(pickle.dumps(h_AB1))
+h_AB3 = pickle.loads(pickle.dumps(h_AB1))
+h_AB4 = pickle.loads(pickle.dumps(h_AB1))
+h_AB5 = pickle.loads(pickle.dumps(h_AB1))
 
 no_epochs=200   # in D&B paper the NN's were trained for at least 200 epochs
 
+########################################
 print('Train to first order objective')
 
-opt1 = torch.optim.Adam(h1.parameters(), lr=0.001) # Use adam optimiser for now, as simple to set up for first run
+opt_AB1 = torch.optim.Adam(h_AB1.parameters(), lr=0.001) # Use adam optimiser for now, as simple to set up for first run
 
 train_loss = []
 for epoch in range(no_epochs):
    for i, data in enumerate(trainloader, 0):
       # get the inputs
       sample = train_dataset[i]
-      opt1.zero_grad()
-      #estimate = sample['tminus1'][2] + h1(sample['tminus1_norm'][:])
-      estimate = sample['tminus1'][2] + h1(sample['tminus1'][:])
+      opt_AB1.zero_grad()
+      estimate = sample['tminus1'][2] + h_AB1(sample['tminus1'][:])
       loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
       loss.backward()
       train_loss.append(loss.item())
-      opt1.step()
+      opt_AB1.step()
 
 plt.figure()
 plt.plot(train_loss)
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainlossRF_AB1stOrder_'+str(n_run)+'.png')
 
-torch.save({'h1_state_dict': h1.state_dict(),
-            'opt1_state_dict': opt1.state_dict(),
+torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
+            'opt_AB1_state_dict': opt_AB1.state_dict(),
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_model_'+str(n_run)+'.pt')
 
+########################################
 print('Train to second order objective')
 
-opt2 = torch.optim.Adam(h2.parameters(), lr=0.001) 
+opt_AB2 = torch.optim.Adam(h_AB2.parameters(), lr=0.001) 
 
-train_loss2 = []
+train_loss = []
 for epoch in range(no_epochs): 
    for i, data in enumerate(trainloader, 0):
       # get the inputs
       sample = train_dataset[i]
-      opt2.zero_grad()
-      #estimate = sample['tminus1'][2] + 0.5*( 3*h2(sample['tminus1_norm'][:]) - h2(sample['tminus2_norm'][:]) )
-      estimate = sample['tminus1'][2] + 0.5*( 3*h2(sample['tminus1'][:]) - h2(sample['tminus2'][:]) )
+      opt_AB2.zero_grad()
+      estimate = sample['tminus1'][2] + 0.5*( 3*h_AB2(sample['tminus1'][:]) - h_AB2(sample['tminus2'][:]) )
       loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
       loss.backward()
-      train_loss2.append(loss.item())
-      opt2.step()
+      train_loss.append(loss.item())
+      opt_AB2.step()
 
 plt.figure()
-plt.plot(train_loss2);
+plt.plot(train_loss);
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainlossRF_AB2ndOrder_'+str(n_run)+'.png')
 
-# Save the NN's
-
-torch.save({'h2_state_dict': h2.state_dict(),
-            'opt2_state_dict': opt2.state_dict(),
+torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
+            'opt_AB2_state_dict': opt_AB2.state_dict()
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB2ndOrder_model_'+str(n_run)+'.pt')
+
+########################################
+print('Train to third order objective')
+
+opt_AB3 = torch.optim.Adam(h_AB3.parameters(), lr=0.001) 
+
+train_loss = []
+for epoch in range(no_epochs): 
+   for i, data in enumerate(trainloader, 0):
+      # get the inputs
+      sample = train_dataset[i]
+      opt_AB3.zero_grad()
+      estimate = sample['tminus1'][2] + 1./12. * ( 23. * h_AB3(sample['tminus1'][:]) -16. * h_AB3(sample['tminus2'][:]) + 5. * h_AB3(sample['tminus3'][:]) )
+      loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
+      loss.backward()
+      train_loss.append(loss.item())
+      opt_AB3.step()
+
+plt.figure()
+plt.plot(train_loss);
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainlossRF_AB3rdOrder_'+str(n_run)+'.png')
+
+torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
+            'opt_AB3_state_dict': opt_AB3.state_dict(),
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB3rdOrder_model_'+str(n_run)+'.pt')
+
+########################################
+print('Train to fourth order objective')
+
+opt_AB4 = torch.optim.Adam(h_AB4.parameters(), lr=0.001) 
+
+train_loss = []
+for epoch in range(no_epochs): 
+   for i, data in enumerate(trainloader, 0):
+      # get the inputs
+      sample = train_dataset[i]
+      opt_AB4.zero_grad()
+      estimate = sample['tminus1'][2] + 1./24. * ( 55. * h_AB4(sample['tminus1'][:]) -59. * h_AB4(sample['tminus2'][:]) + 37. *  h_AB4(sample['tminus3'][:]) - 9. *  h_AB4(sample['tminus4'][:]) )
+      loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
+      loss.backward()
+      train_loss.append(loss.item())
+      opt_AB4.step()
+
+plt.figure()
+plt.plot(train_loss);
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainlossRF_AB4thOrder_'+str(n_run)+'.png')
+
+torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
+            'opt_AB4_state_dict': opt_AB4.state_dict(),
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB4thOrder_model_'+str(n_run)+'.pt')
+
+########################################
+print('Train to fifth order objective')
+
+opt_AB5 = torch.optim.Adam(h_AB5.parameters(), lr=0.001) 
+
+train_loss = []
+for epoch in range(no_epochs): 
+   for i, data in enumerate(trainloader, 0):
+      # get the inputs
+      sample = train_dataset[i]
+      opt_AB5.zero_grad()
+      estimate = sample['tminus1'][2] + 1./720. * ( 1901. * h_AB5(sample['tminus1'][:]) -2774. * h_AB5(sample['tminus2'][:]) + 2616. *  h_AB5(sample['tminus3'][:])
+                                                     - 1274. *  h_AB5(sample['tminus4'][:]) + 251. *  h_AB5(sample['tminus5'][:]) )
+      loss = (estimate - sample['t'][0]).abs().mean()  # mean absolute error
+      loss.backward()
+      train_loss.append(loss.item())
+      opt_AB5.step()
+
+plt.figure()
+plt.plot(train_loss);
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainlossRF_AB5thOrder_'+str(n_run)+'.png')
+
+torch.save({'h_AB5_state_dict': h_AB5.state_dict(),
+            'opt_AB5_state_dict': opt_AB5.state_dict(),
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB5thOrder_model_'+str(n_run)+'.pt')
+
+########################################
 
