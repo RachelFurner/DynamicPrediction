@@ -31,9 +31,9 @@ import pickle
 # Set variables
 #---------------
 
-StepSize = 1 # how many output steps (months!) to predict over
+StepSize = 3 # how many output steps (months!) to predict over
 
-halo_size = 2
+halo_size = 1
 halo_list = (range(-halo_size, halo_size+1))
 #Calculate x,y position in each feature list to use as 'now' value
 xy=2*(halo_size^2+halo_size) # if using a 2-d halo in x and y....if using a 3-d halo need to recalculate!
@@ -415,7 +415,7 @@ lr_nxt= linear_model.Ridge(alpha=best_alpha)
 lr_nxt.fit(norm_inputs_tr, norm_nxt_outputs_tr )  # train to evaluate the value at the next time step...
 lr_nxt.get_params()
 
-pkl_filename = 'pickle_LRmodel'+exp_name+'.pkl'
+pkl_filename = 'PICKLED_MODELS/pickle_lr_'+exp_name+'.pkl'
 with open(pkl_filename, 'wb') as file:
     pickle.dump(lr_nxt, file)
 
@@ -546,6 +546,10 @@ Rf_nxt = RandomForestRegressor()
 Rf_nxt_cv = GridSearchCV(Rf_nxt, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
 Rf_nxt_cv.fit(norm_inputs_tr, np.ravel(norm_nxt_outputs_tr))
 
+pkl_filename = 'PICKLED_MODELS/pickle_rfr_'+exp_name+'.pkl'
+with open(pkl_filename, 'wb') as file:
+    pickle.dump(lr_nxt, file)
+
 results = Rf_nxt_cv.cv_results_
 best_params=Rf_nxt_cv.best_params_
 
@@ -582,6 +586,10 @@ gbr_nxt = GradientBoostingRegressor()
 gbr_nxt_cv = GridSearchCV(gbr_nxt, parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
 gbr_nxt_cv.fit(norm_inputs_tr, np.ravel(norm_nxt_outputs_tr))
 
+pkl_filename = 'PICKLED_MODELS/pickle_gbr_'+exp_name+'.pkl'
+with open(pkl_filename, 'wb') as file:
+    pickle.dump(lr_nxt, file)
+
 results = gbr_nxt_cv.cv_results_
 best_params=gbr_nxt_cv.best_params_
 
@@ -617,6 +625,10 @@ n_folds=3
 mlp_nxt = MLPRegressor()
 mlp_nxt_cv = GridSearchCV(mlp_nxt, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
 mlp_nxt_cv.fit(norm_inputs_tr, np.ravel(norm_nxt_outputs_tr))
+
+pkl_filename = 'PICKLED_MODELS/pickle_mlp_'+exp_name+'.pkl'
+with open(pkl_filename, 'wb') as file:
+    pickle.dump(lr_nxt, file)
 
 results = mlp_nxt_cv.cv_results_
 best_params=mlp_nxt_cv.best_params_
