@@ -94,7 +94,9 @@ filename='Lorenz_full.txt'
 file = open(filename, 'w')
 file.close()
 
-t_span  = np.arange(0, 20.+t_int, t_int)
+restart_file='Lorenz_full_restart.txt'
+
+t_span  = np.arange(0, 50.+t_int, t_int)
 
 for i in range(10000):
    state   = odeint(Lorenz96, state0, t_span, tfirst=True)
@@ -103,4 +105,10 @@ for i in range(10000):
       [file.write(str(state[t,k])+' ') for k in range(K)]
       file.write('\n')
    file.close()
+   #write out full data as 'restart' in case needed
+   rfile = open(restart_file, 'w')
+   [rfile.write(str(state[-1,j])+' ') for j in range(K+J*K+I*J*K)]
+   print(state[-1,:])
+   rfile.close()
    state0=state[-1,:]
+
