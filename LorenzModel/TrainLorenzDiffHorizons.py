@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Script to train various Networks to learn Lorenz model dynamics for various different loss functions
-# Script taken from D&B paper supplematary info and modified
+# Script to train various Networks to learn Lorenz model dynamics with different loss functions
+# Script taken from Dueben and Bauer 2018 paper supplematary info and modified
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,8 +13,7 @@ from torch.utils import data
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 
-#device = 'cuda' if torch.cuda.is_available() else 'cpu'
-device = 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:', device)
 print()
 
@@ -24,17 +23,16 @@ n_run = int(2000000/8)  # Want 2mill samples, and obtain 8 per time step sampled
 no_epochs = 200         # in D&B paper the NN's were trained for at least 200 epochs
 learning_rate = 0.001
 
-
-######################################################
-# Read in input-output training pairs from text file #
-######################################################
+#############################################################
+print('Read in input-output training pairs from text file') #
+#############################################################
 
 file_train = 'Lorenz_full.txt'
 
-data_list_tm1 = []    # value at time minus 1
-data_list_t = []      # value at current time
-data_list_tp10 = []   # value at time plus 10
-data_list_tp100 = []  # value at time plus 100
+data_list_tm1 = []   # value at time minus 1
+data_list_t = []     # value at current time step
+data_list_tp10 = []  # value at time plus 10
+data_list_tp100 = [] # value at time plus 100
 
 file = open(file_train, 'r')
 for i in range(n_run):
@@ -67,9 +65,6 @@ outputs_t        = np.zeros((K*n_run,1))
 outputs_tp10     = np.zeros((K*n_run,1))
 outputs_tp100    = np.zeros((K*n_run,1))
 inputs_K_val     = np.zeros((K*n_run,1))
-
-print('inputs shape : '+str(inputs_tm1.shape))
-print('all_x shape  : '+str(all_x_tm1.shape))
 
 n_count = -1
 for i in range(n_run):
@@ -112,14 +107,20 @@ no_samples=outputs_t.shape[0]
 print('no samples ; ',+no_samples)
 
 
-#########################
-# Store data as Dataset #
-#########################
+################################
+print('Store data as Dataset') #
+################################
 
 class LorenzTrainingsDataset(data.Dataset):
-    """Lorenz Training dataset."""
+    """
+    Lorenz Training dataset.
+       
+    Args:
+        The arrays containing the training data
+    """
 
     def __init__(self, inputs_all_x_tm1, inputs_tm1, outputs_t, outputs_tp10, outputs_tp100, inputs_K_val):
+
         self.inputs_all_x_tm1 = inputs_all_x_tm1
         self.inputs_tm1       = inputs_tm1
         self.outputs_t        = outputs_t
@@ -144,11 +145,11 @@ class LorenzTrainingsDataset(data.Dataset):
 # Instantiate the dataset
 train_dataset = LorenzTrainingsDataset(inputs_all_x_tm1, inputs_tm1, outputs_t, outputs_tp10, outputs_tp100, inputs_K_val)
 
-trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=4)
+trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=16)
 
-###############
-# Set up NN's #
-###############
+#####################
+print('Set up NNs') #
+#####################
 
 # Define matching sequential NNs
 
@@ -174,42 +175,40 @@ h_1ts.to(device)
 h_10ts.to(device)
 h_100ts.to(device)
 
-#######################################
-print('Train on one time step ahead') #
-#######################################
-
-opt_1ts = torch.optim.Adam(h_1ts.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
-
-train_loss = []
-for epoch in range(no_epochs):
-   for tm1_all, tm1, t, tp10, tp100, K in trainloader:
-      #tm1_all = tm1_all.to(device).float()
-      tm1     = tm1.to(device).float()
-      t       = t.to(device).float()
-      h_1ts.train()
-      opt_1ts.zero_grad()
-      estimate = tm1[:,2,None] + h_1ts(tm1[:,:])
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_1ts.step()
-      opt_1ts.zero_grad()
-      train_loss.append(loss.item())
-
-plt.figure()
-plt.plot(train_loss)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_1ts_'+str(n_run)+'.png')
-
-torch.save({'h_1ts_state_dict': h_1ts.state_dict(),
-            'opt_1ts_state_dict': opt_1ts.state_dict(),
-	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_'+str(n_run)+'.pt')
-
+########################################
+#print('Train on one time step ahead') #
+########################################
+#
+#opt_1ts = torch.optim.Adam(h_1ts.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
+#
+#train_loss = []
+#for epoch in range(no_epochs):
+#   for tm1_all, tm1, t, tp10, tp100, K in trainloader:
+#      tm1 = tm1.to(device).float()
+#      t   = t.to(device).float()
+#      h_1ts.train()
+#      estimate = tm1[:,2,None] + h_1ts(tm1[:,:])
+#      loss = (estimate - t).abs().mean()  # mean absolute error
+#      loss.backward()
+#      opt_1ts.step()
+#      opt_1ts.zero_grad()
+#      train_loss.append(loss.item())
+#
+#plt.figure()
+#plt.plot(train_loss)
+#plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_1ts_'+str(n_run)+'.png')
+#
+#torch.save({'h_1ts_state_dict': h_1ts.state_dict(),
+#            'opt_1ts_state_dict': opt_1ts.state_dict(),
+#	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_'+str(n_run)+'.pt')
+#
 ####################################################################################################################
 # Define loss function which trains based on various lead times. Need to use an iterator - stick with AB1 for now. #
 ####################################################################################################################
 
-#########################
-# AB 1st order iterator #
-#########################
+#######################################
+print('define AB 1st order iterator') #
+#######################################
 
 def AB_1st_order_integrator(ref_state, h, n_steps):
     state = ref_state
@@ -225,7 +224,8 @@ def AB_1st_order_integrator(ref_state, h, n_steps):
             inputs[:,k,2] = state[:,k]
             n3=(k+1)%8
             inputs[:,k,3] = state[:,n3]
-        out0 = h( torch.FloatTensor( inputs.to(device).float() ) )
+        #out0 = h( torch.tensor(inputs.to(device).float()) )
+        out0 = h(inputs.to(device).float())
         out0 = out0.reshape((out0.shape[0],out0.shape[1]))
         for k in range(8):
            state[:,k] = state[:,k] + out0[:,k]
@@ -240,13 +240,6 @@ opt_10ts = torch.optim.Adam(h_10ts.parameters(), lr=learning_rate) # Use adam op
 
 alpha=1  # balance between optimising for 1 time step ahead, vs 10 time steps ahead.
 
-#A = np.arange(80)
-#A.shape=(10,8)
-#B = np.array([7,3,2,5,1,5,7,2,6,4])
-#B = torch.tensor(B, dtype=torch.long)
-#A = torch.tensor(A)
-#C = A[range(A.shape[0]),B.flatten()].reshape((-1,1))
-
 train_loss = []
 for epoch in range(no_epochs):
    for tm1_all, tm1, t, tp10, tp100, K in trainloader:
@@ -260,9 +253,11 @@ for epoch in range(no_epochs):
       estimate1 = tm1[:,2,None] + h_10ts(tm1[:,:])
       iterations = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
       estimate10_temp = iterations[9,:,:]
-      #estimate10_temp = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
       estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1.float() - t[0]) + alpha*(estimate10.float() - tp10[0]) ).abs().mean()
+      loss = ( (estimate1.float().to(device) - t[0]) + alpha*(estimate10.float().to(device) - tp10[0]) ).abs().mean()
+      #loss = (estimate1.float() - t[0])
+      #loss = loss + alpha*(estimate10.float().to('cuda') - tp10[0])
+      #loss = ( loss ).abs().mean()
       loss.backward()
       opt_10ts.step()
       opt_10ts.zero_grad()
@@ -307,7 +302,7 @@ for epoch in range(no_epochs):
       #estimate100_temp = AB_1st_order_integrator(tm1_all[:,:], h_100ts, 100)
       estimate100_temp = iterations[99,:,:]
       estimate100 = estimate100_temp[range(estimate100_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1 - t[0]) + alpha*(estimate10.float() - tp10[0]) + beta*(estimate100.float() - tp100[0]) ).abs().mean()
+      loss = ( (estimate1 - t[0]) + alpha*(estimate10.float().to(device) - tp10[0]) + beta*(estimate100.float().to(device) - tp100[0]) ).abs().mean()
       loss.backward()
       opt_100ts.step()
       opt_100ts.zero_grad()

@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import pickle
+from torch.utils import data
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
-#import pycuda.driver as cuda
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:', device)
@@ -23,18 +23,18 @@ n_run = int(2000000/8)  # Want 2mill samples, and obtain 8 per time step sampled
 no_epochs = 200         # in D&B paper the NN's were trained for at least 200 epochs
 learning_rate = 0.001
 
-######################################################
-# Read in input-output training pairs from text file #
-######################################################
+#############################################################
+print('Read in input-output training pairs from text file') #
+#############################################################
 
 file_train = 'Lorenz_full.txt'
 
-data_list_tm5 = []  # value at time minus 5
-data_list_tm4 = []  # value at time minus 4
-data_list_tm3 = []  # value at time minus 3
-data_list_tm2 = []  # value at time minus 2
-data_list_tm1 = []  # value at time minus 1
-data_list_t = []    # value at current time step
+data_list_tm5 = []   # value at time minus 5
+data_list_tm4 = []   # value at time minus 4
+data_list_tm3 = []   # value at time minus 3
+data_list_tm2 = []   # value at time minus 2
+data_list_tm1 = []   # value at time minus 1
+data_list_t = []     # value at current time step
 
 file = open(file_train, 'r')
 for i in range(n_run):
@@ -62,12 +62,12 @@ del(data_list_tm2)
 del(data_list_tm1)
 del(data_list_t)
 
-inputs_tm5   = np.zeros((K*n_run,4))
-inputs_tm4   = np.zeros((K*n_run,4))
-inputs_tm3   = np.zeros((K*n_run,4))
-inputs_tm2   = np.zeros((K*n_run,4))
-inputs_tm1   = np.zeros((K*n_run,4))
-outputs_t    = np.zeros((K*n_run,1))
+inputs_tm5       = np.zeros((K*n_run,4))
+inputs_tm4       = np.zeros((K*n_run,4))
+inputs_tm3       = np.zeros((K*n_run,4))
+inputs_tm2       = np.zeros((K*n_run,4))
+inputs_tm1       = np.zeros((K*n_run,4))
+outputs_t        = np.zeros((K*n_run,1))
 
 n_count = -1
 for i in range(n_run):
@@ -98,7 +98,7 @@ for i in range(n_run):
         inputs_tm2[n_count,3] = all_x_tm2[i,n3]
         inputs_tm1[n_count,3] = all_x_tm1[i,n3]
  
-        outputs_t[n_count,0] = all_x_t[i,j]    
+        outputs_t[n_count,0]     = all_x_t[i,j]    
 
 del(all_x_tm5)
 del(all_x_tm4)
@@ -111,38 +111,33 @@ del(all_x_t)
 max_train = 30.0
 min_train = -20.0
 
-inputs_tm5   = 2.0*(inputs_tm5-min_train)/(max_train-min_train)-1.0
-inputs_tm4   = 2.0*(inputs_tm4-min_train)/(max_train-min_train)-1.0
-inputs_tm3   = 2.0*(inputs_tm3-min_train)/(max_train-min_train)-1.0
-inputs_tm2   = 2.0*(inputs_tm2-min_train)/(max_train-min_train)-1.0
-inputs_tm1   = 2.0*(inputs_tm1-min_train)/(max_train-min_train)-1.0
-outputs_t    = 2.0*( outputs_t-min_train)/(max_train-min_train)-1.0
+inputs_tm5   = torch.FloatTensor(2.0*(inputs_tm5-min_train)/(max_train-min_train)-1.0)
+inputs_tm4   = torch.FloatTensor(2.0*(inputs_tm4-min_train)/(max_train-min_train)-1.0)
+inputs_tm3   = torch.FloatTensor(2.0*(inputs_tm3-min_train)/(max_train-min_train)-1.0)
+inputs_tm2   = torch.FloatTensor(2.0*(inputs_tm2-min_train)/(max_train-min_train)-1.0)
+inputs_tm1   = torch.FloatTensor(2.0*(inputs_tm1-min_train)/(max_train-min_train)-1.0)
+outputs_t    = torch.FloatTensor(2.0*( outputs_t-min_train)/(max_train-min_train)-1.0)
 
-#inputs_tm5_tensor = torch.from_numpy(inputs_tm5).float()#.to(device)
-#inputs_tm4_tensor = torch.from_numpy(inputs_tm4).float()#.to(device)
-#inputs_tm3_tensor = torch.from_numpy(inputs_tm3).float()#.to(device)
-#inputs_tm2_tensor = torch.from_numpy(inputs_tm2).float()#.to(device)
-#inputs_tm1_tensor = torch.from_numpy(inputs_tm1).float()#.to(device)
-#outputs_t_tensor = torch.from_numpy(outputs_t).float()#.to(device)
-
-no_samples=outputs_t.size
-print((inputs_tm1.shape))
-print((outputs_t.shape))
+print('inputs_tm1 : '+str(inputs_tm1.shape))
+print('outputs_t shape ; '+str(outputs_t.shape))
+no_samples=outputs_t.shape[0]
 print('no samples ; ',+no_samples)
 
 
-#########################
-# Store data as Dataset #
-#########################
+################################
+print('Store data as Dataset') #
+################################
 
-class LorenzTrainingsDataset(Dataset):
-    """Lorenz Training dataset."""
+class LorenzTrainingsDataset(data.Dataset):
+    """
+    Lorenz Training dataset.
+       
+    Args:
+        The arrays containing the training data
+    """
 
     def __init__(self, inputs_tm5, inputs_tm4, inputs_tm3, inputs_tm2, inputs_tm1, outputs_t):
-        """
-        Args:
-            The arrays containing the training data
-        """
+
         self.inputs_tm5 = inputs_tm5
         self.inputs_tm4 = inputs_tm4
         self.inputs_tm3 = inputs_tm3
@@ -161,9 +156,8 @@ class LorenzTrainingsDataset(Dataset):
 
         return (sample_tm5, sample_tm4, sample_tm3, sample_tm2, sample_tm1, sample_t)
 
-
     def __len__(self):
-        return len(outputs_t[:])
+        return outputs_t.shape[0]
 
 
 # Instantiate the dataset
@@ -171,17 +165,16 @@ train_dataset = LorenzTrainingsDataset(inputs_tm5, inputs_tm4, inputs_tm3, input
 
 trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=16)
 
-
-###############
-# Set up NN's #
-###############
+#####################
+print('Set up NNs') #
+#####################
 
 # Define matching sequential NNs
 
-h_AB1 = nn.Sequential(nn.Linear( 4, 20), nn.Tanh(), 
-                   nn.Linear(20, 20), nn.Tanh(), 
-                   nn.Linear(20, 20), nn.Tanh(), 
-                   nn.Linear(20, 1))
+h_AB1 = nn.Sequential( nn.Linear( 4, 20), nn.Tanh(), 
+                       nn.Linear(20, 20), nn.Tanh(), 
+                       nn.Linear(20, 20), nn.Tanh(), 
+                       nn.Linear(20, 1 ) )
 h_AB2   = pickle.loads(pickle.dumps(h_AB1))
 h_AB3   = pickle.loads(pickle.dumps(h_AB1))
 h_AB4   = pickle.loads(pickle.dumps(h_AB1))
@@ -213,7 +206,7 @@ train_loss = []
 for epoch in range(no_epochs):
    for tm5, tm4, tm3, tm2, tm1, t in trainloader:
       tm1 = tm1.to(device).float()
-      t = t.to(device).float()
+      t   = t.to(device).float()
       h_AB1.train()
       estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
       loss = (estimate - t).abs().mean()  # mean absolute error
