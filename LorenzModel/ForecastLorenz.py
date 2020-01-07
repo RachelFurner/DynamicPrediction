@@ -44,25 +44,26 @@ del(data_list_ref)
 print('Load Network models') #
 ##############################
 
-h_AB1 = nn.Sequential(nn.Linear(4 , 20), nn.Tanh(),
-                   nn.Linear(20, 20), nn.Tanh(),
-                   nn.Linear(20, 20), nn.Tanh(),
-                   nn.Linear(20, 1))
-h_AB2 = pickle.loads(pickle.dumps(h_AB1))
-h_AB3 = pickle.loads(pickle.dumps(h_AB1))
-h_AB4 = pickle.loads(pickle.dumps(h_AB1))
-h_AB5 = pickle.loads(pickle.dumps(h_AB1))
-h_1ts = pickle.loads(pickle.dumps(h_AB1))
-h_10ts = pickle.loads(pickle.dumps(h_AB1))
+h_AB1   = nn.Sequential(nn.Linear(4 , 20), nn.Tanh(),
+                        nn.Linear(20, 20), nn.Tanh(),
+                        nn.Linear(20, 1))
+h_AB2   = pickle.loads(pickle.dumps(h_AB1))
+h_AB3   = pickle.loads(pickle.dumps(h_AB1))
+h_AB4   = pickle.loads(pickle.dumps(h_AB1))
+h_AB5   = pickle.loads(pickle.dumps(h_AB1))
+h_1ts   = pickle.loads(pickle.dumps(h_AB1))
+h_1tsIt = pickle.loads(pickle.dumps(h_AB1))
+h_10ts  = pickle.loads(pickle.dumps(h_AB1))
 h_100ts = pickle.loads(pickle.dumps(h_AB1))
 
-opt_AB1 = torch.optim.Adam(h_AB1.parameters(), lr=0.001)
-opt_AB2 = torch.optim.Adam(h_AB2.parameters(), lr=0.001)
-opt_AB3 = torch.optim.Adam(h_AB3.parameters(), lr=0.001)
-opt_AB4 = torch.optim.Adam(h_AB4.parameters(), lr=0.001)
-opt_AB5 = torch.optim.Adam(h_AB5.parameters(), lr=0.001)
-opt_1ts = torch.optim.Adam(h_1ts.parameters(), lr=0.001)
-opt_10ts = torch.optim.Adam(h_10ts.parameters(), lr=0.001)
+opt_AB1   = torch.optim.Adam(h_AB1.parameters(), lr=0.001)
+opt_AB2   = torch.optim.Adam(h_AB2.parameters(), lr=0.001)
+opt_AB3   = torch.optim.Adam(h_AB3.parameters(), lr=0.001)
+opt_AB4   = torch.optim.Adam(h_AB4.parameters(), lr=0.001)
+opt_AB5   = torch.optim.Adam(h_AB5.parameters(), lr=0.001)
+opt_1ts   = torch.optim.Adam(h_1ts.parameters()  , lr=0.001)
+opt_1tsIt = torch.optim.Adam(h_1tsIt.parameters(), lr=0.001)
+opt_10ts  = torch.optim.Adam(h_10ts.parameters() , lr=0.001)
 opt_100ts = torch.optim.Adam(h_100ts.parameters(), lr=0.001)
 
 checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_model_250000.pt', map_location=torch.device(device))
@@ -85,15 +86,23 @@ checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutp
 h_AB5.load_state_dict(checkpoint['h_AB5_state_dict'])
 opt_AB5.load_state_dict(checkpoint['opt_AB5_state_dict'])
 
-checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_100.pt', map_location=torch.device(device))
+#checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_250000.pt', map_location=torch.device(device))
+checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_256.pt', map_location=torch.device(device))
 h_1ts.load_state_dict(checkpoint['h_1ts_state_dict'])
 opt_1ts.load_state_dict(checkpoint['opt_1ts_state_dict'])
 
-checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/10ts_model_100.pt', map_location=torch.device(device))
+#checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1tsIt_model_250000.pt', map_location=torch.device(device))
+checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1tsIt_model_256.pt', map_location=torch.device(device))
+h_1ts.load_state_dict(checkpoint['h_1tsIt_state_dict'])
+opt_1ts.load_state_dict(checkpoint['opt_1tsIt_state_dict'])
+
+#checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/10ts_model_250000.pt', map_location=torch.device(device))
+checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/10ts_model_256.pt', map_location=torch.device(device))
 h_10ts.load_state_dict(checkpoint['h_10ts_state_dict'])
 opt_10ts.load_state_dict(checkpoint['opt_10ts_state_dict'])
 
-checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/100ts_model_100.pt', map_location=torch.device(device))
+#checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/100ts_model_250000.pt', map_location=torch.device(device))
+checkpoint = torch.load('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/100ts_model_256.pt', map_location=torch.device(device))
 h_100ts.load_state_dict(checkpoint['h_100ts_state_dict'])
 opt_100ts.load_state_dict(checkpoint['opt_100ts_state_dict'])
 
@@ -103,6 +112,7 @@ h_AB3.eval()
 h_AB4.eval()
 h_AB5.eval()
 h_1ts.eval()
+h_1tsIt.eval()
 h_10ts.eval()
 h_100ts.eval()
 
@@ -292,9 +302,10 @@ fore_state_trainAB5testAB5=AB_5th_order_integrator(ref_state, h_AB5, n_forecasts
 fore_state_trainAB3testAB1=AB_1st_order_integrator(ref_state, h_AB3, n_forecasts, n_steps)
 fore_state_trainAB1testAB3=AB_3rd_order_integrator(ref_state, h_AB1, n_forecasts, n_steps)
 
-fore_state_1ts   = AB_3rd_order_integrator(ref_state, h_1ts, n_forecasts, n_steps)
-fore_state_10ts  = AB_3rd_order_integrator(ref_state, h_10ts, n_forecasts, n_steps)
-fore_state_100ts = AB_3rd_order_integrator(ref_state, h_100ts, n_forecasts, n_steps)
+fore_state_1ts   = AB_1st_order_integrator(ref_state, h_1ts  , n_forecasts, n_steps)
+fore_state_1tsIt = AB_1st_order_integrator(ref_state, h_1tsIt, n_forecasts, n_steps)
+fore_state_10ts  = AB_1st_order_integrator(ref_state, h_10ts , n_forecasts, n_steps)
+fore_state_100ts = AB_1st_order_integrator(ref_state, h_100ts, n_forecasts, n_steps)
 
 ##########################################################################################
 # un-'normalise'                                                                         #
@@ -310,13 +321,26 @@ fore_state_trainAB5testAB5 = (fore_state_trainAB5testAB5 + 1.0) * (max_train-min
 fore_state_trainAB3testAB1 = (fore_state_trainAB3testAB1 + 1.0) * (max_train-min_train)/2.0 + min_train
 fore_state_trainAB1testAB3 = (fore_state_trainAB1testAB3 + 1.0) * (max_train-min_train)/2.0 + min_train
 
-fore_state_1ts   = (fore_state_1ts + 1.0) * (max_train-min_train)/2.0 + min_train
-fore_state_10ts  = (fore_state_10ts + 1.0) * (max_train-min_train)/2.0 + min_train
+fore_state_1ts   = (fore_state_1ts   + 1.0) * (max_train-min_train)/2.0 + min_train
+fore_state_1tsIt = (fore_state_1tsIt + 1.0) * (max_train-min_train)/2.0 + min_train
+fore_state_10ts  = (fore_state_10ts  + 1.0) * (max_train-min_train)/2.0 + min_train
 fore_state_100ts = (fore_state_100ts + 1.0) * (max_train-min_train)/2.0 + min_train
 
 ######################
 # Plot the forecasts #
 ######################
+
+# Plot 1st order AB method (control)
+for i in range(n_forecasts):    
+    fig = plt.figure(figsize=(16,8))
+    plt.plot(ref_state[i*(n_steps+1):(i+1)*(n_steps+1),3], color='black', linewidth=1.4)
+    for prediction in [fore_state_trainAB1testAB1]:
+       plt.plot(prediction[i*(n_steps+1):(i+1)*(n_steps+1),3], linewidth=1.)
+    plt.ylim(-30,30)
+    plt.legend(['data', 'forecast'], loc=1)
+    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecast_control_'+str(i)+'.png', bbox_inches = 'tight')
+    plt.show()
+    plt.close()
 
 # Plot to asses impact of differing train-predict AB methods
 for i in range(n_forecasts):    
@@ -325,8 +349,8 @@ for i in range(n_forecasts):
     for prediction in [fore_state_trainAB1testAB1, fore_state_trainAB3testAB1, fore_state_trainAB1testAB3, fore_state_trainAB3testAB3]:
        plt.plot(prediction[i*(n_steps+1):(i+1)*(n_steps+1),3], linewidth=1.)
     plt.ylim(-30,30)
-    plt.legend(['data', 'forecast_train1test1', 'forecast_train3test1', 'forecast_train1test3', 'forecast_train3test3'], loc=1)
-    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecast_check_'+str(i)+'.png', bbox_inches = 'tight')
+    plt.legend(['data', 'train 1st order, test 1st order', 'train 3rd order, test 1st order', 'train 1st order, test 3rd order', 'train 3rd order, test 3rd order'], loc=1)
+    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecast_TeTrDiffer_'+str(i)+'.png', bbox_inches = 'tight')
     plt.show()
     plt.close()
 
@@ -338,7 +362,7 @@ for i in range(n_forecasts):
        plt.plot(prediction[i*(n_steps+1):(i+1)*(n_steps+1),3], linewidth=1.)
     plt.ylim(-30,30)
     plt.legend(['data', '1st order', '2nd order', '3rd order', '4th order', '5th order'], loc=1)
-    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecast'+str(i)+'.png', bbox_inches = 'tight')
+    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecastAB'+str(i)+'.png', bbox_inches = 'tight')
     plt.show()
     plt.close()
 
@@ -346,11 +370,11 @@ for i in range(n_forecasts):
 for i in range(n_forecasts):    
     fig = plt.figure(figsize=(16,8))
     plt.plot(ref_state[i*(n_steps+1):(i+1)*(n_steps+1),3], color='black', linewidth=1.4)
-    for prediction in [fore_state_1ts, fore_state_10ts, fore_state_100ts]:
+    for prediction in [fore_state_1ts, fore_state_1tsIt, fore_state_10ts, fore_state_100ts]:
        plt.plot(prediction[i*(n_steps+1):(i+1)*(n_steps+1),3], linewidth=1.)
     plt.ylim(-30,30)
-    plt.legend(['data', '1ts', '10ts', '100ts'], loc=1)
-    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecast'+str(i)+'.png', bbox_inches = 'tight')
+    plt.legend(['data', '1ts', '1tsIt', '10ts', '100ts'], loc=1)
+    plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/forecastDiffHor'+str(i)+'.png', bbox_inches = 'tight')
     plt.show()
     plt.close()
 

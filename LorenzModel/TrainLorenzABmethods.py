@@ -12,6 +12,7 @@ import pickle
 from torch.utils import data
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
+from torch.utils.data.sampler import SubsetRandomSampler
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:', device)
@@ -21,6 +22,8 @@ K = 8                   # 8 X variables in the Lorenz model
 t_int = 0.005
 n_run = int(2000000/8)  # Want 2mill samples, and obtain 8 per time step sampled
 no_epochs = 200         # in D&B paper the NN's were trained for at least 200 epochs
+#n_run = 20      # Testing
+#no_epochs = 5   # Testing
 learning_rate = 0.001
 
 #############################################################
@@ -128,7 +131,7 @@ print('no samples ; ',+no_samples)
 print('Store data as Dataset') #
 ################################
 
-class LorenzTrainingsDataset(data.Dataset):
+class LorenzDataset(data.Dataset):
     """
     Lorenz Training dataset.
        
@@ -161,18 +164,35 @@ class LorenzTrainingsDataset(data.Dataset):
 
 
 # Instantiate the dataset
-train_dataset = LorenzTrainingsDataset(inputs_tm5, inputs_tm4, inputs_tm3, inputs_tm2, inputs_tm1, outputs_t)
+Lorenz_Dataset = LorenzDataset(inputs_tm5, inputs_tm4, inputs_tm3, inputs_tm2, inputs_tm1, outputs_t)
 
-trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=16)
+random_seed= 42
+validation_split = .2
+batch_size=512
+
+# Creating data indices for training and validation splits:
+dataset_size = len(Lorenz_Dataset)
+indices = list(range(dataset_size))
+split = int(np.floor(validation_split * dataset_size))
+np.random.seed(random_seed)
+np.random.shuffle(indices)
+train_indices, val_indices = indices[split:], indices[:split]
+
+# Creating PT data samplers and loaders:
+train_sampler = SubsetRandomSampler(train_indices)
+valid_sampler = SubsetRandomSampler(val_indices)
+
+train_loader = torch.utils.data.DataLoader(Lorenz_Dataset, batch_size=batch_size, num_workers=16, sampler=train_sampler)
+val_loader   = torch.utils.data.DataLoader(Lorenz_Dataset, batch_size=batch_size, num_workers=16, sampler=valid_sampler)
+
 
 #####################
 print('Set up NNs') #
 #####################
 
-# Define matching sequential NNs
+# Define matching sequential NNs, two hidden layers, with 20 neurons in each, and the tanh activation function
 
 h_AB1 = nn.Sequential( nn.Linear( 4, 20), nn.Tanh(), 
-                       nn.Linear(20, 20), nn.Tanh(), 
                        nn.Linear(20, 20), nn.Tanh(), 
                        nn.Linear(20, 1 ) )
 h_AB2   = pickle.loads(pickle.dumps(h_AB1))
@@ -197,26 +217,57 @@ h_AB5.to(device)
 
 
 #########################################
+print('')                               #
 print('Train to first order objective') #
+print('')                               #
 #########################################
 
 opt_AB1 = torch.optim.Adam(h_AB1.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
 
-train_loss = []
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
 for epoch in range(no_epochs):
-   for tm5, tm4, tm3, tm2, tm1, t in trainloader:
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
       tm1 = tm1.to(device).float()
       t   = t.to(device).float()
-      h_AB1.train()
+      h_AB1.train(True)
       estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
       opt_AB1.step()
       opt_AB1.zero_grad()
-      train_loss.append(loss.item())
-      
-plt.figure()
-plt.plot(train_loss)
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB1.train(False)
+      estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
+
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+ 
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB1stOrder_'+str(n_run)+'.png')
 
 torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
@@ -225,27 +276,59 @@ torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
 
 
 ##########################################
+print('')                                #
 print('Train to second order objective') #
+print('')                                #
 ##########################################
 
 opt_AB2 = torch.optim.Adam(h_AB2.parameters(), lr=learning_rate) 
 
-train_loss = []
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
 for epoch in range(no_epochs): 
-   for tm5, tm4, tm3, tm2, tm1, t in trainloader:
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
       tm2 = tm2.to(device).float()
       tm1 = tm1.to(device).float()
       t = t.to(device).float()
-      h_AB2.train()
+      h_AB2.train(True)
       estimate = tm1[:,2,None] + 0.5*( 3*h_AB2(tm1[:,:]) - h_AB2(tm2[:,:]) )
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
-      train_loss.append(loss.item())
       opt_AB2.step()
       opt_AB2.zero_grad()
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+      tm2 = tm2.to(device).float()
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB2.train(False)
+      estimate = tm1[:,2,None] + 0.5*( 3*h_AB2(tm1[:,:]) - h_AB2(tm2[:,:]) )
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
 
-plt.figure()
-plt.plot(train_loss);
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB2ndOrder_'+str(n_run)+'.png')
 
 torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
@@ -253,28 +336,61 @@ torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB2ndOrder_model_'+str(n_run)+'.pt')
 
 #########################################
+print('')                                #
 print('Train to third order objective') #
+print('')                                #
 #########################################
 
 opt_AB3 = torch.optim.Adam(h_AB3.parameters(), lr=learning_rate) 
 
-train_loss = []
-for epoch in range(no_epochs): 
-   for tm5, tm4, tm3, tm2, tm1, t in trainloader:
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
+for epoch in range(no_epochs):
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
       tm3 = tm3.to(device).float()
       tm2 = tm2.to(device).float()
       tm1 = tm1.to(device).float()
       t = t.to(device).float()
-      h_AB3.train()
+      h_AB3.train(True)
       estimate = tm1[:,2,None] + 1./12. * ( 23. * h_AB3(tm1[:,:]) -16. * h_AB3(tm2[:,:]) + 5. * h_AB3(tm3[:,:]) )
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
-      train_loss.append(loss.item())
       opt_AB3.step()
       opt_AB3.zero_grad()
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+      tm3 = tm3.to(device).float()
+      tm2 = tm2.to(device).float()
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB3.train(False)
+      estimate = tm1[:,2,None] + 1./12. * ( 23. * h_AB3(tm1[:,:]) -16. * h_AB3(tm2[:,:]) + 5. * h_AB3(tm3[:,:]) )
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
 
-plt.figure()
-plt.plot(train_loss);
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB3rdOrder_'+str(n_run)+'.png')
 
 torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
@@ -282,29 +398,63 @@ torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB3rdOrder_model_'+str(n_run)+'.pt')
 
 ##########################################
+print('')                                #
 print('Train to fourth order objective') #
+print('')                                #
 ##########################################
 
 opt_AB4 = torch.optim.Adam(h_AB4.parameters(), lr=learning_rate) 
 
-train_loss = []
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
 for epoch in range(no_epochs): 
-   for tm5, tm4, tm3, tm2, tm1, t in trainloader:
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
       tm4 = tm4.to(device).float()
       tm3 = tm3.to(device).float()
       tm2 = tm2.to(device).float()
       tm1 = tm1.to(device).float()
       t = t.to(device).float()
-      h_AB4.train()
-      opt_AB4.zero_grad()
+      h_AB4.train(True)
       estimate = tm1[:,2,None] + 1./24. * ( 55. * h_AB4(tm1[:,:]) -59. * h_AB4(tm2[:,:]) + 37. *  h_AB4(tm3[:,:]) - 9. *  h_AB4(tm4[:,:]) )
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
-      train_loss.append(loss.item())
       opt_AB4.step()
+      opt_AB4.zero_grad()
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+      tm4 = tm4.to(device).float()
+      tm3 = tm3.to(device).float()
+      tm2 = tm2.to(device).float()
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB4.train(False)
+      estimate = tm1[:,2,None] + 1./24. * ( 55. * h_AB4(tm1[:,:]) -59. * h_AB4(tm2[:,:]) + 37. *  h_AB4(tm3[:,:]) - 9. *  h_AB4(tm4[:,:]) )
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
 
-plt.figure()
-plt.plot(train_loss);
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB4thOrder_'+str(n_run)+'.png')
 
 torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
@@ -312,31 +462,67 @@ torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB4thOrder_model_'+str(n_run)+'.pt')
 
 #########################################
+print('')                                #
 print('Train to fifth order objective') #
+print('')                                #
 #########################################
 
 opt_AB5 = torch.optim.Adam(h_AB5.parameters(), lr=learning_rate) 
 
-train_loss = []
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
 for epoch in range(no_epochs): 
-   for tm5, tm4, tm3, tm2, tm1, t in trainloader:
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
       tm5 = tm5.to(device).float()
       tm4 = tm4.to(device).float()
       tm3 = tm3.to(device).float()
       tm2 = tm2.to(device).float()
       tm1 = tm1.to(device).float()
       t = t.to(device).float()
-      h_AB5.train()
-      opt_AB5.zero_grad()
+      h_AB5.train(True)
       estimate = tm1[:,2,None] + 1./720. * ( 1901. * h_AB5(tm1[:,:]) -2774. * h_AB5(tm2[:,:]) + 2616. *  h_AB5(tm3[:,:])
                                                      - 1274. *  h_AB5(tm4[:,:]) + 251. *  h_AB5(tm5[:,:]) )
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
-      train_loss.append(loss.item())
       opt_AB5.step()
+      opt_AB5.zero_grad()
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+      tm5 = tm5.to(device).float()
+      tm4 = tm4.to(device).float()
+      tm3 = tm3.to(device).float()
+      tm2 = tm2.to(device).float()
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB5.train(False)
+      estimate = tm1[:,2,None] + 1./720. * ( 1901. * h_AB5(tm1[:,:]) -2774. * h_AB5(tm2[:,:]) + 2616. *  h_AB5(tm3[:,:])
+                                                     - 1274. *  h_AB5(tm4[:,:]) + 251. *  h_AB5(tm5[:,:]) )
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
 
-plt.figure()
-plt.plot(train_loss);
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB5thOrder_'+str(n_run)+'.png')
 
 torch.save({'h_AB5_state_dict': h_AB5.state_dict(),
