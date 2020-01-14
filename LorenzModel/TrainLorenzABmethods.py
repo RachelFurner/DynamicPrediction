@@ -22,8 +22,8 @@ K = 8                   # 8 X variables in the Lorenz model
 t_int = 0.005
 n_run = int(2000000/8)  # Want 2mill samples, and obtain 8 per time step sampled
 no_epochs = 200         # in D&B paper the NN's were trained for at least 200 epochs
-#n_run = 20      # Testing
-#no_epochs = 5   # Testing
+#n_run = 512     # Testing
+#no_epochs = 10  # Testing
 learning_rate = 0.001
 
 #############################################################
@@ -114,12 +114,12 @@ del(all_x_t)
 max_train = 30.0
 min_train = -20.0
 
-inputs_tm5   = torch.FloatTensor(2.0*(inputs_tm5-min_train)/(max_train-min_train)-1.0)
-inputs_tm4   = torch.FloatTensor(2.0*(inputs_tm4-min_train)/(max_train-min_train)-1.0)
-inputs_tm3   = torch.FloatTensor(2.0*(inputs_tm3-min_train)/(max_train-min_train)-1.0)
-inputs_tm2   = torch.FloatTensor(2.0*(inputs_tm2-min_train)/(max_train-min_train)-1.0)
-inputs_tm1   = torch.FloatTensor(2.0*(inputs_tm1-min_train)/(max_train-min_train)-1.0)
-outputs_t    = torch.FloatTensor(2.0*( outputs_t-min_train)/(max_train-min_train)-1.0)
+inputs_tm5       = torch.FloatTensor(2.0*(inputs_tm5-min_train)/(max_train-min_train)-1.0)
+inputs_tm4       = torch.FloatTensor(2.0*(inputs_tm4-min_train)/(max_train-min_train)-1.0)
+inputs_tm3       = torch.FloatTensor(2.0*(inputs_tm3-min_train)/(max_train-min_train)-1.0)
+inputs_tm2       = torch.FloatTensor(2.0*(inputs_tm2-min_train)/(max_train-min_train)-1.0)
+inputs_tm1       = torch.FloatTensor(2.0*(inputs_tm1-min_train)/(max_train-min_train)-1.0)
+outputs_t        = torch.FloatTensor(2.0*(outputs_t-min_train)/(max_train-min_train)-1.0)
 
 print('inputs_tm1 : '+str(inputs_tm1.shape))
 print('outputs_t shape ; '+str(outputs_t.shape))
@@ -165,6 +165,7 @@ class LorenzDataset(data.Dataset):
 
 # Instantiate the dataset
 Lorenz_Dataset = LorenzDataset(inputs_tm5, inputs_tm4, inputs_tm3, inputs_tm2, inputs_tm1, outputs_t)
+#np.savez('arrays.npz', inputs_tm1, outputs_t)
 
 random_seed= 42
 validation_split = .2
@@ -257,22 +258,26 @@ for epoch in range(no_epochs):
    val_loss_epoch.append(val_loss_temp / len(val_indices))
    print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
    print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
-   
- 
+
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB1stOrder_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB1stOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
             'opt_AB1_state_dict': opt_AB1.state_dict(),
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_model_'+str(n_run)+'.pt')
+	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_model_'+str(n_run)+'.pt')
 
 
 ##########################################
@@ -323,13 +328,18 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB2ndOrder_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB2ndOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
             'opt_AB2_state_dict': opt_AB2.state_dict()
@@ -385,16 +395,21 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB3rdOrder_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB3rdOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
-            'opt_AB3_state_dict': opt_AB3.state_dict(),
+            'opt_AB3_state_dict': opt_AB3.state_dict()
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB3rdOrder_model_'+str(n_run)+'.pt')
 
 ##########################################
@@ -449,16 +464,21 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB4thOrder_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB4thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
-            'opt_AB4_state_dict': opt_AB4.state_dict(),
+            'opt_AB4_state_dict': opt_AB4.state_dict()
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB4thOrder_model_'+str(n_run)+'.pt')
 
 #########################################
@@ -517,15 +537,20 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB5thOrder_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB5thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB5_state_dict': h_AB5.state_dict(),
-            'opt_AB5_state_dict': opt_AB5.state_dict(),
+            'opt_AB5_state_dict': opt_AB5.state_dict()
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB5thOrder_model_'+str(n_run)+'.pt')
 

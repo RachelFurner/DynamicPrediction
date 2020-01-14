@@ -22,13 +22,13 @@ K = 8                   # 8 X variables in the Lorenz model
 t_int = 0.005
 n_run = int(2000000/8)  # Want 2mill samples, and obtain 8 per time step sampled
 no_epochs = 200         # in D&B paper the NN's were trained for at least 200 epochs
-#n_run = 256     # Testing
-#no_epochs = 10   # Testing
+#n_run = 512     # Testing
+#no_epochs = 5   # Testing
 learning_rate = 0.001
 
-#############################################################
-print('Read in input-output training pairs from text file') #
-#############################################################
+##############################################################
+#print('Read in input-output training pairs from text file') #
+##############################################################
 
 file_train = 'Lorenz_full.txt'
 
@@ -38,7 +38,7 @@ data_list_tp10 = []  # value at time plus 10
 data_list_tp100 = [] # value at time plus 100
 
 file = open(file_train, 'r')
-for i in range(10): #skip first 10 lines - model starts from rest and we want to ignore this bit
+for i in range(4): #skip first 4 lines - model starts from rest and we want to ignore this bit
     a_str = file.readline()
 for i in range(n_run):
     a_str = file.readline() ;  data_list_tm1.append(a_str.split())
@@ -101,13 +101,12 @@ max_train = 30.0
 min_train = -20.0
 
 inputs_all_x_tm1 = torch.FloatTensor(2.0*(inputs_all_x_tm1-min_train)/(max_train-min_train)-1.0)
-inputs_tm1       = torch.FloatTensor(2.0*(      inputs_tm1-min_train)/(max_train-min_train)-1.0)
-outputs_t        = torch.FloatTensor(2.0*(       outputs_t-min_train)/(max_train-min_train)-1.0)
-outputs_tp10     = torch.FloatTensor(2.0*(    outputs_tp10-min_train)/(max_train-min_train)-1.0)
-outputs_tp100    = torch.FloatTensor(2.0*(   outputs_tp100-min_train)/(max_train-min_train)-1.0)
+inputs_tm1       = torch.FloatTensor(2.0*(inputs_tm1-min_train)/(max_train-min_train)-1.0)
+outputs_t        = torch.FloatTensor(2.0*(outputs_t-min_train)/(max_train-min_train)-1.0)
+outputs_tp10     = torch.FloatTensor(2.0*(outputs_tp10-min_train)/(max_train-min_train)-1.0)
+outputs_tp100    = torch.FloatTensor(2.0*(outputs_tp100-min_train)/(max_train-min_train)-1.0)
 
 print('inputs_all_x_tm1 shape : '+str(inputs_all_x_tm1.shape))
-#print('inputs_all_x_tm1 : '+str(inputs_all_x_tm1))
 print('outputs_t shape ; '+str(outputs_t.shape))
 no_samples=outputs_t.shape[0]
 print('no samples ; ',+no_samples)
@@ -128,22 +127,22 @@ class LorenzDataset(data.Dataset):
     def __init__(self, inputs_all_x_tm1, inputs_tm1, outputs_t, outputs_tp10, outputs_tp100, inputs_K_val):
 
         self.inputs_all_x_tm1 = inputs_all_x_tm1
-        self.inputs_tm1       = inputs_tm1
-        self.outputs_t        = outputs_t
-        self.outputs_tp10     = outputs_tp10
-        self.outputs_tp100    = outputs_tp100
-        self.inputs_K_val     = inputs_K_val
+        self.inputs_tm1 = inputs_tm1
+        self.outputs_t = outputs_t
+        self.outputs_tp10 = outputs_tp10
+        self.outputs_tp100 = outputs_tp100
+        self.inputs_K_val = inputs_K_val
 
     def __getitem__(self, index):
 	
-        sample_tm1_all      = inputs_all_x_tm1[index,:]
-        sample_x_tm1        = inputs_tm1[index,:]
-        sample_x_t          = outputs_t[index,:]
-        sample_x_tp10       = outputs_tp10[index,:]
-        sample_x_tp100      = outputs_tp100[index,:]
+        sample_tm1_all = inputs_all_x_tm1[index,:]
+        sample_tm1 = inputs_tm1[index,:]
+        sample_t = outputs_t[index]
+        sample_tp10 = outputs_tp10[index,:]
+        sample_tp100 = outputs_tp100[index,:]
         sample_inputs_K_val = inputs_K_val[index,:]
 
-        return (sample_tm1_all, sample_x_tm1, sample_x_t, sample_x_tp10, sample_x_tp100, sample_inputs_K_val)
+        return (sample_tm1, sample_t, sample_tp10, sample_tp100, sample_inputs_K_val, sample_tm1_all)
 
     def __len__(self):
         return outputs_t.shape[0]
@@ -154,7 +153,6 @@ Lorenz_Dataset = LorenzDataset(inputs_all_x_tm1, inputs_tm1, outputs_t, outputs_
 random_seed= 42
 validation_split = .2
 batch_size=512
-
 
 # Creating data indices for training and validation splits:
 dataset_size = len(Lorenz_Dataset)
@@ -181,18 +179,23 @@ print('Set up NNs') #
 h_1ts = nn.Sequential( nn.Linear( 4, 20), nn.Tanh(), 
                        nn.Linear(20, 20), nn.Tanh(), 
                        nn.Linear(20, 1 ) )
-h_1tsIt  = pickle.loads(pickle.dumps(h_1ts))
-h_10ts  = pickle.loads(pickle.dumps(h_1ts))
-h_100ts = pickle.loads(pickle.dumps(h_1ts))
+pickled_h = pickle.dumps(h_1ts)
+
+h_AB1 = pickle.loads(pickled_h)
+h_1tsIt = pickle.loads(pickled_h)
+h_10ts  = pickle.loads(pickled_h)
+h_100ts = pickle.loads(pickled_h)
 
 # parallelise and send to GPU
 if torch.cuda.device_count() > 1:
   print("Let's use", torch.cuda.device_count(), "GPUs!")
+  h_AB1 = nn.DataParallel(h_AB1)
   h_1ts   = nn.DataParallel(h_1ts)
   h_1tsIt  = nn.DataParallel(h_1tsIt)
   h_10ts  = nn.DataParallel(h_10ts)
   h_100ts = nn.DataParallel(h_100ts)
 
+h_AB1.to(device)
 h_1ts.to(device)
 h_1tsIt.to(device)
 h_10ts.to(device)
@@ -229,6 +232,70 @@ def AB_1st_order_integrator(ref_state, h, n_steps):
         state_out[j,:,:] = (state[:,:])
     return(state_out)
 
+
+#########################################
+print('')                               #
+print('Train to first order objective') #
+print('')                               #
+#########################################
+
+opt_AB1 = torch.optim.Adam(h_AB1.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
+
+train_loss_batch = []
+train_loss_epoch = []
+val_loss_epoch = []
+for epoch in range(no_epochs):
+   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+   print('-' * 10)
+   train_loss_temp = 0.0
+   val_loss_temp = 0.0
+
+   for tm1, t, tp10, tp100, K, tm1_all in train_loader:
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB1.train(True)
+      estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      loss.backward()
+      opt_AB1.step()
+      opt_AB1.zero_grad()
+      train_loss_batch.append(loss.item())
+      train_loss_temp += loss.item()
+     
+   for tm1, t, tp10, tp100, K, tm1_all in val_loader:
+      tm1 = tm1.to(device).float()
+      t   = t.to(device).float()
+      h_AB1.train(False)
+      estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
+      loss = (estimate - t).abs().mean()  # mean absolute error
+      val_loss_temp += loss.item()
+
+   train_loss_epoch.append(train_loss_temp / len(train_indices))
+   val_loss_epoch.append(val_loss_temp / len(val_indices))
+   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+
+fig = plt.figure()
+ax1 = fig.add_subplot(211)
+ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
+ax2 = fig.add_subplot(212)
+ax2.plot(train_loss_epoch)
+ax2.plot(val_loss_epoch)
+ax2.legend(['Training loss','Validation loss'])
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Loss')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB1stOrderTEST_'+str(n_run)+'.png',  bbox_inches = 'tight', pad_inches = 0.1)
+
+torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
+            'opt_AB1_state_dict': opt_AB1.state_dict(),
+	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_modelTEST_'+str(n_run)+'.pt')
+
+
 #######################################
 print('')                             #
 print('Train on one time step ahead') #
@@ -246,21 +313,11 @@ for epoch in range(no_epochs):
    train_loss_temp = 0.0
    val_loss_temp = 0.0
 
-   for tm1_all, tm1, t, tp10, tp100, K in train_loader:
-      tm1_all = tm1_all.to(device).float()
+   for tm1, t, tp10, tp100, K, tm1_all in train_loader:
       tm1 = tm1.to(device).float()
       t   = t.to(device).float()
       h_1ts.train(True)
       estimate = tm1[:,2,None] + h_1ts(tm1[:,:])
-      #print(' ')
-      #print('tm1_all :')
-      #print(tm1_all)
-      #print('tm1[:,2,None] :')
-      #print(tm1[:,2,None])
-      #print('h_1ts(tm1[:,:]) :')
-      #print(h_1ts(tm1[:,:]))
-      #print('estimate :')
-      #print(estimate)
       loss = (estimate - t).abs().mean()  # mean absolute error
       loss.backward()
       opt_1ts.step()
@@ -268,7 +325,7 @@ for epoch in range(no_epochs):
       train_loss_batch.append(loss.item())
       train_loss_temp += loss.item()
 
-   for tm1_all, tm1, t, tp10, tp100, K in val_loader:
+   for tm1, t, tp10, tp100, K, tm1_all in val_loader:
       tm1 = tm1.to(device).float()
       t   = t.to(device).float()
       h_1ts.train(False)
@@ -284,23 +341,28 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_1ts_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_1ts_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_1ts_state_dict': h_1ts.state_dict(),
             'opt_1ts_state_dict': opt_1ts.state_dict(),
 	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1ts_model_'+str(n_run)+'.pt')
 
-#########################################################
-print('')                                               #
-print('Train on one time steps ahead with iterator...') #
-print('')                                               #
-#########################################################
+########################################################
+print('')                                              #
+print('Train on one time step ahead with iterator...') #
+print('')                                              #
+########################################################
 
 opt_1tsIt = torch.optim.Adam(h_1tsIt.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
 
@@ -313,47 +375,32 @@ for epoch in range(no_epochs):
    train_loss_temp = 0.0
    val_loss_temp = 0.0
 
-   for tm1_all, tm1, t, tp10, tp100, K in train_loader:
+   for tm1, t, tp10, tp100, K, tm1_all in train_loader:
       tm1_all = tm1_all.to(device).float()
       tm1     = tm1.to(device).float()
       t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
       K       = K.to(device).long()
       h_1tsIt.train(True)
       iterations = AB_1st_order_integrator(tm1_all[:,:], h_1tsIt, 1)
       estimate1_temp = iterations[0,:,:]
       estimate1 = estimate1_temp[range(estimate1_temp.shape[0]), K.flatten()].reshape(-1,1)
-      #print(' ')
-      #print('tm1_all :')
-      #print(tm1_all)
-      #print('tm1[:,2,None] :')
-      #print(tm1[:,2,None])
-      #print('iterations :')
-      #print(iterations)
-      #print('estimate1_temp :')
-      #print(estimate1_temp)
-      #print('estimate :')
-      #print(estimate)
-      #print('h_1ts(tm1[:,:]) :')
-      #print(h_1ts(tm1[:,:]))
-      loss = ( (estimate1.float().to(device) - t[0]) ).abs().mean()
+      loss = ( (estimate1.float().to(device) - t) ).abs().mean()
       loss.backward()
       opt_1tsIt.step()
       opt_1tsIt.zero_grad()
       train_loss_batch.append(loss.item())
       train_loss_temp += loss.item()
 
-   for tm1_all, tm1, t, tp10, tp100, K in val_loader:
+   for tm1, t, tp10, tp100, K, tm1_all in val_loader:
       tm1_all = tm1_all.to(device).float()
       tm1     = tm1.to(device).float()
       t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
       K       = K.to(device).long()
       h_1tsIt.train(False)
       iterations = AB_1st_order_integrator(tm1_all[:,:], h_1tsIt, 1)
       estimate1_temp = iterations[0,:,:]
       estimate1 = estimate1_temp[range(estimate1_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1.float().to(device) - t[0]) ).abs().mean()
+      loss = ( (estimate1.float().to(device) - t) ).abs().mean()
       val_loss_temp += loss.item()
 
    train_loss_epoch.append(train_loss_temp / len(train_indices))
@@ -364,16 +411,21 @@ for epoch in range(no_epochs):
 fig = plt.figure()
 ax1 = fig.add_subplot(211)
 ax1.plot(train_loss_batch)
+ax1.set_xlabel('Batches')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(train_loss_epoch)
 ax2.plot(val_loss_epoch)
 ax2.legend(['Training loss','Validation loss'])
 ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_1tsIt_'+str(n_run)+'.png')
+ax2.set_yscale('log')
+plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_1tsIt_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_1tsIt_state_dict': h_1tsIt.state_dict(),
-            'opt_1tsIt_state_dict': opt_1tsIt.state_dict(),
+            'opt_1tsIt_state_dict': opt_1tsIt.state_dict()
 	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/1tsIt_model_'+str(n_run)+'.pt')
 
 del(estimate1_temp)
@@ -387,73 +439,78 @@ print('')                                     #
 
 opt_10ts = torch.optim.Adam(h_10ts.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
 
-alpha=1  # balance between optimising for 1 time step ahead, vs 10 time steps ahead.
+for alpha in [0.1,0.3,1,10]:   # balance between optimising for 1 time step ahead, vs 10 time steps ahead.
 
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs):
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm1_all, tm1, t, tp10, tp100, K in train_loader:
-      tm1_all = tm1_all.to(device).float()
-      tm1     = tm1.to(device).float()
-      t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
-      K       = K.to(device).long()
-      h_10ts.train(True)
-      estimate1 = tm1[:,2,None] + h_10ts(tm1[:,:])
-      iterations = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
-      estimate10_temp = iterations[9,:,:]
-      estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1.float().to(device) - t[0]).abs() + alpha*(estimate10.float().to(device) - tp10[0]).abs() ).mean()
-      loss.backward()
-      opt_10ts.step()
-      opt_10ts.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-
-   for tm1_all, tm1, t, tp10, tp100, K in val_loader:
-      tm1_all = tm1_all.to(device).float()
-      tm1     = tm1.to(device).float()
-      t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
-      K       = K.to(device).long()
-      h_10ts.train(False)
-      estimate1 = tm1[:,2,None] + h_10ts(tm1[:,:])
-      iterations = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
-      estimate10_temp = iterations[9,:,:]
-      estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1.float().to(device) - t[0]).abs() + alpha*(estimate10.float().to(device) - tp10[0]).abs() ).mean()
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_10ts_'+str(n_run)+'.png')
-
-torch.save({'h_10ts_state_dict': h_10ts.state_dict(),
-            'opt_10ts_state_dict': opt_10ts.state_dict(),
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/10ts_model_'+str(n_run)+'.pt')
-
-del(estimate1)
-del(estimate10_temp)
-del(estimate10)
-
+   train_loss_batch = []
+   train_loss_epoch = []
+   val_loss_epoch = []
+   for epoch in range(no_epochs):
+      print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+      print('-' * 10)
+      train_loss_temp = 0.0
+      val_loss_temp = 0.0
+   
+      for tm1, t, tp10, tp100, K, tm1_all in train_loader:
+         tm1_all = tm1_all.to(device).float()
+         tm1     = tm1.to(device).float()
+         t       = t.to(device).float()
+         tp10    = tp10.to(device).float()
+         K       = K.to(device).long()
+         h_10ts.train(True)
+         estimate1 = tm1[:,2,None] + h_10ts(tm1[:,:])
+         iterations = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
+         estimate10_temp = iterations[9,:,:]
+         estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
+         loss = ( (estimate1.float().to(device) - t).abs() + alpha*(estimate10.float().to(device) - tp10).abs() ).mean()
+         loss.backward()
+         opt_10ts.step()
+         opt_10ts.zero_grad()
+         train_loss_batch.append(loss.item())
+         train_loss_temp += loss.item()
+   
+      for tm1, t, tp10, tp100, K, tm1_all in val_loader:
+         tm1_all = tm1_all.to(device).float()
+         tm1     = tm1.to(device).float()
+         t       = t.to(device).float()
+         tp10    = tp10.to(device).float()
+         K       = K.to(device).long()
+         h_10ts.train(False)
+         estimate1 = tm1[:,2,None] + h_10ts(tm1[:,:])
+         iterations = AB_1st_order_integrator(tm1_all[:,:], h_10ts, 10)
+         estimate10_temp = iterations[9,:,:]
+         estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
+         loss = ( (estimate1.float().to(device) - t).abs() + alpha*(estimate10.float().to(device) - tp10).abs() ).mean()
+         val_loss_temp += loss.item()
+   
+      train_loss_epoch.append(train_loss_temp / len(train_indices))
+      val_loss_epoch.append(val_loss_temp / len(val_indices))
+      print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+      print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   
+   fig = plt.figure()
+   ax1 = fig.add_subplot(211)
+   ax1.plot(train_loss_batch)
+   ax1.set_xlabel('Batches')
+   ax1.set_ylabel('Loss')
+   ax1.set_yscale('log')
+   ax2 = fig.add_subplot(212)
+   ax2.plot(train_loss_epoch)
+   ax2.plot(val_loss_epoch)
+   ax2.legend(['Training loss','Validation loss'])
+   ax2.set_xlabel('Epochs')
+   ax2.set_ylabel('Loss')
+   ax2.set_yscale('log')
+   plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+   plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_10ts_a'+str(alpha)+'_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   
+   torch.save({'h_10ts_state_dict': h_10ts.state_dict(),
+               'opt_10ts_state_dict': opt_10ts.state_dict()
+   	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/10ts_model_a'+str(alpha)+'_'+str(n_run)+'.pt')
+   
+   del(estimate1)
+   del(estimate10_temp)
+   del(estimate10)
+   
 ###########################################################
 print('')                                                 #
 print('Train NN to match 1, 10 and 100 time steps ahead') #
@@ -462,73 +519,77 @@ print('')                                                 #
 
 opt_100ts = torch.optim.Adam(h_100ts.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
 
-alpha=1  # balance between optimising for 1 time step ahead, vs 10 time steps ahead.
-beta =1  # balance between optimising for 1 time step ahead, vs 100 time steps ahead.
+for alpha in [0.1,0.3,1,10]:   # balance between optimising for 1 time step ahead, vs 10 time steps ahead.
+   for beta in [0.1,0.3,1,10]:   # balance between optimising for 1 time step ahead, vs 100 time steps ahead.
 
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs):
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm1_all, tm1, t, tp10, tp100, K in train_loader:
-      tm1_all = tm1_all.to(device).float()
-      tm1     = tm1.to(device).float()
-      t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
-      tp100   = tp100.to(device).float()
-      K = K.to(device).long()
-      h_100ts.train(True)
-      estimate1 = (tm1[:,2,None] + h_100ts(tm1[:,:]))
-      iterations = AB_1st_order_integrator(tm1_all[:,:], h_100ts, 100)
-      estimate10_temp = iterations[9,:,:]
-      estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
-      estimate100_temp = iterations[99,:,:]
-      estimate100 = estimate100_temp[range(estimate100_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1 - t[0]).abs() + alpha*(estimate10.float().to(device) - tp10[0]).abs() + beta*(estimate100.float().to(device) - tp100[0]).abs() ).mean()
-      loss.backward()
-      opt_100ts.step()
-      opt_100ts.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-
-   for tm1_all, tm1, t, tp10, tp100, K in val_loader:
-      tm1_all = tm1_all.to(device).float()
-      tm1     = tm1.to(device).float()
-      t       = t.to(device).float()
-      tp10    = tp10.to(device).float()
-      tp100   = tp100.to(device).float()
-      K       = K.to(device).long()
-      h_100ts.train(False)
-      estimate1 = (tm1[:,2,None] + h_100ts(tm1[:,:]))
-      iterations = AB_1st_order_integrator(tm1_all[:,:], h_100ts, 100)
-      estimate10_temp = iterations[9,:,:]
-      estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
-      estimate100_temp = iterations[99,:,:]
-      estimate100 = estimate100_temp[range(estimate100_temp.shape[0]), K.flatten()].reshape(-1,1)
-      loss = ( (estimate1 - t[0]).abs() + alpha*(estimate10.float().to(device) - tp10[0]).abs() + beta*(estimate100.float().to(device) - tp100[0]).abs() ).mean()
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_100ts_'+str(n_run)+'.png')
-
-torch.save({'h_100ts_state_dict': h_100ts.state_dict(),
-            'opt_100ts_state_dict': opt_100ts.state_dict(),
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/100ts_model_'+str(n_run)+'.pt')
-
+      train_loss_batch = []
+      train_loss_epoch = []
+      val_loss_epoch = []
+      for epoch in range(no_epochs):
+         print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+         print('-' * 10)
+         train_loss_temp = 0.0
+         val_loss_temp = 0.0
+      
+         for tm1, t, tp10, tp100, K, tm1_all in train_loader:
+            tm1_all = tm1_all.to(device).float()
+            tm1     = tm1.to(device).float()
+            t       = t.to(device).float()
+            tp10    = tp10.to(device).float()
+            tp100   = tp100.to(device).float()
+            K = K.to(device).long()
+            h_100ts.train(True)
+            estimate1 = (tm1[:,2,None] + h_100ts(tm1[:,:]))
+            iterations = AB_1st_order_integrator(tm1_all[:,:], h_100ts, 100)
+            estimate10_temp = iterations[9,:,:]
+            estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
+            estimate100_temp = iterations[99,:,:]
+            estimate100 = estimate100_temp[range(estimate100_temp.shape[0]), K.flatten()].reshape(-1,1)
+            loss = ( (estimate1 - t).abs() + alpha*(estimate10.float().to(device) - tp10).abs() + beta*(estimate100.float().to(device) - tp100).abs() ).mean()
+            loss.backward()
+            opt_100ts.step()
+            opt_100ts.zero_grad()
+            train_loss_batch.append(loss.item())
+            train_loss_temp += loss.item()
+      
+         for tm1, t, tp10, tp100, K, tm1_all in val_loader:
+            tm1_all = tm1_all.to(device).float()
+            tm1     = tm1.to(device).float()
+            t       = t.to(device).float()
+            tp10    = tp10.to(device).float()
+            tp100   = tp100.to(device).float()
+            K       = K.to(device).long()
+            h_100ts.train(False)
+            estimate1 = (tm1[:,2,None] + h_100ts(tm1[:,:]))
+            iterations = AB_1st_order_integrator(tm1_all[:,:], h_100ts, 100)
+            estimate10_temp = iterations[9,:,:]
+            estimate10 = estimate10_temp[range(estimate10_temp.shape[0]), K.flatten()].reshape(-1,1)
+            estimate100_temp = iterations[99,:,:]
+            estimate100 = estimate100_temp[range(estimate100_temp.shape[0]), K.flatten()].reshape(-1,1)
+            loss = ( (estimate1 - t).abs() + alpha*(estimate10.float().to(device) - tp10).abs() + beta*(estimate100.float().to(device) - tp100).abs() ).mean()
+            val_loss_temp += loss.item()
+      
+         train_loss_epoch.append(train_loss_temp / len(train_indices))
+         val_loss_epoch.append(val_loss_temp / len(val_indices))
+         print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+         print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+      
+      fig = plt.figure()
+      ax1 = fig.add_subplot(211)
+      ax1.plot(train_loss_batch)
+      ax1.set_xlabel('Batches')
+      ax1.set_ylabel('Loss')
+      ax1.set_yscale('log')
+      ax2 = fig.add_subplot(212)
+      ax2.plot(train_loss_epoch)
+      ax2.plot(val_loss_epoch)
+      ax2.legend(['Training loss','Validation loss'])
+      ax2.set_xlabel('Epochs')
+      ax2.set_ylabel('Loss')
+      ax2.set_yscale('log')
+      plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+      plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainloss_100ts_a'+str(alpha)+'_b'+str(beta)+'_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+      
+      torch.save({'h_100ts_state_dict': h_100ts.state_dict(),
+                  'opt_100ts_state_dict': opt_100ts.state_dict()
+      	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/100ts_model_a'+str(alpha)+'_b'+str(beta)+'_'+str(n_run)+'.pt')
