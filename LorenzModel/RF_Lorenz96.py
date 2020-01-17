@@ -1,42 +1,21 @@
-#!/usr/bin/env python
-# coding: utf-8
+## Script to integrate Lorenz model
 
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.integrate import solve_ivp
-from scipy.integrate import odeint
-from scipy.integrate import RK45
 
-# # Set up three layer Lorenz 95 model as in D&B paper
+#######################
+# Define Lorenz model #
+#######################
+def Lorenz96(t, state, I, J, K):
 
-# code based on version from https://en.wikipedia.org/wiki/Lorenz_96_model
-# and ammended to match D&B paper - not sure how to initialise, paper doesn't say, so have gone 
-# with forcing values for x variables and random for y and z variables.
+    #Define parameters
+    F = 20.  # forcing
+    h = 1.
+    c = 10.
+    b = 10.
+    e = 10.
+    d = 10.
+    gz = 1.
 
-I = 8
-J = 8
-K = 8
-
-F = 20.  # forcing
-
-h = 1.
-c = 10.
-b = 10.
-e = 10.
-d = 10.
-
-gz = 1.
-
-x0 = np.zeros((K)) # ??
-x0[:]=F
-y0 = np.random.rand(J,K) # Random??
-z0 = np.random.rand(I,J,K) # Random??
-state0  = np.concatenate((x0,y0.reshape(J*K,),z0.reshape(I*J*K,)))
-
-t_int = 0.005
-
-# Define Lorenz model 
-def Lorenz96(t, state):
     # unpack input array
     x=state[0:K]
     y=state[K:J*K+K]
@@ -84,31 +63,4 @@ def Lorenz96(t, state):
     
     return d_state
 
-
-######################
-# Run outputting every time step (t_int), in batches of 20 MTUs
-
-state0  = np.concatenate((x0,y0.reshape(J*K,),z0.reshape(I*J*K,)))
-
-filename='Lorenz_full.txt'
-file = open(filename, 'w')
-file.close()
-
-restart_file='Lorenz_full_restart.txt'
-
-t_span  = np.arange(0, 50.+t_int, t_int)
-
-for i in range(10000):
-   state   = odeint(Lorenz96, state0, t_span, tfirst=True)
-   file = open(filename, 'a')
-   for t in range(len(t_span)-1):
-      [file.write(str(state[t,k])+' ') for k in range(K)]
-      file.write('\n')
-   file.close()
-   #write out full data as 'restart' in case needed
-   rfile = open(restart_file, 'w')
-   [rfile.write(str(state[-1,j])+' ') for j in range(K+J*K+I*J*K)]
-   print(state[-1,:])
-   rfile.close()
-   state0=state[-1,:]
 

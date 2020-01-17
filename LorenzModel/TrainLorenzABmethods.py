@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # Script to train various Networks to learn Lorenz model dynamics with different loss functions
-# Script taken from Dueben and Bauer 2018 paper supplematary info and modified
+# Script taken from Dueben and Bauer 2018 paper supplementary info and modified
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,7 +30,7 @@ learning_rate = 0.001
 print('Read in input-output training pairs from text file') #
 #############################################################
 
-file_train = 'Lorenz_full.txt'
+file_train = '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/LORENZ_DATASETS/Lorenz_full.txt'
 
 data_list_tm5 = []   # value at time minus 5
 data_list_tm4 = []   # value at time minus 4
@@ -40,6 +40,8 @@ data_list_tm1 = []   # value at time minus 1
 data_list_t = []     # value at current time step
 
 file = open(file_train, 'r')
+for skip in range(50):  # skip first 50 lines as initialisation is a bit odd
+    a_str = file.readline()
 for i in range(n_run):
     a_str = file.readline() ;  data_list_tm5.append(a_str.split())
     a_str = file.readline() ;  data_list_tm4.append(a_str.split())
@@ -47,7 +49,7 @@ for i in range(n_run):
     a_str = file.readline() ;  data_list_tm2.append(a_str.split())
     a_str = file.readline() ;  data_list_tm1.append(a_str.split())
     a_str = file.readline() ;  data_list_t.append(a_str.split())
-    for j in range(200-6):  # skip lines so we take every 200th point for training
+    for skip in range(200-6):  # skip lines so we take every 200th point for training
        a_str = file.readline()
 file.close()
 
@@ -165,7 +167,6 @@ class LorenzDataset(data.Dataset):
 
 # Instantiate the dataset
 Lorenz_Dataset = LorenzDataset(inputs_tm5, inputs_tm4, inputs_tm3, inputs_tm2, inputs_tm1, outputs_t)
-#np.savez('arrays.npz', inputs_tm1, outputs_t)
 
 random_seed= 42
 validation_split = .2
@@ -273,11 +274,11 @@ ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
 ax2.set_yscale('log')
 plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB1stOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB1stOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
             'opt_AB1_state_dict': opt_AB1.state_dict(),
-	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB1stOrder_model_'+str(n_run)+'.pt')
+	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB1stOrder_model_'+str(n_run)+'.pt')
 
 
 ##########################################
@@ -339,11 +340,11 @@ ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
 ax2.set_yscale('log')
 plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB2ndOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB2ndOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
             'opt_AB2_state_dict': opt_AB2.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB2ndOrder_model_'+str(n_run)+'.pt')
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB2ndOrder_model_'+str(n_run)+'.pt')
 
 #########################################
 print('')                                #
@@ -406,11 +407,11 @@ ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
 ax2.set_yscale('log')
 plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB3rdOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB3rdOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
             'opt_AB3_state_dict': opt_AB3.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB3rdOrder_model_'+str(n_run)+'.pt')
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB3rdOrder_model_'+str(n_run)+'.pt')
 
 ##########################################
 print('')                                #
@@ -475,11 +476,11 @@ ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
 ax2.set_yscale('log')
 plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB4thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB4thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
             'opt_AB4_state_dict': opt_AB4.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB4thOrder_model_'+str(n_run)+'.pt')
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB4thOrder_model_'+str(n_run)+'.pt')
 
 #########################################
 print('')                                #
@@ -548,9 +549,9 @@ ax2.set_xlabel('Epochs')
 ax2.set_ylabel('Loss')
 ax2.set_yscale('log')
 plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/trainingloss_AB5thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB5thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 torch.save({'h_AB5_state_dict': h_AB5.state_dict(),
             'opt_AB5_state_dict': opt_AB5.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/AB5thOrder_model_'+str(n_run)+'.pt')
+	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB5thOrder_model_'+str(n_run)+'.pt')
 
