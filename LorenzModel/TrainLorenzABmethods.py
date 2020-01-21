@@ -194,364 +194,111 @@ print('Set up NNs') #
 
 # Define matching sequential NNs, two hidden layers, with 20 neurons in each, and the tanh activation function
 
-h_AB1 = nn.Sequential( nn.Linear( 4, 20), nn.Tanh(), 
-                       nn.Linear(20, 20), nn.Tanh(), 
-                       nn.Linear(20, 1 ) )
-h_AB2   = pickle.loads(pickle.dumps(h_AB1))
-h_AB3   = pickle.loads(pickle.dumps(h_AB1))
-h_AB4   = pickle.loads(pickle.dumps(h_AB1))
-h_AB5   = pickle.loads(pickle.dumps(h_AB1))
+h_orig = nn.Sequential( nn.Linear( 4, 20), nn.Tanh(), 
+                   nn.Linear(20, 20), nn.Tanh(), 
+                   nn.Linear(20, 1 ) )
+h_dump = pickle.dumps(h_orig)
 
-# parallelise and send to GPU
-if torch.cuda.device_count() > 1:
-  print("Let's use", torch.cuda.device_count(), "GPUs!")
-  h_AB1 = nn.DataParallel(h_AB1)
-  h_AB2 = nn.DataParallel(h_AB2)
-  h_AB3 = nn.DataParallel(h_AB3)
-  h_AB4 = nn.DataParallel(h_AB4)
-  h_AB5 = nn.DataParallel(h_AB5)
+for order in range(5):
 
-h_AB1.to(device)
-h_AB2.to(device)
-h_AB3.to(device)
-h_AB4.to(device)
-h_AB5.to(device)
-
-
-#########################################
-print('')                               #
-print('Train to first order objective') #
-print('')                               #
-#########################################
-
-opt_AB1 = torch.optim.Adam(h_AB1.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
-
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs):
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB1.train(True)
-      estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_AB1.step()
-      opt_AB1.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-     
-   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB1.train(False)
-      estimate = tm1[:,2,None] + h_AB1(tm1[:,:])
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax1.set_xlabel('Batches')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-ax2.set_yscale('log')
-plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB1stOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-torch.save({'h_AB1_state_dict': h_AB1.state_dict(),
-            'opt_AB1_state_dict': opt_AB1.state_dict(),
-	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB1stOrder_model_'+str(n_run)+'.pt')
-
-
-##########################################
-print('')                                #
-print('Train to second order objective') #
-print('')                                #
-##########################################
-
-opt_AB2 = torch.optim.Adam(h_AB2.parameters(), lr=learning_rate) 
-
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs): 
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t = t.to(device).float()
-      h_AB2.train(True)
-      estimate = tm1[:,2,None] + 0.5*( 3*h_AB2(tm1[:,:]) - h_AB2(tm2[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_AB2.step()
-      opt_AB2.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-     
-   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB2.train(False)
-      estimate = tm1[:,2,None] + 0.5*( 3*h_AB2(tm1[:,:]) - h_AB2(tm2[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   print(' ')
+   print('############################')
+   print('Train the model, order = '+str(order))
+   print('############################')
    
+   h = pickle.loads(h_dump)
 
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax1.set_xlabel('Batches')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-ax2.set_yscale('log')
-plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB2ndOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   # parallelise and send to GPU
+   if torch.cuda.device_count() > 1:
+      print("Let's use", torch.cuda.device_count(), "GPUs!")
+      h = nn.DataParallel(h)
+   h.to(device)
 
-torch.save({'h_AB2_state_dict': h_AB2.state_dict(),
-            'opt_AB2_state_dict': opt_AB2.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB2ndOrder_model_'+str(n_run)+'.pt')
+   opt = torch.optim.Adam(h.parameters(), lr=learning_rate) # Use adam optimiser for now, as simple to set up for first run
 
-#########################################
-print('')                                #
-print('Train to third order objective') #
-print('')                                #
-#########################################
-
-opt_AB3 = torch.optim.Adam(h_AB3.parameters(), lr=learning_rate) 
-
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs):
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t = t.to(device).float()
-      h_AB3.train(True)
-      estimate = tm1[:,2,None] + 1./12. * ( 23. * h_AB3(tm1[:,:]) -16. * h_AB3(tm2[:,:]) + 5. * h_AB3(tm3[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_AB3.step()
-      opt_AB3.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-     
-   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB3.train(False)
-      estimate = tm1[:,2,None] + 1./12. * ( 23. * h_AB3(tm1[:,:]) -16. * h_AB3(tm2[:,:]) + 5. * h_AB3(tm3[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+   train_loss_batch = []
+   train_loss_epoch = []
+   val_loss_epoch = []
+   for epoch in range(no_epochs):
+      print('Epoch {}/{}'.format(epoch, no_epochs - 1))
+      print('-' * 10)
+      train_loss_temp = 0.0
+      val_loss_temp = 0.0
    
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax1.set_xlabel('Batches')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-ax2.set_yscale('log')
-plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB3rdOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-torch.save({'h_AB3_state_dict': h_AB3.state_dict(),
-            'opt_AB3_state_dict': opt_AB3.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB3rdOrder_model_'+str(n_run)+'.pt')
-
-##########################################
-print('')                                #
-print('Train to fourth order objective') #
-print('')                                #
-##########################################
-
-opt_AB4 = torch.optim.Adam(h_AB4.parameters(), lr=learning_rate) 
-
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs): 
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
-      tm4 = tm4.to(device).float()
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t = t.to(device).float()
-      h_AB4.train(True)
-      estimate = tm1[:,2,None] + 1./24. * ( 55. * h_AB4(tm1[:,:]) -59. * h_AB4(tm2[:,:]) + 37. *  h_AB4(tm3[:,:]) - 9. *  h_AB4(tm4[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_AB4.step()
-      opt_AB4.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-     
-   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
-      tm4 = tm4.to(device).float()
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB4.train(False)
-      estimate = tm1[:,2,None] + 1./24. * ( 55. * h_AB4(tm1[:,:]) -59. * h_AB4(tm2[:,:]) + 37. *  h_AB4(tm3[:,:]) - 9. *  h_AB4(tm4[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+      for tm5, tm4, tm3, tm2, tm1, t in train_loader:
+         tm5 = tm5.to(device).float()
+         tm4 = tm4.to(device).float()
+         tm3 = tm3.to(device).float()
+         tm2 = tm2.to(device).float()
+         tm1 = tm1.to(device).float()
+         t   = t.to(device).float()
+         h.train(True)
+         if order == 0:
+            estimate = tm1[:,2,None] + h(tm1[:,:])
+         elif order == 1:
+            estimate = tm1[:,2,None] + 0.5*( 3*h(tm1[:,:]) - h(tm2[:,:]) )
+         elif order == 2:
+            estimate = tm1[:,2,None] + 1./12. * ( 23. * h(tm1[:,:]) -16. * h(tm2[:,:]) + 5. * h(tm3[:,:]) )
+         elif order == 3:
+            estimate = tm1[:,2,None] + 1./24. * ( 55. * h(tm1[:,:]) -59. * h(tm2[:,:]) + 37. * h(tm3[:,:]) - 9. * h(tm4[:,:]) )
+         elif order == 4:
+            estimate = tm1[:,2,None] + 1./720. * ( 1901. * h(tm1[:,:]) -2774. * h(tm2[:,:]) + 2616. * h(tm3[:,:])
+                                                     - 1274. * h(tm4[:,:]) + 251. * h(tm5[:,:]) )
+         else:
+            print('error, order is none of 0-4!')
+         loss = (estimate - t).abs().mean()  # mean absolute error
+         loss.backward()
+         opt.step()
+         opt.zero_grad()
+         train_loss_batch.append(loss.item())
+         train_loss_temp += loss.item()
+        
+      for tm5, tm4, tm3, tm2, tm1, t in val_loader:
+         tm5 = tm5.to(device).float()
+         tm4 = tm4.to(device).float()
+         tm3 = tm3.to(device).float()
+         tm2 = tm2.to(device).float()
+         tm1 = tm1.to(device).float()
+         t   = t.to(device).float()
+         h.train(False)
+         if order == 0:
+            estimate = tm1[:,2,None] + h(tm1[:,:])
+         elif order == 1:
+            estimate = tm1[:,2,None] + 0.5*( 3*h(tm1[:,:]) - h(tm2[:,:]) )
+         elif order == 2:
+            estimate = tm1[:,2,None] + 1./12. * ( 23. * h(tm1[:,:]) -16. * h(tm2[:,:]) + 5. * h(tm3[:,:]) )
+         elif order == 3:
+            estimate = tm1[:,2,None] + 1./24. * ( 55. * h(tm1[:,:]) -59. * h(tm2[:,:]) + 37. * h(tm3[:,:]) - 9. * h(tm4[:,:]) )
+         elif order == 4:
+            estimate = tm1[:,2,None] + 1./720. * ( 1901. * h(tm1[:,:]) -2774. * h(tm2[:,:]) + 2616. * h(tm3[:,:])
+                                                     - 1274. * h(tm4[:,:]) + 251. * h(tm5[:,:]) )
+         else:
+            print('error, order is none of 0-4!')
+         loss = (estimate - t).abs().mean()  # mean absolute error
+         val_loss_temp += loss.item()
    
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax1.set_xlabel('Batches')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-ax2.set_yscale('log')
-plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB4thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-torch.save({'h_AB4_state_dict': h_AB4.state_dict(),
-            'opt_AB4_state_dict': opt_AB4.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB4thOrder_model_'+str(n_run)+'.pt')
-
-#########################################
-print('')                                #
-print('Train to fifth order objective') #
-print('')                                #
-#########################################
-
-opt_AB5 = torch.optim.Adam(h_AB5.parameters(), lr=learning_rate) 
-
-train_loss_batch = []
-train_loss_epoch = []
-val_loss_epoch = []
-for epoch in range(no_epochs): 
-   print('Epoch {}/{}'.format(epoch, no_epochs - 1))
-   print('-' * 10)
-   train_loss_temp = 0.0
-   val_loss_temp = 0.0
-
-   for tm5, tm4, tm3, tm2, tm1, t in train_loader:
-      tm5 = tm5.to(device).float()
-      tm4 = tm4.to(device).float()
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t = t.to(device).float()
-      h_AB5.train(True)
-      estimate = tm1[:,2,None] + 1./720. * ( 1901. * h_AB5(tm1[:,:]) -2774. * h_AB5(tm2[:,:]) + 2616. *  h_AB5(tm3[:,:])
-                                                     - 1274. *  h_AB5(tm4[:,:]) + 251. *  h_AB5(tm5[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      loss.backward()
-      opt_AB5.step()
-      opt_AB5.zero_grad()
-      train_loss_batch.append(loss.item())
-      train_loss_temp += loss.item()
-     
-   for tm5, tm4, tm3, tm2, tm1, t in val_loader:
-      tm5 = tm5.to(device).float()
-      tm4 = tm4.to(device).float()
-      tm3 = tm3.to(device).float()
-      tm2 = tm2.to(device).float()
-      tm1 = tm1.to(device).float()
-      t   = t.to(device).float()
-      h_AB5.train(False)
-      estimate = tm1[:,2,None] + 1./720. * ( 1901. * h_AB5(tm1[:,:]) -2774. * h_AB5(tm2[:,:]) + 2616. *  h_AB5(tm3[:,:])
-                                                     - 1274. *  h_AB5(tm4[:,:]) + 251. *  h_AB5(tm5[:,:]) )
-      loss = (estimate - t).abs().mean()  # mean absolute error
-      val_loss_temp += loss.item()
-
-   train_loss_epoch.append(train_loss_temp / len(train_indices))
-   val_loss_epoch.append(val_loss_temp / len(val_indices))
-   print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
-   print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
+      train_loss_epoch.append(train_loss_temp / len(train_indices))
+      val_loss_epoch.append(val_loss_temp / len(val_indices))
+      print('Training Loss: {:.8f}'.format(train_loss_epoch[-1]))
+      print('Validation Loss: {:.8f}'.format(val_loss_epoch[-1]))
    
-
-fig = plt.figure()
-ax1 = fig.add_subplot(211)
-ax1.plot(train_loss_batch)
-ax1.set_xlabel('Batches')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax2 = fig.add_subplot(212)
-ax2.plot(train_loss_epoch)
-ax2.plot(val_loss_epoch)
-ax2.legend(['Training loss','Validation loss'])
-ax2.set_xlabel('Epochs')
-ax2.set_ylabel('Loss')
-ax2.set_yscale('log')
-plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB5thOrder_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-torch.save({'h_AB5_state_dict': h_AB5.state_dict(),
-            'opt_AB5_state_dict': opt_AB5.state_dict()
-	    }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB5thOrder_model_'+str(n_run)+'.pt')
-
+   fig = plt.figure()
+   ax1 = fig.add_subplot(211)
+   ax1.plot(train_loss_batch)
+   ax1.set_xlabel('Batches')
+   ax1.set_ylabel('Loss')
+   ax1.set_yscale('log')
+   ax2 = fig.add_subplot(212)
+   ax2.plot(train_loss_epoch)
+   ax2.plot(val_loss_epoch)
+   ax2.legend(['Training loss','Validation loss'])
+   ax2.set_xlabel('Epochs')
+   ax2.set_ylabel('Loss')
+   ax2.set_yscale('log')
+   plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
+   plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/trainingloss_AB'+str(order+1)+'_'+str(n_run)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   
+   torch.save({'h_state_dict': h.state_dict(),
+               'opt_state_dict': opt.state_dict(),
+   	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB'+str(order+1)+'_model_'+str(n_run)+'.pt')
+   

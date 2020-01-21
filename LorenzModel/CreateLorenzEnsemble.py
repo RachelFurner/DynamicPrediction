@@ -17,7 +17,7 @@ F=20
 t_int = 0.005
 t_span  = np.arange(0, 4, t_int)
 print(len(t_span))
-n_forecasts = 3
+n_forecasts = 4
 
 # Run the ensembles 
  

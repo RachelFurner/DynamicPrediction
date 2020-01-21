@@ -8,7 +8,7 @@ import pickle
 # Define Experiment variables etc #
 ###################################
 
-forecast_starts = [10001.0, 20002.0]  # spawn off multiple forecasts, so we can see impact of initialisation
+forecast_starts = [10001.0, 20002.0, 30003.0, 40004.0]  # spawn off multiple forecasts, so we can see impact of initialisation
 n_forecasts = len(forecast_starts)
 n_ensembles = 10
 n_steps = int(4/0.005 - 1)   # no of steps per forecast
@@ -431,6 +431,7 @@ print('Read reference state - the truth and ensembles') #
 ref_state = np.zeros((n_forecasts,n_steps,8))
 z_ens_state = np.zeros((n_ensembles,n_forecasts,n_steps,8))
 y_ens_state = np.zeros((n_ensembles,n_forecasts,n_steps,8))
+rand_yz_ens_state = np.zeros((n_ensembles,n_forecasts,n_steps,8))
 
 for forecast in range(n_forecasts): 
 
@@ -441,7 +442,6 @@ for forecast in range(n_forecasts):
        a_str = ref_file.readline()
        data_list_ref.append(a_str.split()) 
    ref_state[forecast] = np.array(data_list_ref)
-   #ref_state = ref_state.astype(np.float)
    ref_file.close()
    del(data_list_ref)
   
@@ -454,24 +454,28 @@ for forecast in range(n_forecasts):
           data_list_ref.append(a_str.split()) 
       z_ens_state[ensemble,forecast,:,:] = np.array(data_list_ref)
       #ref_state = ref_state.astype(np.float)
-      
       del(data_list_ref)
    
    # Read in y ensembles
    for ensemble in range(n_ensembles): 
       ensfile = open('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/LORENZ_DATASETS/Lorenz_y_ensemble_'+str(forecast_starts[forecast])+'_'+str(ensemble)+'.txt', 'r') 
-      print('Lorenz_y_ensemble_'+str(forecast_starts[forecast])+'_'+str(ensemble)+'.txt')
       data_list_ref = []
       for i in range((n_steps)):
           a_str = ensfile.readline()
           data_list_ref.append(a_str.split()) 
-      print(len(data_list_ref))
-      print(len(data_list_ref[0]))
-      print(len(data_list_ref[-1]))
-      print((np.array(data_list_ref)).shape)
       y_ens_state[ensemble,forecast,:,:] = np.array(data_list_ref)
       #ref_state = ref_state.astype(np.float)
-      
+      del(data_list_ref)
+   
+   # Read in yz random ensembles
+   for ensemble in range(n_ensembles): 
+      ensfile = open('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/LORENZ_DATASETS/Lorenz_rand_yz_ensemble_'+str(forecast_starts[forecast])+'_'+str(ensemble)+'.txt', 'r') 
+      data_list_ref = []
+      for i in range((n_steps)):
+          a_str = ensfile.readline()
+          data_list_ref.append(a_str.split()) 
+      rand_yz_ens_state[ensemble,forecast,:,:] = np.array(data_list_ref)
+      #ref_state = ref_state.astype(np.float)
       del(data_list_ref)
    
 ################################################################
@@ -567,10 +571,13 @@ for i in range(n_forecasts):
     plt.plot(ref_state[i,:,x_pos], color='black', linewidth=1.4)
     for prediction in [fore_state_trainAB1iterateAB1]:
        plt.plot(prediction[i,:,x_pos], linewidth=1.)
+    #for ensemble in range(n_ensembles):
+    #   plt.plot(rand_yz_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3)
     for ensemble in range(n_ensembles):
        plt.plot(z_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3)
     for ensemble in range(n_ensembles):
-       plt.plot(y_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1)
+       plt.plot(y_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3, linestyle=':')
+    plt.plot(ref_state[i,:,x_pos], color='black', linewidth=1.4)
     plt.ylim(-30,30)
     plt.legend(['data', 'forecast'], loc=1, fontsize=20)
     plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/forecast_control_'+str(i)+'.png', bbox_inches = 'tight')
@@ -584,7 +591,10 @@ for i in range(n_forecasts):
     for prediction in [fore_state_trainAB1iterateAB1, fore_state_trainAB3iterateAB1, fore_state_trainAB1iterateAB3, fore_state_trainAB3iterateAB3]:
        plt.plot(prediction[i,:,x_pos], linewidth=1.)
     for ensemble in range(n_ensembles):
-       plt.plot(z_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3)
+       plt.plot(z_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1)
+    for ensemble in range(n_ensembles):
+       plt.plot(y_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1, linestyle=':')
+    plt.plot(ref_state[i,:,x_pos], color='black', linewidth=1.4)
     plt.ylim(-30,30)
     plt.legend(['data', 'train 1st order, iterate 1st order', 'train 3rd order, iterate 1st order', 'train 1st order, iterate 3rd order', 'train 3rd order, iterate 3rd order'], loc=1, fontsize=20)
     plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/forecast_TeTrDiffer_'+str(i)+'.png', bbox_inches = 'tight')
@@ -598,7 +608,10 @@ for i in range(n_forecasts):
     for prediction in [fore_state_trainAB1iterateAB1, fore_state_trainAB2iterateAB2, fore_state_trainAB3iterateAB3, fore_state_trainAB4iterateAB4, fore_state_trainAB5iterateAB5]:
        plt.plot(prediction[i,:,x_pos], linewidth=1.)
     for ensemble in range(n_ensembles):
-       plt.plot(ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3)
+       plt.plot(z_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1)
+    for ensemble in range(n_ensembles):
+       plt.plot(y_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1, linestyle=':')
+    plt.plot(ref_state[i,:,x_pos], color='black', linewidth=1.4)
     plt.ylim(-30,30)
     plt.legend(['data', '1st order', '2nd order', '3rd order', '4th order', '5th order'], loc=1, fontsize=20)
     plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/forecastAB'+str(i)+'.png', bbox_inches = 'tight')
@@ -612,7 +625,10 @@ for i in range(n_forecasts):
     for prediction in [fore_state_trainAB1iterateAB1, fore_state_10ts_ap1, fore_state_10ts_ap3, fore_state_10ts_a1, fore_state_10ts_a10]:
        plt.plot(prediction[i,:,x_pos], linewidth=1.)
     for ensemble in range(n_ensembles):
-       plt.plot(ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.3)
+       plt.plot(z_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1)
+    for ensemble in range(n_ensembles):
+       plt.plot(y_ens_state[ensemble,i,:,x_pos], linewidth=1., color='grey', alpha=0.1, linestyle=':')
+    plt.plot(ref_state[i,:,x_pos], color='black', linewidth=1.4)
     plt.ylim(-30,30)
     plt.legend(['data', 'alpha=0', 'alpha=0.1', 'alpha=0.3', 'alpha=1', 'alpha=10'], loc=1, fontsize=20)
     plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/PLOTS/forecast10tsHor'+str(i)+'.png', bbox_inches = 'tight')
