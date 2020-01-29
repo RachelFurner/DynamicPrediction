@@ -4,6 +4,7 @@
 #----------------------------
 print('Import neccessary packages')
 #----------------------------
+import ReadTestTrain_MITGCM
 
 import numpy as np
 import os
@@ -25,36 +26,6 @@ import torch
 from torch.autograd import Variable
 
 torch.cuda.empty_cache()
-#print('1')
-#os.system('nvidia-smi')
-
-#---------------
-print('Set variables')
-#---------------
-
-StepSize = 1 # how many output steps (months!) to predict over
-
-halo_size = 1
-halo_list = (range(-halo_size, halo_size+1))
-## Calculate x,y position in each feature list to use as 'now' value
-## When using 3-d inputs
-if halo_size == 1:
-   xy = 13
-elif halo_size == 2:
-   xy == 62
-else:
-   print('error in halo size....')
-## When using 2-d inputs
-#xy=2*(halo_size^2+halo_size) # if using a 2-d halo in x and y....if using a 3-d halo need to use above.
-
-# ratio of test to train data to randomly split
-data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
-split_ratio = .7             # ratio of test data to training data
-temp = 'Ttave'
-
-#exp_name='T_3dLatDepVarsINT_halo'+str(halo_size)+'_pred'+str(StepSize)
-exp_name='skLearn_3dLatINT'
-
 
 #------------------
 # Read in the data
@@ -62,158 +33,31 @@ exp_name='skLearn_3dLatINT'
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/'
 exp = '20000yr_Windx1.00_mm_diag/'
-filename=DIR+exp+'cat_tave_5000yrs_SelectedVars.nc'
-print(filename)
-ds   = xr.open_dataset(filename)
+MITGCM_filename=DIR+exp+'cat_tave_5000yrs_SelectedVars.nc'
+print(MITGCM_filename)
 
-da_T=ds['Ttave'].values
-da_S=ds['Stave'].values
-da_U=ds['uVeltave'].values
-da_V=ds['vVeltave'].values
-da_Eta=ds['ETAtave'].values
-da_lat=ds['Y'].values
-da_depth=ds['Z'].values
-
-#------------------------------------------------------------------------------------------
-print('Read in data as one dataset, which we randomly split into train and test later')
-#------------------------------------------------------------------------------------------
-inputs = []
-outputs = []
-
-#for z in range(2,38,15):
-#    for x in range(2,7,3):
-#        for y in range(2,74,20):
-#            for time in range(0, data_end_index, 1000):  #  
-for z in range(2,38,2):
-    for x in range(2,7,2):
-        for y in range(2,74,5):
-            for time in range(0, data_end_index, 100):  # look at first 2000 years only - ignore region when model is at equilibrium
-                input_temp = []
-                #[input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                #[input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                #[input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                #[input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                #[input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                input_temp.append(da_lat[y])
-                #input_temp.append(da_depth[z])
-
-                inputs.append(input_temp)
-                outputs.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
-ds = None
-da_T = None
-da_S = None
-da_U = None
-da_V = None
-da_Eta = None
-da_lat = None
-da_depth = None
- 
-inputs=np.asarray(inputs)
-outputs=np.asarray(outputs)
-print('now save them')
-array_file = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/DATASETS/'+exp_name+'_InputsOutputs.npz'
-np.savez(array_file, inputs,outputs)
-print('saved')
-print('open array from file')
-inputs, outputs = np.load(array_file).values()
-print('inputs.shape, outputs.shape')
-print(inputs.shape, outputs.shape)
-
-## Add polynomial combinations of the features
-print('do poly features')
-polynomial_features = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False) # bias included at linear regressor stage, not needed in input data
-inputs = polynomial_features.fit_transform(inputs)
-print('inputs.shape, outputs.shape')
-print(inputs.shape, outputs.shape)
-
-
-#randomise the sample order, and split into test and train data
-split=int(split_ratio * inputs.shape[0])
-
-np.random.seed(5)
-ordering = np.random.permutation(inputs.shape[0])
-
-inputs_tr = inputs[ordering][:split]
-outputs_tr = outputs[ordering][:split]
-inputs_te = inputs[ordering][split:]
-outputs_te = outputs[ordering][split:]
-
-print('shape for inputs and outputs: full; tr; te')
-print(inputs.shape, outputs.shape)
-print(inputs_tr.shape, outputs_tr.shape)
-print(inputs_te.shape, outputs_te.shape)
-
+exp_name, xy_pos, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = ReadTestTrain_MITGCM.ReadData_MITGCM(MITGCM_filename, 0.7, dimension=2, lat=False, dep=False, current=False, sal=False, eta=False, poly_degree=1)
 
 #-------------------------------------------------------------------------------------------------------------
 print('Plot temp at time t against outputs (temp at time t+1), to see if variance changes with input values') 
 #-------------------------------------------------------------------------------------------------------------
-fig = plt.figure(figsize=(21, 7))
+fig = plt.figure(figsize=(14, 7))
 
-ax1 = fig.add_subplot(131)
-ax1.scatter(inputs[:,xy], outputs, edgecolors=(0, 0, 0))
+ax1 = fig.add_subplot(121)
+ax1.scatter(norm_inputs_tr[:,xy_pos], norm_outputs_tr, edgecolors=(0, 0, 0))
 ax1.set_xlabel('Inputs (t)')
 ax1.set_ylabel('Outputs (t+1)')
-ax1.set_title('Full dataset')
+ax1.set_title('Training Data')
 
-ax2 = fig.add_subplot(132)
-ax2.scatter(inputs_tr[:,xy], outputs_tr, edgecolors=(0, 0, 0))
+ax2 = fig.add_subplot(122)
+ax2.scatter(norm_inputs_te[:,xy_pos], norm_outputs_te, edgecolors=(0, 0, 0))
 ax2.set_xlabel('Inputs (t)')
 ax2.set_ylabel('Outputs (t+1)')
-ax2.set_title('Training Data')
-
-ax3 = fig.add_subplot(133)
-ax3.scatter(inputs_te[:,xy], outputs_te, edgecolors=(0, 0, 0))
-ax3.set_xlabel('Inputs (t)')
-ax3.set_ylabel('Outputs (t+1)')
-ax3.set_title('Validation Data')
+ax2.set_title('Validation Data')
 
 plt.suptitle('Inputs against Outputs, i.e. Temp at t, against Temp at t+1', x=0.5, y=0.94, fontsize=15)
 
 plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_InputsvsOutputs', bbox_inches = 'tight', pad_inches = 0.1)
-
-#----------------------------------------------
-# Normalise Data (based on training data only)
-#----------------------------------------------
-print('normalise data')
-def normalise_data(train,test1):
-    train_mean, train_std = np.mean(train), np.std(train)
-    norm_train = (train - train_mean) / train_std
-    norm_test1 = (test1 - train_mean) / train_std
-    return norm_train, norm_test1, train_mean, train_std
-
-## normalise inputs
-inputs_mean = np.zeros(inputs_tr.shape[1])
-inputs_std  = np.zeros(inputs_tr.shape[1])
-norm_inputs_tr   = np.zeros(inputs_tr.shape)
-norm_inputs_te   = np.zeros(inputs_te.shape)
-for i in range(inputs_tr.shape[1]):  #loop over each feature, normalising individually
-    norm_inputs_tr[:, i], norm_inputs_te[:, i], inputs_mean[i], inputs_std[i] = normalise_data(inputs_tr[:, i], inputs_te[:,i])
-
-## normalise outputs
-norm_outputs_tr, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_te[:])
-
-## save mean and std to un-normalise later (in a different script)
-norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/normalising_parameters_'+exp_name+'.txt','w')
-for i in range(inputs_tr.shape[1]):  #loop over each feature, normalising individually
-    norm_file.write('inputs_mean['+str(i)+']\n')
-    norm_file.write(str(inputs_mean[i])+'\n')
-    norm_file.write('inputs_std['+str(i)+']\n')
-    norm_file.write(str(inputs_std[i])+'\n')
-norm_file.write('outputs_mean\n')
-norm_file.write(str(outputs_mean)+'\n')
-norm_file.write('outputs_std\n')
-norm_file.write(str(outputs_std)+'\n')
-norm_file.close()
-
-stats_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/'+exp_name+'.txt',"w+")
-stats_file.write('shape for inputs and outputs. full; tr; te \n')
-stats_file.write(str(inputs.shape)+'  '+str(outputs.shape)+'\n')
-stats_file.write(str(norm_inputs_tr.shape)+'  '+str(norm_outputs_tr.shape)+'\n')
-stats_file.write(str(norm_inputs_te.shape)+'  '+str(norm_outputs_te.shape)+'\n')
-
-inputs = None
-outputs = None
 
 #---------------------------------------------------------
 # First calculate 'persistance' score, to give a baseline
@@ -422,18 +266,43 @@ plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_norm_predictedVtruth.png
 #------------------------------------------------------
 # de-normalise predicted values and plot against truth
 #------------------------------------------------------
-denorm_lr_predicted_tr = lr_predicted_tr*outputs_std+outputs_mean
-denorm_lr_predicted_te = lr_predicted_te*outputs_std+outputs_mean
+#Read in mean and std to normalise inputs - should move this outside of the loop!
+print('read in info to normalise data')
+norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/normalising_parameters_'+exp_name+'.txt',"r")
+count = len(norm_file.readlines(  ))
+#print('count ; '+str(count))
+input_mean=[]
+input_std =[]
+norm_file.seek(0)
+for i in range( int( (count-4)/4) ):
+   a_str = norm_file.readline()
+   a_str = norm_file.readline() ;  input_mean.append(a_str.split())
+   a_str = norm_file.readline()
+   a_str = norm_file.readline() ;  input_std.append(a_str.split())
+a_str = norm_file.readline() 
+a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
+a_str = norm_file.readline() 
+a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
+norm_file.close()
+input_mean = np.array(input_mean).astype(float)
+input_std  = np.array(input_std).astype(float)
+input_mean = input_mean.reshape(1,input_mean.shape[0])
+input_std  = input_std.reshape(1,input_std.shape[0])
 
-bottom = min(min(outputs_tr), min(denorm_lr_predicted_tr), min(outputs_te), min(denorm_lr_predicted_te))
-top    = max(max(outputs_tr), max(denorm_lr_predicted_tr), max(outputs_te), max(denorm_lr_predicted_te))
+denorm_lr_predicted_tr = lr_predicted_tr*output_std+output_mean
+denorm_lr_predicted_te = lr_predicted_te*output_std+output_mean
+denorm_outputs_tr = norm_outputs_tr*output_std+output_mean
+denorm_outputs_te = norm_outputs_te*output_std+output_mean
+
+bottom = min(min(denorm_outputs_tr), min(denorm_lr_predicted_tr), min(denorm_outputs_te), min(denorm_lr_predicted_te))
+top    = max(max(denorm_outputs_tr), max(denorm_lr_predicted_tr), max(denorm_outputs_te), max(denorm_lr_predicted_te))
 bottom = bottom - 0.1*abs(top)
 top    = top + 0.1*abs(top)
 
 fig = plt.figure(figsize=(20,9.4))
 
 ax1 = fig.add_subplot(121)
-ax1.scatter(outputs_tr, denorm_lr_predicted_tr, edgecolors=(0, 0, 0))
+ax1.scatter(denorm_outputs_tr, denorm_lr_predicted_tr, edgecolors=(0, 0, 0))
 ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
 ax1.set_xlabel('Truth')
 ax1.set_ylabel('Predicted')
@@ -443,7 +312,7 @@ ax1.set_xlim(bottom, top)
 ax1.set_ylim(bottom, top)
 
 ax2 = fig.add_subplot(122)
-ax2.scatter(outputs_te, denorm_lr_predicted_te, edgecolors=(0, 0, 0))
+ax2.scatter(denorm_outputs_te, denorm_lr_predicted_te, edgecolors=(0, 0, 0))
 ax2.plot([bottom, top], [bottom, top], 'k--', lw=1)
 ax2.set_xlabel('Truth')
 ax2.set_ylabel('Predicted')
@@ -459,6 +328,10 @@ plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_predictedVtruth.png', bb
 #--------------------------------------------
 # Print all scores to file
 #--------------------------------------------
+stats_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/'+exp_name+'.txt',"w+")
+stats_file.write('shape for inputs and outputs: tr; te \n')
+stats_file.write(str(norm_inputs_tr.shape)+'  '+str(norm_outputs_tr.shape)+'\n')
+stats_file.write(str(norm_inputs_te.shape)+'  '+str(norm_outputs_te.shape)+'\n')
 
 stats_file.write('\n')
 stats_file.write('--------------------------------------------------------')
