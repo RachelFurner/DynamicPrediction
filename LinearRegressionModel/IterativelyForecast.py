@@ -6,48 +6,47 @@ print('import packages')
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import linear_model
+from sklearn.preprocessing import PolynomialFeatures
 import os
 import xarray as xr
 import pickle
 
-for_len_yrs = 100 # forecast length in years
+for_len_yrs = 1000 # forecast length in years
 #exp_names = ['T_3dLatDepVarsINT_halo1_pred1']
-exp_names = ['T_3dLatDepVarsINT_halo1_pred1']
+exp_names = ['skLearn_3dLatDepVars']
 start = 200
-#xy = 4  # 2d halo
-xy = 13  # 3d halo 
 
 #-----------------
 # Define iterator
 #-----------------
 print('define iterator')
-def interator(exp_name, model, init, start, num_steps, ds):
+def interator(exp_name, model, init, ch_start, num_steps, ds):
     x_size = init.shape[2]
     y_size = init.shape[1]
     z_size = init.shape[0]
-    print('z_size, y_size, x_size ; '+str(z_size)+', '+str(y_size)+', '+str(x_size))
+    #print('z_size, y_size, x_size ; '+str(z_size)+', '+str(y_size)+', '+str(x_size))
     
     print('read in other variables') 
-    da_T=ds['Ttave'][start:start+num_steps,:,:,:]
-    da_S=ds['Stave'][start:start+num_steps,:,:,:]
-    da_U=ds['uVeltave'][start:start+num_steps,:,:,:]
-    da_V=ds['vVeltave'][start:start+num_steps,:,:,:]
-    da_eta=ds['ETAtave'][start:start+num_steps,:,:]
+    da_T=ds['Ttave'][ch_start:ch_start+num_steps,:,:,:]
+    da_S=ds['Stave'][ch_start:ch_start+num_steps,:,:,:]
+    da_U=ds['uVeltave'][ch_start:ch_start+num_steps,:,:,:]
+    da_V=ds['vVeltave'][ch_start:ch_start+num_steps,:,:,:]
+    da_eta=ds['ETAtave'][ch_start:ch_start+num_steps,:,:]
     da_lat=ds['Y'][:]
     da_depth=ds['Z'][:]
-    print('da_T.shape ; '+str(da_T.shape))
-    print('da_S.shape ; '+str(da_S.shape))
-    print('da_U.shape ; '+str(da_U.shape))
-    print('da_V.shape ; '+str(da_V.shape))
-    print('da_eta.shape ; '+str(da_eta.shape))
-    print('da_lat.shape ; '+str(da_lat.shape))
-    print('da_depth.shape ; '+str(da_depth.shape))
+    #print('da_T.shape ; '+str(da_T.shape))
+    #print('da_S.shape ; '+str(da_S.shape))
+    #print('da_U.shape ; '+str(da_U.shape))
+    #print('da_V.shape ; '+str(da_V.shape))
+    #print('da_eta.shape ; '+str(da_eta.shape))
+    #print('da_lat.shape ; '+str(da_lat.shape))
+    #print('da_depth.shape ; '+str(da_depth.shape))
 
-    #Read in mean and std to normalise inputs
+    #Read in mean and std to normalise inputs - should move this outside of the loop!
     print('read in info to normalise data')
     norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/normalising_parameters_'+exp_name+'.txt',"r")
     count = len(norm_file.readlines(  ))
-    print('count ; '+str(count))
+    #print('count ; '+str(count))
     input_mean=[]
     input_std =[]
     norm_file.seek(0)
@@ -65,27 +64,33 @@ def interator(exp_name, model, init, start, num_steps, ds):
     input_std  = np.array(input_std).astype(float)
     input_mean = input_mean.reshape(1,input_mean.shape[0])
     input_std  = input_std.reshape(1,input_std.shape[0])
+    
+    out_t   = np.zeros((z_size, y_size, x_size))
+    out_tm1 = np.zeros((z_size, y_size, x_size))
+    out_tm2 = np.zeros((z_size, y_size, x_size))
 
     predictions = np.zeros((num_steps, z_size, y_size, x_size))
     print('predictions.shape ; ' + str(predictions.shape))
-    print('input_mean.shape ; ' + str(input_mean.shape))
-    print('input_std.shape ; ' + str(input_std.shape))
-    print('output_mean ; ' + str(output_mean))
-    print('output_std ; ' + str(output_std))
-    predictions[0,:,:,:] = init
+    #print('input_mean.shape ; ' + str(input_mean.shape))
+    #print('input_std.shape ; ' + str(input_std.shape))
+    #print('output_mean ; ' + str(output_mean))
+    #print('output_std ; ' + str(output_std))
+    predictions[0,:,:,:] = init[:,:,:]
     # Set all boundary and near land data to match 'da_T'
-    predictions[1:,:,:,0:2]             = da_T[1:num_steps,:,:,0:2]
-    predictions[1:,:,:,x_size-2:x_size] = da_T[1:num_steps,:,:,x_size-2:x_size]
-    predictions[1:,:,0:2,:]             = da_T[1:num_steps,:,0:2,:]
-    predictions[1:,:,y_size-3:y_size,:] = da_T[1:num_steps,:,y_size-3:y_size,:]
-    predictions[1:,0:2,:,:]             = da_T[1:num_steps,0:2,:,:]
-    predictions[1:,z_size-2:z_size,:,:] = da_T[1:num_steps,z_size-2:z_size,:,:]
-    for t in range(1,num_steps):
-        #print(t)
-        for x in range(2,x_size-2):
-            for y in range(2,y_size-3):
-                for z in range(2,z_size-2):
+    predictions[1:,:,:,0:3]             = da_T[1:num_steps,:,:,0:3]
+    predictions[1:,:,:,x_size-4:x_size] = da_T[1:num_steps,:,:,x_size-4:x_size]
+    predictions[1:,:,0:3,:]             = da_T[1:num_steps,:,0:3,:]
+    predictions[1:,:,y_size-4:y_size,:] = da_T[1:num_steps,:,y_size-4:y_size,:]
+    predictions[1:,0:3,:,:]             = da_T[1:num_steps,0:3,:,:]
+    predictions[1:,z_size-4:z_size,:,:] = da_T[1:num_steps,z_size-4:z_size,:,:]
 
+    for t in range(1,num_steps):
+        out_tm2[:,:,:] = out_tm1[:,:,:]
+        out_tm1[:,:,:] = out_t[:,:,:]
+        print(t)
+        for x in range(3,x_size-4):
+            for y in range(3,y_size-4):
+                for z in range(3,z_size-4):
                     input_temp=[]
                     #[input_temp.append(predictions[t-1,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
                     [input_temp.append(predictions[t-1,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
@@ -96,15 +101,28 @@ def interator(exp_name, model, init, start, num_steps, ds):
                     input_temp.append(da_lat[y])
                     input_temp.append(da_depth[z])
 
+                    # convert to array and make 2-d
                     input_temp = np.array(input_temp)
                     input_temp = input_temp.astype(float)
+                    input_temp = input_temp.reshape(1, -1)
+
+                    # Add polynomial combinations of the features
+                    #polynomial_features = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+                    #input_temp = polynomial_features.fit_transform(input_temp)
+
                     # normalise inputs
                     inputs = np.divide( np.subtract(input_temp, input_mean), input_std)
-                    inputs = inputs.reshape(1, -1)
-                    predictions[t,z,y,x] = model.predict(inputs)
-                    #predictions[t,z,y,x] = inputs[:,xy]
-                    # de-normalise inputs
-                    predictions[t,z,y,x] = predictions[t,z,y,x] * input_std[0,xy] + input_mean[0,xy]
+                    
+                    #predict and then de-normalise outputs
+                    out_t[z,y,x] = model.predict(inputs) * output_std + output_mean
+        if t==0: 
+           deltaT = out_t
+        if t==1: 
+           deltaT = 1.5*out_t-0.5*out_tm1
+        if t>1: 
+           deltaT = (23.0/12.0)*out_t-(4.0/3.0)*out_tm1+(5.0/12.0)*out_tm2
+        
+        predictions[t,:,:,:] = predictions[t-1,:,:,:] + ( deltaT )
 
     return predictions
 #----------------------------------
@@ -113,7 +131,7 @@ def interator(exp_name, model, init, start, num_steps, ds):
 
 print('reading in ds')
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=DIR+'cat_tave_500yrs_SelectedVars.nc'
+data_filename=DIR+'cat_tave_5000yrs_SelectedVars.nc'
 ds   = xr.open_dataset(data_filename)
 da_T=ds['Ttave'][start:start+for_len_yrs*12]   
 
@@ -128,12 +146,12 @@ print(da_T.shape)
 #----------------------------------
 # Predict for a variety of points
 #----------------------------------
-x_points=[5,5,5]
-y_points=[5,10,15]
-z_points=[3,3,3]
-#x_points=[5]
-#y_points=[5]
-#z_points=[5]
+#x_points=[5,5,5]
+#y_points=[5,10,15]
+#z_points=[3,3,3]
+x_points=[5]
+y_points=[5]
+z_points=[5]
 
 #---------------------------
 # Set persistence forecasts
@@ -165,10 +183,22 @@ for exp in exp_names:
    #----------------------
    # Make the predictions
    #----------------------
+   # Call iterator for chunks of data at a time, saving interim results in arrays, so if the predictions become unstable and lead to Nan's etc we still have some of the trajectory saved.
    print('Call iterator and make the predictions')
+   predictions = np.zeros((for_len+1, z_size, y_size, x_size))
    pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/DATASETS/'+exp+'_predictions.npy'
-   predictions = interator(exp, model, da_T[0,:,:,:], start, int(for_len), ds)
-   np.save(pred_filename, np.array(predictions))
+   no_chunks = 50
+   size_chunk = int(for_len/no_chunks)
+   init = da_T[0,:,:,:]
+   for chunk in range(no_chunks):
+       print('')
+       print(chunk)
+       print('')
+       print(predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:].shape)
+       chunk_start = start + size_chunk*chunk
+       predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp, model, init, chunk_start, size_chunk+1, ds)
+       init = predictions[size_chunk*(chunk+1),:,:,:]
+       np.save(pred_filename, np.array(predictions))
    predictions = np.load(pred_filename)
    print('predictions.shape')
    print(predictions.shape)
@@ -198,8 +228,8 @@ for exp in exp_names:
       print('Plot it')
       fig = plt.figure(figsize=(15 ,8))
 
-      #ax1=plt.subplot(311)
-      ax1=plt.subplot(211)
+      ax1=plt.subplot(311)
+      #ax1=plt.subplot(211)
       plt_len=int(10/predict_step * 12)
       ax1.plot(da_T[:plt_len,z,y,x])
       ax1.plot(predictions[:plt_len,z,y,x])
@@ -209,18 +239,18 @@ for exp in exp_names:
       ax1.set_title('10 years')
       ax1.legend(['da_T (truth)', 'lr model', 'persistence' ])
 
-      #ax2=plt.subplot(312)
-      #plt_len=int(100/predict_step * 12)
-      #ax2.plot(da_T[:plt_len,z,y,x])
-      #ax2.plot(predictions[:plt_len,z,y,x])
-      #ax2.plot(persistence[:plt_len,point])
-      #ax2.set_ylabel('Temperature')
-      #ax2.set_xlabel('No of forecast steps')
-      #ax2.set_title('100 years')
-      #ax2.legend(['da_T (truth)', 'lr model', 'persistence' ])
+      ax2=plt.subplot(312)
+      plt_len=int(100/predict_step * 12)
+      ax2.plot(da_T[:plt_len,z,y,x])
+      ax2.plot(predictions[:plt_len,z,y,x])
+      ax2.plot(persistence[:plt_len,point])
+      ax2.set_ylabel('Temperature')
+      ax2.set_xlabel('No of forecast steps')
+      ax2.set_title('100 years')
+      ax2.legend(['da_T (truth)', 'lr model', 'persistence' ])
 
-      #ax3=plt.subplot(313)
-      ax3=plt.subplot(212)
+      ax3=plt.subplot(313)
+      #ax3=plt.subplot(212)
       plt_len=for_len
       ax3.plot(da_T[:plt_len,z,y,x])
       ax3.plot(predictions[:plt_len,z,y,x])
@@ -231,7 +261,7 @@ for exp in exp_names:
       ax3.legend(['da_T (truth)', 'lr model', 'persistence' ])
 
       #plt.subplots_adjust(hspace=0.4, top=0.9, bottom=0.12, left=0.08, right=0.85)
-      plt.subplots_adjust(hspace=0.5)
+      plt.subplots_adjust(hspace=0.4)
       plt.suptitle('Timeseries at point '+str(x)+','+str(y)+','+str(z)+' from the simulator (da_T),\n and as predicted by the regression model, and persistence', fontsize=15, x=0.47, y=0.98)
 
       plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/PLOTS/lr_'+exp+'_'+str(x)+'.'+str(y)+'.'+str(z)+'_TruthvsPredict_Timeseries.png', bbox_inches = 'tight', pad_inches = 0.1)
