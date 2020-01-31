@@ -4,7 +4,9 @@
 #----------------------------
 print('Import neccessary packages')
 #----------------------------
-import ReadTestTrain_MITGCM
+import sys
+sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/Tools/')
+import RF_routines as RF
 
 import numpy as np
 import os
@@ -27,16 +29,37 @@ from torch.autograd import Variable
 
 torch.cuda.empty_cache()
 
-#------------------
-# Read in the data
-#------------------
+#----------------------------
+# Set variables for this run
+#----------------------------
+run_vars={'dimension':2, 'lat':False, 'dep':False, 'current':False, 'sal':False, 'eta':False, 'poly_degree':1}
+model_type = 'Small_lr'
 
-DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/'
-exp = '20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+exp+'cat_tave_5000yrs_SelectedVars.nc'
-print(MITGCM_filename)
+DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+MITGCM_filename=DIR+'cat_tave_500yrs_SelectedVars.nc'
 
-exp_name, xy_pos, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = ReadTestTrain_MITGCM.ReadData_MITGCM(MITGCM_filename, 0.7, dimension=2, lat=False, dep=False, current=False, sal=False, eta=False, poly_degree=1)
+read_data=True
+#---------------------
+# calc some variables 
+#---------------------
+exp_name = RF.create_expname(model_type, run_vars)
+
+## Calculate x,y position in each feature list for extracting 'now' value
+if run_vars['dimension'] == 2:
+   xy_pos = 4
+elif run_vars['dimension'] == 3:
+   xy_pos = 13
+else:
+   print('ERROR, dimension neither two or three!!!')
+
+#--------------------------------------------------------------
+# Call module to read in the data, or open it from saved array
+#--------------------------------------------------------------
+if read_data:
+   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = RF.ReadMITGCM(MITGCM_filename, 0.7, exp_name, run_vars)
+else:
+   array_file = '/data/hpcdata/users/racfur/DynamicPrediction/DATASETS/'+exp_name+'_InputsOutputs.npz'
+   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(array_file).values()
 
 #-------------------------------------------------------------------------------------------------------------
 print('Plot temp at time t against outputs (temp at time t+1), to see if variance changes with input values') 
@@ -55,13 +78,13 @@ ax2.set_xlabel('Inputs (t)')
 ax2.set_ylabel('Outputs (t+1)')
 ax2.set_title('Validation Data')
 
-plt.suptitle('Inputs against Outputs, i.e. Temp at t, against Temp at t+1', x=0.5, y=0.94, fontsize=15)
+#plt.suptitle('Inputs against Outputs, i.e. Temp at t, against Temp at t+1', x=0.5, y=0.94, fontsize=15)
 
-plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_InputsvsOutputs', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../RegressionOutputs/PLOTS/'+model_type+'_'+exp_name+'_InputsvsOutputs', bbox_inches = 'tight', pad_inches = 0.1)
 
-#---------------------------------------------------------
-# First calculate 'persistance' score, to give a baseline
-#---------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------
+# Calculate 'persistance' score, to give a baseline - this is just zero everywhere as we're predicting the trend
+#----------------------------------------------------------------------------------------------------------------
 print('calc persistance')
 
 # For training data
@@ -72,8 +95,8 @@ predict_persistance_te = np.zeros(norm_outputs_te.shape)
 pers_te_mse = metrics.mean_squared_error(norm_outputs_te, predict_persistance_te)
 
 ##-------------------------------------------------------------------------------------
-## Set up a model in scikitlearn to predict deltaT 
-## Run ridge regression with interaction between terms, tuning alpha through cross val
+## Set up a model in scikitlearn to predict deltaT (the trend)
+## Run ridge regression tuning alpha through cross val
 ##-------------------------------------------------------------------------------------
 
 alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
@@ -90,7 +113,7 @@ lr.fit(norm_inputs_tr, norm_outputs_tr)
 lr.get_params()
 
 print('pickle it')
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/MODELS/pickle_lr_'+exp_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(lr, pckl_file)
 
@@ -258,9 +281,9 @@ ax2.set_xlim(bottom, top)
 ax2.set_ylim(bottom, top)
 ax2.text(.05,.95,'Mean Squared Error: {:.4e}'.format(lr_te_mse),transform=ax2.transAxes)
 
-plt.suptitle('Noramlised temperature predicted by Linear Regression model against normalised GCM data (truth)', x=0.5, y=0.94, fontsize=15)
+#plt.suptitle('Noramlised temperature predicted by Linear Regression model against normalised GCM data (truth)', x=0.5, y=0.94, fontsize=15)
 
-plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../RegressionOutputs/PLOTS/'+model_type+'_'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 
 #------------------------------------------------------
@@ -321,14 +344,14 @@ ax2.set_xlim(bottom, top)
 ax2.set_ylim(bottom, top)
 ax2.text(.05,.95,'Mean Squared Error: {:.4e}'.format(lr_te_mse),transform=ax2.transAxes)
 
-plt.suptitle('Temperature predicted by Linear Regression model against GCM data (truth)', x=0.5, y=0.94, fontsize=15)
+#plt.suptitle('Temperature predicted by Linear Regression model against GCM data (truth)', x=0.5, y=0.94, fontsize=15)
 
-plt.savefig('../../RegressionOutputs/PLOTS/'+exp_name+'_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../RegressionOutputs/PLOTS/'+model_type+'_'+exp_name+'_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #--------------------------------------------
 # Print all scores to file
 #--------------------------------------------
-stats_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/'+exp_name+'.txt',"w+")
+stats_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/'+model_type+'_'+exp_name+'.txt',"w+")
 stats_file.write('shape for inputs and outputs: tr; te \n')
 stats_file.write(str(norm_inputs_tr.shape)+'  '+str(norm_outputs_tr.shape)+'\n')
 stats_file.write(str(norm_inputs_te.shape)+'  '+str(norm_outputs_te.shape)+'\n')
