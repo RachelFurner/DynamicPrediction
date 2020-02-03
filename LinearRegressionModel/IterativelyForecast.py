@@ -3,8 +3,8 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/Tools/')
-import RF_routines as RF
+sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+from Tools import CreateExpName as cn
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True, 'dep':True, 'current':True, 'sal':True, 'eta':True, 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True, 'dep':True, 'current':True, 'sal':True, 'eta':True, 'poly_degree':2}
 model_type = 'lr'
 
 for_len_yrs = 10 # forecast length in years
@@ -37,7 +37,7 @@ predict_step = 1
 halo_list = (range(-halo_size, halo_size+1))
 for_len = int(for_len_yrs/predict_step * 12)
 
-exp_name = RF.create_expname(model_type, run_vars)
+exp_name = cn.create_expname(model_type, run_vars)
 
 #-----------------
 # Define iterator
@@ -59,7 +59,7 @@ def interator(exp_name, model, init, ch_start, num_steps, ds):
 
     #Read in mean and std to normalise inputs - should move this outside of the loop!
     print('read in info to normalise data')
-    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/normalising_parameters_'+exp_name+'.txt',"r")
+    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt',"r")
     count = len(norm_file.readlines(  ))
     input_mean=[]
     input_std =[]
@@ -189,26 +189,15 @@ with open(pkl_filename, 'rb') as file:
 # predictions become unstable and lead to Nan's etc we still have some of the trajectory saved
 print('Call iterator and make the predictions')
 predictions = np.zeros((for_len+1, z_size, y_size, x_size))
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/DATASETS/'+model_type+'_'+exp_name+'_predictions.npy'
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/SAVEDARRAYS/'+model_type+'_'+exp_name+'_predictions.npy'
 size_chunk = int(for_len/no_chunks)
 print(size_chunk)
 init = da_T[0,:,:,:]
-for chunk in range(no_chunks):
-    print('')
-    print(chunk)
-    print('')
-    print(predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:].shape)
-    chunk_start = start + size_chunk*chunk
-    predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp_name, model, init, chunk_start, size_chunk+1, ds)
-    print('')
-    print('')
-    print('')
-    print('saving to file...!')
-    print('')
-    print('')
-    print('')
-    init = predictions[size_chunk*(chunk+1),:,:,:]
-    np.save(pred_filename, np.array(predictions))
+#for chunk in range(no_chunks):
+#    chunk_start = start + size_chunk*chunk
+#    predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp_name, model, init, chunk_start, size_chunk+1, ds)
+#    init = predictions[size_chunk*(chunk+1),:,:,:]
+#    np.save(pred_filename, np.array(predictions))
 predictions = np.load(pred_filename)
 print('predictions.shape')
 print(predictions.shape)
@@ -227,7 +216,8 @@ for point in range(len(x_points)):
    #ax1=plt.subplot(211)
    plt_len=int(10/predict_step * 12)
    ax1.plot(da_T[:plt_len,z,y,x])
-   ax1.plot(predictions[:plt_len,z,y,x])
+   #ax1.plot(predictions[:plt_len,z,y,x])
+   ax1.plot(predictions[:12,z,y,x])
    ax1.plot(persistence[:plt_len,point])
    ax1.set_ylabel('Temperature')
    ax1.set_xlabel('No of months')
@@ -237,7 +227,8 @@ for point in range(len(x_points)):
    ax2=plt.subplot(312)
    plt_len=int(100/predict_step * 12)
    ax2.plot(da_T[:plt_len,z,y,x])
-   ax2.plot(predictions[:plt_len,z,y,x])
+   #ax2.plot(predictions[:plt_len,z,y,x])
+   ax2.plot(predictions[:12,z,y,x])
    ax2.plot(persistence[:plt_len,point])
    ax2.set_ylabel('Temperature')
    ax2.set_xlabel('No of forecast steps')
@@ -248,7 +239,8 @@ for point in range(len(x_points)):
    #ax3=plt.subplot(212)
    plt_len=for_len
    ax3.plot(da_T[:plt_len,z,y,x])
-   ax3.plot(predictions[:plt_len,z,y,x])
+   #ax3.plot(predictions[:plt_len,z,y,x])
+   ax3.plot(predictions[:12,z,y,x])
    ax3.plot(persistence[:plt_len,point])
    ax3.set_ylabel('Temperature')
    ax3.set_xlabel('No of months')

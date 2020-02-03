@@ -11,30 +11,6 @@ import numpy as np
 import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
 
-def create_expname(model_type, run_vars):
-   '''
-   Small routine to take model type and runs variables and create an experiment name.
-   '''
-   if run_vars['dimension'] == 2:
-      exp_name='2d'
-   elif run_vars['dimension'] == 3:
-      exp_name='3d'
-   else:
-      print('ERROR, dimension neither two or three!!!')
-   if run_vars['lat']:
-      exp_name=exp_name+'Lat'
-   if run_vars['dep']:
-      exp_name=exp_name+'Dep'
-   if run_vars['current']:
-      exp_name=exp_name+'UV'
-   if run_vars['sal']:
-      exp_name=exp_name+'Sal'
-   if run_vars['eta']:
-      exp_name=exp_name+'Eta'
-   exp_name = exp_name+'PolyDeg'+str(run_vars['poly_degree'])
-   return exp_name 
-
-
 def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
 
    '''
@@ -144,7 +120,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    norm_outputs_tr, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
-   norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/STATS/normalising_parameters_'+exp_name+'.txt','w')
+   norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt','w')
    #loop over each input feature
    for i in range(inputs_tr.shape[1]):  
        norm_file.write('inputs_mean['+str(i)+']\n')
@@ -166,10 +142,10 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    #-----------------
    # Save the arrays
    #-----------------
-   array_file = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/DATASETS/'+exp_name+'_InputsOutputs.npz'
-   np.savez(array_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
+   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+exp_name+'_InputsOutputs.npz'
+   np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
    # Open arrays from file
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(array_file).values()
+   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
  
    print('shape for inputs and outputs: full; tr; te')
    print(inputs.shape, outputs.shape)
