@@ -17,19 +17,21 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':2, 'lat':True, 'dep':True, 'current':True, 'sal':True, 'eta':True, 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True, 'dep':True, 'current':True, 'sal':True, 'eta':True, 'poly_degree':2}
 model_type = 'lr'
 
-for_len_yrs = 10 # forecast length in years
+iteratively_predict = True
 
-no_chunks = 50
+for_len_yrs = 100    # forecast length in years
 
-#x_points=[5,5,5]
-#y_points=[5,10,15]
-#z_points=[3,3,3]
-x_points=[5]
-y_points=[5]
-z_points=[5]
+no_chunks = 100
+
+x_points=[5,5,5]
+y_points=[5,10,15]
+z_points=[3,3,3]
+#x_points=[5]
+#y_points=[5]
+#z_points=[5]
 
 start = 200
 halo_size = 1
@@ -79,9 +81,9 @@ def interator(exp_name, model, init, ch_start, num_steps, ds):
     input_mean = input_mean.reshape(1,input_mean.shape[0])
     input_std  = input_std.reshape(1,input_std.shape[0])
     
-    out_t   = np.zeros((z_size, y_size, x_size))
-    out_tm1 = np.zeros((z_size, y_size, x_size))
-    out_tm2 = np.zeros((z_size, y_size, x_size))
+    out_t   = np.zeros((z_size-7, y_size-7, x_size-7))
+    out_tm1 = np.zeros((z_size-7, y_size-7, x_size-7))
+    out_tm2 = np.zeros((z_size-7, y_size-7, x_size-7))
 
     predictions = np.zeros((num_steps, z_size, y_size, x_size))
     print('predictions.shape ; ' + str(predictions.shape))
@@ -96,51 +98,57 @@ def interator(exp_name, model, init, ch_start, num_steps, ds):
     predictions[1:,z_size-4:z_size,:,:] = da_T[1:num_steps,z_size-4:z_size,:,:]
 
     for t in range(1,num_steps):
+        inputs = []
         out_tm2[:,:,:] = out_tm1[:,:,:]
         out_tm1[:,:,:] = out_t[:,:,:]
         print(t)
         for x in range(3,x_size-4):
             for y in range(3,y_size-4):
                 for z in range(3,z_size-4):
-                   #print(t)
-                   #print(x,y,z)
                    input_temp = []
                    if run_vars['dimension'] == 2:
-                      [input_temp.append(predictions[t-1,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                      input_temp = input_temp + predictions[t-1,z,y-1:y+2,x-1:x+2].reshape((-1)).tolist()
                       if run_vars['sal']:
-                         [input_temp.append(da_S[t-1,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                         input_temp = input_temp + da_S[t-1,z,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
                       if run_vars['current']:
-                         [input_temp.append(da_U[t-1,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                         [input_temp.append(da_V[t-1,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                         input_temp = input_temp + da_U[t-1,z,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
+                         input_temp = input_temp + da_V[t-1,z,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
                    elif run_vars['dimension'] == 3:
-                      [input_temp.append(predictions[t-1,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                      input_temp = input_temp + predictions[t-1,z-1:z+2,y-1:y+2,x-1:x+2].reshape((-1)).tolist()
                       if run_vars['sal']:
-                         [input_temp.append(da_S[t-1,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                         input_temp = input_temp + da_S[t-1,z-1:z+2,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
                       if run_vars['current']:
-                         [input_temp.append(da_U[t-1,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                         [input_temp.append(da_V[t-1,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                         input_temp = input_temp + da_U[t-1,z-1:z+2,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
+                         input_temp = input_temp + da_V[t-1,z-1:z+2,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
                    if run_vars['eta']:
-                      [input_temp.append(da_eta[t-1,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                      input_temp = input_temp + da_eta[t-1,y-1:y+2,x-1:x+2].values.reshape((-1)).tolist()
                    if run_vars['lat']:
-                      input_temp.append(da_lat[y])
+                      input_temp.append(da_lat[y].values)
                    if run_vars['dep']:
-                      input_temp.append(da_depth[z])
+                      input_temp.append(da_depth[z].values)
   
-                   # convert to array and make 2-d
-                   input_temp = np.array(input_temp)
-                   input_temp = input_temp.astype(float)
-                   input_temp = input_temp.reshape(1, -1)
+                   inputs.append(input_temp)
 
-                   if run_vars['poly_degree'] > 1: 
-                      # Add polynomial combinations of the features
-                      polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
-                      input_temp = polynomial_features.fit_transform(input_temp)
+        # convert to array
+        inputs = np.array(inputs)
 
-                   # normalise inputs
-                   inputs = np.divide( np.subtract(input_temp, input_mean), input_std)
-                   
-                   #predict and then de-normalise outputs
-                   out_t[z,y,x] = model.predict(inputs) * output_std + output_mean
+        print(inputs.shape)
+        if run_vars['poly_degree'] > 1: 
+           # Add polynomial combinations of the features
+           polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
+           inputs = polynomial_features.fit_transform(inputs)
+        print(inputs.shape)
+
+        # normalise inputs
+        inputs = np.divide( np.subtract(inputs, input_mean), input_std)
+        print(inputs.shape)
+                 
+        # predict and then de-normalise outputs
+        out_temp = model.predict(inputs) * output_std + output_mean
+
+        # reshape out
+        out_t = out_temp.reshape((z_size-7, y_size-7, x_size-7))
+
         if t==0: 
            deltaT = out_t
         if t==1: 
@@ -148,7 +156,7 @@ def interator(exp_name, model, init, ch_start, num_steps, ds):
         if t>1: 
            deltaT = (23.0/12.0)*out_t-(4.0/3.0)*out_tm1+(5.0/12.0)*out_tm2
         
-        predictions[t,:,:,:] = predictions[t-1,:,:,:] + ( deltaT )
+        predictions[t,3:z_size-4,3:y_size-4,3:x_size-4] = predictions[t-1,3:z_size-4,3:y_size-4,3:x_size-4] + ( deltaT )
 
     return predictions
 
@@ -189,15 +197,16 @@ with open(pkl_filename, 'rb') as file:
 # predictions become unstable and lead to Nan's etc we still have some of the trajectory saved
 print('Call iterator and make the predictions')
 predictions = np.zeros((for_len+1, z_size, y_size, x_size))
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/SAVEDARRAYS/'+model_type+'_'+exp_name+'_predictions.npy'
-size_chunk = int(for_len/no_chunks)
-print(size_chunk)
-init = da_T[0,:,:,:]
-#for chunk in range(no_chunks):
-#    chunk_start = start + size_chunk*chunk
-#    predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp_name, model, init, chunk_start, size_chunk+1, ds)
-#    init = predictions[size_chunk*(chunk+1),:,:,:]
-#    np.save(pred_filename, np.array(predictions))
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_predictions.npy'
+if iteratively_predict:
+   size_chunk = int(for_len/no_chunks)
+   print(size_chunk)
+   init = da_T[0,:,:,:]
+   for chunk in range(no_chunks):
+       chunk_start = start + size_chunk*chunk
+       predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp_name, model, init, chunk_start, size_chunk+1, ds)
+       init = predictions[size_chunk*(chunk+1),:,:,:]
+       np.save(pred_filename, np.array(predictions))
 predictions = np.load(pred_filename)
 print('predictions.shape')
 print(predictions.shape)
