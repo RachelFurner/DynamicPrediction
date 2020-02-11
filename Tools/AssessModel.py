@@ -50,7 +50,7 @@ def get_stats(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_
    stats_file.write('\n')
    stats_file.close()
 
-   return()   
+   return(exp_tr_mse, exp_te_mse)   
 
   
 def plot_results(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_te_predictions):
