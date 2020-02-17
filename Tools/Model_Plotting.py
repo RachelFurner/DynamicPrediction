@@ -91,7 +91,7 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, title=N
 ## Plot cross sections for y=const at a few discrete time points - start, middle and end #
 ##########################################################################################
 
-def plot_y_crss_sec_ax(ax, field, y, min_value=None, max_value=None, cmap=None):
+def plot_yconst_crss_sec_ax(ax, field, y, min_value=None, max_value=None, cmap=None):
 
     # Assumes field is (z, y, x)
 
@@ -110,12 +110,12 @@ def plot_y_crss_sec_ax(ax, field, y, min_value=None, max_value=None, cmap=None):
     
     return(ax, im)
 
-def plot_y_crss_sec(field, field_name, y, title=None, min_value=None, max_value=None):
+def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_value=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
-    ax, im = plot_y_crss_sec_ax(ax, field, y, min_value, max_value)
+    ax, im = plot_yconst_crss_sec_ax(ax, field, y, min_value, max_value)
 
     ax.set_title(str(field_name)+' at y='+str(y))
 
@@ -130,7 +130,7 @@ def plot_y_crss_sec(field, field_name, y, title=None, min_value=None, max_value=
 
     return(fig, ax, im)
 
-def plot_y_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None):
+def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None):
     
     flds_min_value = min( np.amin(field1[:,y,:]), np.amin(field2[:,y,:]) )
     flds_max_value = max( np.amax(field1[:,y,:]), np.amax(field2[:,y,:]) )
@@ -142,9 +142,9 @@ def plot_y_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
-    ax1, im1 = plot_y_crss_sec_ax(ax1, field1, y, flds_min_value, flds_max_value)
-    ax2, im2 = plot_y_crss_sec_ax(ax2, field2, y, flds_min_value, flds_max_value)
-    ax3, im3 = plot_y_crss_sec_ax(ax3, field1-field2, y, diff_min_value, diff_max_value, cmap='bwr')
+    ax1, im1 = plot_yconst_crss_sec_ax(ax1, field1, y, flds_min_value, flds_max_value)
+    ax2, im2 = plot_yconst_crss_sec_ax(ax2, field2, y, flds_min_value, flds_max_value)
+    ax3, im3 = plot_yconst_crss_sec_ax(ax3, field1-field2, y, diff_min_value, diff_max_value, cmap='bwr')
 
     ax1.set_title(str(field1_name)+' at y='+str(y))
     ax2.set_title(str(field2_name)+' at y='+str(y))
@@ -159,7 +159,7 @@ def plot_y_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None
        plt.suptitle(title, fontsize=14)
 
     plt.tight_layout()
-    plt.subplots_adjust(hspace = 0.5, right=0.9, bottom=0.07, top=0.95)
+    plt.subplots_adjust(hspace = 0.2, right=0.9, bottom=0.07, top=0.95)
 
     return(fig)
 
@@ -167,7 +167,7 @@ def plot_y_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None
 # Plot cross section at x=const (i.e. North to South) #   
 #######################################################
 
-def plot_x_crss_sec_ax(ax, field, x, min_value=None, max_value=None, cmap=None):
+def plot_xconst_crss_sec_ax(ax, field, x, min_value=None, max_value=None, cmap=None):
 
     # Assumes field is (z, y, x)
 
@@ -187,12 +187,12 @@ def plot_x_crss_sec_ax(ax, field, x, min_value=None, max_value=None, cmap=None):
     
     return(ax, im)
 
-def plot_x_crss_sec(field, field_name, x, title=None, min_value=None, max_value=None):
+def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_value=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
-    ax, im = plot_x_crss_sec_ax(ax, field, x, min_value, max_value)
+    ax, im = plot_xconst_crss_sec_ax(ax, field, x, min_value, max_value)
 
     ax.set_title(str(field_name)+' at x='+str(x))
 
@@ -207,7 +207,7 @@ def plot_x_crss_sec(field, field_name, x, title=None, min_value=None, max_value=
 
     return(fig, ax, im)
 
-def plot_x_crss_sec_diff(field1, field1_name, field2, field2_name, x, title=None):
+def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, title=None):
     
     flds_min_value = min( np.amin(field1[:,:,x]), np.amin(field2[:,:,x]) )
     flds_max_value = max( np.amax(field1[:,:,x]), np.amax(field2[:,:,x]) )
@@ -219,9 +219,9 @@ def plot_x_crss_sec_diff(field1, field1_name, field2, field2_name, x, title=None
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
-    ax1, im1 = plot_x_crss_sec_ax(ax1, field1, x, flds_min_value, flds_max_value)
-    ax2, im2 = plot_x_crss_sec_ax(ax2, field2, x, flds_min_value, flds_max_value)
-    ax3, im3 = plot_x_crss_sec_ax(ax3, field1-field2, x, diff_min_value, diff_max_value, cmap='bwr')
+    ax1, im1 = plot_xconst_crss_sec_ax(ax1, field1, x, flds_min_value, flds_max_value)
+    ax2, im2 = plot_xconst_crss_sec_ax(ax2, field2, x, flds_min_value, flds_max_value)
+    ax3, im3 = plot_xconst_crss_sec_ax(ax3, field1-field2, x, diff_min_value, diff_max_value, cmap='bwr')
 
     ax1.set_title(str(field1_name)+' at x='+str(x))
     ax2.set_title(str(field2_name)+' at x='+str(x))
@@ -236,7 +236,7 @@ def plot_x_crss_sec_diff(field1, field1_name, field2, field2_name, x, title=None
        plt.suptitle(title, fontsize=14)
 
     plt.tight_layout()
-    plt.subplots_adjust(hspace = 0.5, right=0.9, bottom=0.07, top=0.95)
+    plt.subplots_adjust(hspace = 0.2, right=0.9, bottom=0.07, top=0.95)
 
     return(fig)
 
@@ -248,15 +248,11 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
 
    my_legend=[]
    for name, dataset in datasets.items():
-      print(name)
-      print(dataset.shape)
-      #ii = np.argwhere(dataset[:, point[0], point[1], point[2]]==0)
       ii = np.argwhere(np.isnan(dataset[:, point[0], point[1], point[2]]))
       if ii.shape[0]==0:
          end=length
       else: 
          end=min(np.amin(ii),length)
-      print(end)
       ax.plot(dataset[:end, point[0], point[1], point[2]])
       my_legend.append(name)
    ax.legend(my_legend)
@@ -285,10 +281,21 @@ def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
    fig = plt.figure(figsize=(15 ,11))
 
    ax=plt.subplot(311)
+   bottom = min(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])-1
+   top    = max(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])+1
+   ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+
    ax=plt.subplot(312)
+   bottom = min(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])-1
+   top    = max(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])+1
+   ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+
    ax=plt.subplot(313)
+   bottom = min(datasets['da_T (truth)'][:length3, point[0], point[1], point[2]])-1
+   top    = max(datasets['da_T (truth)'][:length3, point[0], point[1], point[2]])+1
+   ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim)
 
    plt.tight_layout()
@@ -299,12 +306,14 @@ def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
 ###############################
 # Plot histogram of y_hat - y #
 ###############################
-def Plot_Histogram(y, y_hat, no_bins)
+def Plot_Histogram(data, no_bins):
 
     fig = plt.figure(figsize=(10, 8))
 
-    y_minus_y_hat = y - y_hat
-    plt.hist(x, bins = no_bins)
-    ########
-    ###annotate with skew(x)
+    if len(data.shape) > 1:
+       data = data.reshape(-1)
+
+    plt.hist(data, bins = no_bins)
+    plt.yscale('log')
+    plt.annotate('skew = '+str(skew(data)), (0.15,0.85), xycoords='figure fraction')
     return(fig)
