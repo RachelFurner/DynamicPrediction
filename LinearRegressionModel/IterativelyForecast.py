@@ -17,14 +17,14 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':False, 'poly_degree':2}
 model_type = 'lr'
 
 iteratively_predict = True 
 
 for_len_yrs = 1000    # forecast length in years
 
-no_chunks = 100
+no_chunks = 1000
 
 #----------------------------
 for_len = int(for_len_yrs * 12)
@@ -56,7 +56,7 @@ print(da_T.shape)
 
 import netCDF4 as nc4
 
-nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_predictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -91,15 +91,17 @@ with open(pkl_filename, 'rb') as file:
 print('Call iterator and make the predictions')
 predictions = np.zeros((for_len+1, z_size, y_size, x_size))
 predictions[:,:,:,:]=np.nan
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_predictions.npy'
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.npy'
 if iteratively_predict:
    size_chunk = int(for_len/no_chunks)
    print(size_chunk)
    init = da_T[0,:,:,:]
    for chunk in range(no_chunks):
+       print('')
+       print(chunk)
        chunk_start = size_chunk*chunk
-       predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = it.interator(exp_name, run_vars, model, init, chunk_start, size_chunk+1, ds)
-       #predictions[size_chunk*chunk:size_chunk*(chunk+1)+1,:,:,:] = interator(exp_name, model, init, chunk_start, size_chunk+1, ds)
+       chunk_end = size_chunk*(chunk+1)+1
+       predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), init=init)
        init = predictions[size_chunk*(chunk+1),:,:,:]
        # Save to array
        np.save(pred_filename, np.array(predictions))

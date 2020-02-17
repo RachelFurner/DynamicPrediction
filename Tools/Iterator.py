@@ -13,22 +13,25 @@ from skimage.util import view_as_windows
 #-----------------
 # Define iterator
 #-----------------
-def interator(exp_name, run_vars, model, init, ch_start, num_steps, ds):
-    x_size = init.shape[2]
-    y_size = init.shape[1]
-    z_size = init.shape[0]
-    
-    print('read in other variables') 
-    da_T=ds['Ttave'][ch_start:ch_start+num_steps,:,:,:]
-    da_S=ds['Stave'][ch_start:ch_start+num_steps,:,:,:]
-    da_U=ds['uVeltave'][ch_start:ch_start+num_steps,:,:,:]
-    da_V=ds['vVeltave'][ch_start:ch_start+num_steps,:,:,:]
-    da_eta=ds['ETAtave'][ch_start:ch_start+num_steps,:,:]
+
+def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None):
+
+    if start is None:
+       start = 0
+
+    da_T=ds['Ttave'][start:start+num_steps+1,:,:,:]
+    da_S=ds['Stave'][start:start+num_steps+1,:,:,:]
+    da_U=ds['uVeltave'][start:start+num_steps+1,:,:,:]
+    da_V=ds['vVeltave'][start:start+num_steps+1,:,:,:]
+    da_eta=ds['ETAtave'][start:start+num_steps+1,:,:]
     da_lat=ds['Y'][:]
     da_depth=ds['Z'][:]
 
+    x_size = da_T.shape[3]
+    y_size = da_T.shape[2]
+    z_size = da_T.shape[1]
+
     #Read in mean and std to normalise inputs - should move this outside of the loop!
-    print('read in info to normalise data')
     norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt',"r")
     count = len(norm_file.readlines(  ))
     input_mean=[]
@@ -50,36 +53,38 @@ def interator(exp_name, run_vars, model, init, ch_start, num_steps, ds):
     input_std  = input_std.reshape(1,input_std.shape[0])
   
     # Set region to predict for - we want to exclude boundary points, and near to boundary points 
-    x_lw = 3
-    x_up = x_size-4 
-    y_lw = 3
-    y_up = y_size-4 
-    z_lw = 3
-    z_up = z_size-4 
-    x_subsize = x_size -7
-    y_subsize = y_size -7
-    z_subsize = z_size -7
+    x_lw = 1
+    x_up = x_size-2 
+    y_lw = 1
+    y_up = y_size-3 
+    z_lw = 1
+    z_up = z_size-1 
+    x_subsize = x_size -3
+    y_subsize = y_size -4
+    z_subsize = z_size -2
 
     out_t   = np.zeros((z_subsize, y_subsize, x_subsize))
     out_tm1 = np.zeros((z_subsize, y_subsize, x_subsize))
     out_tm2 = np.zeros((z_subsize, y_subsize, x_subsize))
 
-    predictions = np.empty((num_steps, z_size, y_size, x_size))
+    predictions = np.empty((num_steps+1, z_size, y_size, x_size))
     predictions[:,:,:,:] = np.nan
-    print('predictions.shape ; ' + str(predictions.shape))
-    # Set initial conditions to match init
-    predictions[0,:,:,:] = init[:,:,:]
+    # Set initial conditions to match either initial conditions passed to function, or temp at time 0
+    if init is None:
+        predictions[0,:,:,:] = da_T[0,:,:,:]
+    else:
+        predictions[0,:,:,:] = init
+    
     # Set all boundary and near land data to match 'da_T'
-    predictions[1:,:,:,0:x_lw]      = da_T[1:num_steps,:,:,0:x_lw]
-    predictions[1:,:,:,x_up:x_size] = da_T[1:num_steps,:,:,x_up:x_size]
-    predictions[1:,:,0:y_lw,:]      = da_T[1:num_steps,:,0:y_lw,:]
-    predictions[1:,:,y_up:y_size,:] = da_T[1:num_steps,:,y_up:y_size,:]
-    predictions[1:,0:z_lw,:,:]      = da_T[1:num_steps,0:z_lw,:,:]
-    predictions[1:,z_up:z_size,:,:] = da_T[1:num_steps,z_up:z_size,:,:]
+    predictions[1:,:,:,0:x_lw]      = da_T[1:num_steps+1,:,:,0:x_lw]
+    predictions[1:,:,:,x_up:x_size] = da_T[1:num_steps+1,:,:,x_up:x_size]
+    predictions[1:,:,0:y_lw,:]      = da_T[1:num_steps+1,:,0:y_lw,:]
+    predictions[1:,:,y_up:y_size,:] = da_T[1:num_steps+1,:,y_up:y_size,:]
+    predictions[1:,0:z_lw,:,:]      = da_T[1:num_steps+1,0:z_lw,:,:]
+    predictions[1:,z_up:z_size,:,:] = da_T[1:num_steps+1,z_up:z_size,:,:]
 
-
-    for t in range(1,num_steps):
-
+    for t in range(1,num_steps+1):
+        print('    '+str(t))
         out_tm2[:,:,:] = out_tm1[:,:,:]
         out_tm1[:,:,:] = out_t[:,:,:]
 
@@ -153,11 +158,11 @@ def interator(exp_name, run_vars, model, init, ch_start, num_steps, ds):
         # reshape out
         out_t = out_temp.reshape((z_subsize, y_subsize, x_subsize))
 
-        if t==0: 
-           deltaT = out_t
         if t==1: 
+           deltaT = out_t
+        if t==2: 
            deltaT = 1.5*out_t-0.5*out_tm1
-        if t>1: 
+        if t>3: 
            deltaT = (23.0/12.0)*out_t-(4.0/3.0)*out_tm1+(5.0/12.0)*out_tm2
         
         predictions[ t, z_lw:z_up, y_lw:y_up, x_lw:x_up ] = predictions[ t-1, z_lw:z_up, y_lw:y_up, x_lw:x_up ] + ( deltaT )
