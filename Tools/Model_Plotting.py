@@ -248,12 +248,39 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
 
    my_legend=[]
    for name, dataset in datasets.items():
-      ii = np.argwhere(np.isnan(dataset[:, point[0], point[1], point[2]]))
-      if ii.shape[0]==0:
-         end=length
-      else: 
-         end=min(np.amin(ii),length)
-      ax.plot(dataset[:end, point[0], point[1], point[2]])
+
+      if len(point) == 0:
+          ii = np.argwhere(np.isnan(dataset[:]))
+          if ii.shape[0]==0:
+              end=length
+          else: 
+              end=min(np.amin(ii),length)
+          ax.plot(dataset[:end])
+
+      elif len(point) == 1:
+          ii = np.argwhere(np.isnan(dataset[:, point[0]]))
+          if ii.shape[0]==0:
+              end=length
+          else: 
+              end=min(np.amin(ii),length)
+          ax.plot(dataset[:end, point[0]])
+
+      elif len(point) == 2:
+          ii = np.argwhere(np.isnan(dataset[:, point[0], point[1]]))
+          if ii.shape[0]==0:
+              end=length
+          else: 
+              end=min(np.amin(ii),length)
+          ax.plot(dataset[:end, point[0], point[1]])
+
+      elif len(point) == 3:
+          ii = np.argwhere(np.isnan(dataset[:, point[0], point[1], point[2]]))
+          if ii.shape[0]==0:
+              end=length
+          else: 
+              end=min(np.amin(ii),length)
+          ax.plot(dataset[:end, point[0], point[1], point[2]])
+
       my_legend.append(name)
    ax.legend(my_legend)
    ax.set_ylabel('Temperature')
