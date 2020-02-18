@@ -36,21 +36,21 @@ torch.cuda.empty_cache()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
-exp_name_prefix = '1layer_1000nodes_'
+run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+exp_name_prefix = '0hiddenlayers_'
 # Set up comet exp tracking
 hyper_params = {
     "batch_size": 64,
     "num_epochs": 200, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
-    "no_layers": 1,    # no of *hidden* layers
+    "no_layers": 0,    # no of *hidden* layers
     "no_nodes": 1000
 }
 
 model_type = 'nn'
 
-read_data = False
+read_data = True 
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars.nc'
 
@@ -63,7 +63,7 @@ exp_name = exp_name_prefix+data_exp_name
 #---------------------
 # Set up Comet stuff:
 #---------------------
-experiment = Experiment(project_name="learnmitgcm2deg")
+experiment = Experiment(project_name="learnmitgcm2deg_wholefield")
 experiment.set_name(exp_name)
 experiment.log_parameters(hyper_params)
 experiment.log_others(run_vars)
@@ -72,10 +72,11 @@ experiment.log_others(run_vars)
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
 if read_data:
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, exp_name, run_vars)
+   print('reading data')
+   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCMfield(MITGCM_filename, 0.7, exp_name, run_vars)
    # no need to save here as saved in the Read Routine
 else:
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_exp_name+'_InputsOutputs.npz'
+   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_exp_name+'_InputsOutputs_Fields.npz'
    norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
 
 #-----------------------------------------------------------------
@@ -203,13 +204,13 @@ with experiment.train():
 del inputs, outputs, predicted 
 torch.cuda.empty_cache()
  
-weight_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/weights_'+exp_name+'.txt'
+weight_filename = '/data/hpcdata/users/racfur/DynamicPrediction/NNOutputs/MODELS/weights_'+exp_name+'fields.txt'
 weight_file = open(weight_filename, 'w')
 np.set_printoptions(threshold=np.inf)
 weight_file.write(str(h[0].weight.data.cpu().numpy()))
 
 print('pickle model')
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/NNOutputs/MODELS/pickle_'+model_type+'_'+exp_name+'fields.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 
