@@ -17,20 +17,21 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':False, 'poly_degree':2}
-model_type = 'lr'
+run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+model_type = 'nn'
 
-iteratively_predict = True 
+iteratively_predict = False
 
-for_len_yrs = 1000    # forecast length in years
+for_len_yrs = 100    # forecast length in years
 
-no_chunks = 1000
+no_chunks = 100
 
 #----------------------------
 for_len = int(for_len_yrs * 12)
 
 exp_name = cn.create_expname(model_type, run_vars)
 
+rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 #-------------------------------------------
 # Read in netcdf file for shape and 'truth'
 #-------------------------------------------
@@ -56,7 +57,7 @@ print(da_T.shape)
 
 import netCDF4 as nc4
 
-nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset(rootdir+'ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -81,7 +82,7 @@ nc_X[:] = ds['X'].data
 # Make the predictions
 #----------------------
 # Read in the model
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = rootdir+'MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
 with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
@@ -91,7 +92,7 @@ with open(pkl_filename, 'rb') as file:
 print('Call iterator and make the predictions')
 predictions = np.zeros((for_len+1, z_size, y_size, x_size))
 predictions[:,:,:,:]=np.nan
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.npy'
+pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.npy'
 if iteratively_predict:
    size_chunk = int(for_len/no_chunks)
    print(size_chunk)
@@ -101,7 +102,7 @@ if iteratively_predict:
        print(chunk)
        chunk_start = size_chunk*chunk
        chunk_end = size_chunk*(chunk+1)+1
-       predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), init=init)
+       predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), model_type=model_type, init=init)
        init = predictions[size_chunk*(chunk+1),:,:,:]
        # Save to array
        np.save(pred_filename, np.array(predictions))
