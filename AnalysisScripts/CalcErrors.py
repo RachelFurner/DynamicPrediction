@@ -18,9 +18,9 @@ import pickle
 run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
 
-iter_length = 12  # in months
+iter_length = 12000  # in months
 
-calc_predictions = True 
+calc_predictions = False
 
 exp_name = cn.create_expname(model_type, run_vars)
 
@@ -49,7 +49,7 @@ with open(pkl_filename, 'rb') as file:
 #---------------------
 import netCDF4 as nc4
 
-nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_SinglePredictionsTEST.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_SinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -76,7 +76,7 @@ nc_X[:] = ds['X'].data
 # i.e. each entry is the result of a single prediction using the 'truth' as inputs,
 # rather than iteratively predicting through time
 #-----------------------------------------------------------------------------------
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_SinglePredictionsTest.npy'
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/RegressionOutputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_SinglePredictions.npy'
 if calc_predictions:
     predictions = np.zeros((truth.shape))
     predictions[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
