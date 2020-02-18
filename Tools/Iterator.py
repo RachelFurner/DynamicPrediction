@@ -10,11 +10,17 @@ from sklearn.preprocessing import PolynomialFeatures
 from skimage.util import view_as_windows
 
 
+from torch.utils import data
+import torch.nn as nn
+from torch.autograd import Variable
+import torch
+
+
 #-----------------
 # Define iterator
 #-----------------
 
-def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None):
+def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr'):
 
     if start is None:
        start = 0
@@ -153,7 +159,15 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None):
         inputs = np.divide( np.subtract(inputs, input_mean), input_std)
                  
         # predict and then de-normalise outputs
-        out_temp = model.predict(inputs) * output_std + output_mean
+        if model_type == 'lr':
+            out_temp = model.predict(inputs) * output_std + output_mean
+        elif model_type == 'nn':
+            if torch.cuda.is_available():
+               inputs = Variable(torch.from_numpy(inputs).cuda().float())
+            else:
+               inputs = Variable(torch.from_numpy(inputs).float())
+            out_temp = model(inputs).cpu().detach().numpy()
+            out_temp = out_temp * output_std + output_mean
 
         # reshape out
         out_t = out_temp.reshape((z_subsize, y_subsize, x_subsize))
