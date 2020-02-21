@@ -15,7 +15,7 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
 
 iter_length = 12000  # in months
@@ -29,7 +29,7 @@ exp_name = cn.create_expname(model_type, run_vars)
 #---------------------------------------------------
 print('reading in ds')
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=DIR+'cat_tave_5000yrs_SelectedVars.nc'
+data_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 truth = ds['Ttave'][:iter_length+1,:,:,:].data
 

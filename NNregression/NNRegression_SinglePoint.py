@@ -36,23 +36,27 @@ torch.cuda.empty_cache()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-run_vars={'dimension':3, 'lat':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
-exp_name_prefix = '1layer_1000nodes_'
-# Set up comet exp tracking
+comet_log = True 
+
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
+
 hyper_params = {
     "batch_size": 64,
     "num_epochs": 200, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
-    "no_layers": 1,    # no of *hidden* layers
-    "no_nodes": 1000
+    "no_layers": 4,    # no of *hidden* layers
+    "no_nodes": 119
 }
+
+exp_name_prefix = 'AsDB_'+str(hyper_params["no_layers"])+'hiddenlayer_'+str(hyper_params["no_nodes"])+'nodes_withPoly_'
+#exp_name_prefix = str(hyper_params["no_layers"])+'hiddenlayer_withPoly_'
 
 model_type = 'nn'
 
 read_data = False
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars.nc'
+MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars_masked.nc'
 
 #--------------------------------
 # Calculate some other variables 
@@ -63,10 +67,11 @@ exp_name = exp_name_prefix+data_exp_name
 #---------------------
 # Set up Comet stuff:
 #---------------------
-experiment = Experiment(project_name="learnmitgcm2deg")
-experiment.set_name(exp_name)
-experiment.log_parameters(hyper_params)
-experiment.log_others(run_vars)
+experiment = Experiment(project_name="learnmitgcm2deg_SinglePointPrediction")
+if comet_log:
+   experiment.set_name(exp_name)
+   experiment.log_parameters(hyper_params)
+   experiment.log_others(run_vars)
 
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
@@ -109,11 +114,8 @@ class MITGCM_Dataset(data.Dataset):
 Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
 Test_Dataset  = MITGCM_Dataset(norm_inputs_te, norm_outputs_te)
 
-#train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
-#val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=hyper_params["batch_size"])
-
-train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=50)
-val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=50)
+train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
+val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=hyper_params["batch_size"])
 
 inputFeatures = norm_inputs_tr.shape[1]
 outputFeatures = norm_outputs_tr.shape[1]
@@ -125,6 +127,17 @@ elif hyper_params["no_layers"] == 1:
                        nn.Linear(hyper_params["no_nodes"], outputFeatures) )
 elif hyper_params["no_layers"] == 2:
     h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
+                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
+elif hyper_params["no_layers"] == 3:
+    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
+                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
+elif hyper_params["no_layers"] == 4:
+    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
+                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
                        nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
                        nn.Linear(hyper_params["no_nodes"], outputFeatures) )
 
@@ -197,8 +210,9 @@ with experiment.train():
         print('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
         print('epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
         # Log to Comet.ml
-        experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
-        experiment.log_metric('Validation_Loss', val_loss_epoch[-1], epoch = epoch)
+        if comet_log:
+           experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
+           experiment.log_metric('Validation_Loss', val_loss_epoch[-1], epoch = epoch)
 
 del inputs, outputs, predicted 
 torch.cuda.empty_cache()
@@ -244,9 +258,10 @@ torch.cuda.empty_cache()
 #------------------
 
 test_mse, val_mse = am.get_stats(model_type, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
-with experiment.test():
-    experiment.log_metric("test_mse", test_mse)
-    experiment.log_metric("val_mse", val_mse)
+if comet_log:
+    with experiment.test():
+        experiment.log_metric("test_mse", test_mse)
+        experiment.log_metric("val_mse", val_mse)
 
-am.plot_results(model_type, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+am.plot_results(model_type, data_exp_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
 

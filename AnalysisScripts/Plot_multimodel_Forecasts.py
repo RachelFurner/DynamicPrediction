@@ -32,7 +32,7 @@ lr_dir = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/'
 #-----------------------------------------------
 print('reading in ds')
 datadir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=datadir+'cat_tave_5000yrs_SelectedVars.nc'
+data_filename=datadir+'cat_tave_5000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 da_T=ds['Ttave'][:12001,:,:,:]
 
@@ -49,29 +49,32 @@ print(da_T.shape)
 lr_pred_dir = lr_dir+'ITERATED_PREDICTION_ARRAYS/'
 nn_pred_dir = nn_dir+'ITERATED_PREDICTION_ARRAYS/'
 
-pred1_filename = lr_pred_dir+ 'lr_3dLatDepUVSalEtaPolyDeg2_IterativePredictions.npy'
+pred1_filename = lr_pred_dir+ 'lr_3dLatLonDepUVSalEtaPolyDeg2_IterativePredictions.npy'
 pred_full = np.load(pred1_filename)
 
-pred2_filename = lr_pred_dir+ 'lr_2dLatDepUVSalEtaPolyDeg2_IterativePredictions.npy'
+pred2_filename = lr_pred_dir+ 'lr_2dLatLonDepUVSalEtaPolyDeg2_IterativePredictions.npy'
 pred_2d = np.load(pred2_filename)
 
-pred3_filename = lr_pred_dir+ 'lr_3dDepUVSalEtaPolyDeg2_IterativePredictions.npy'
+pred3_filename = lr_pred_dir+ 'lr_3dLonDepUVSalEtaPolyDeg2_IterativePredictions.npy'
 pred_noLat = np.load(pred3_filename)
 
-pred4_filename = lr_pred_dir+ 'lr_3dLatUVSalEtaPolyDeg2_IterativePredictions.npy'
-pred_noDepth = np.load(pred4_filename)
+pred4_filename = lr_pred_dir+ 'lr_3dLatDepUVSalEtaPolyDeg2_IterativePredictions.npy'
+pred_noLon = np.load(pred4_filename)
 
-pred5_filename = lr_pred_dir+ 'lr_3dLatDepSalEtaPolyDeg2_IterativePredictions.npy'
-pred_noCurrents = np.load(pred5_filename)
+pred5_filename = lr_pred_dir+ 'lr_3dLatLonUVSalEtaPolyDeg2_IterativePredictions.npy'
+pred_noDepth = np.load(pred5_filename)
 
-pred6_filename = lr_pred_dir+ 'lr_3dLatDepUVEtaPolyDeg2_IterativePredictions.npy'
-pred_noSal = np.load(pred6_filename)
+pred6_filename = lr_pred_dir+ 'lr_3dLatLonDepSalEtaPolyDeg2_IterativePredictions.npy'
+pred_noCurrents = np.load(pred6_filename)
 
-pred7_filename = lr_pred_dir+ 'lr_3dLatDepUVSalPolyDeg2_IterativePredictions.npy'
-pred_noEta = np.load(pred7_filename)
+pred7_filename = lr_pred_dir+ 'lr_3dLatLonDepUVEtaPolyDeg2_IterativePredictions.npy'
+pred_noSal = np.load(pred7_filename)
 
-#pred8_filename = nn_pred_dir+ 'nn_3dLatDepUVSalEtaPolyDeg2_IterativePredictions.npy'
-#pred_nn = np.load(pred8_filename)
+pred8_filename = lr_pred_dir+ 'lr_3dLatLonDepUVSalPolyDeg2_IterativePredictions.npy'
+pred_noEta = np.load(pred8_filename)
+
+#pred9_filename = nn_pred_dir+ 'nn_3dLatLonDepUVSalEtaPolyDeg2_IterativePredictions.npy'
+#pred_nn = np.load(pred9_filename)
 
 #---------------------------
 # Set persistence forecasts
@@ -90,9 +93,9 @@ persistence[:,:,:,:] = da_T[0,:,:,:]
 #fig = rfplt.plt_3_timeseries(point, 120, 1200, 12000, {'da_T (truth)':da_T.data, 'persistence':persistence, 'full_lr_model':pred_full, 'full_nn_model':pred_nn})
 #plt.savefig(rootdir+'PLOTS/multimodel_forecast_1000yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = rfplt.plt_timeseries(point, 120, {'da_T (truth)':da_T.data, 'persistence':persistence, 'full_lr_model':pred_full, '2d':pred_2d, 'no_Lat':pred_noLat, 'no_depth':pred_noDepth, 'no_currents':pred_noCurrents, 'no_sal':pred_noSal, 'no_eta':pred_noEta})
+fig = rfplt.plt_timeseries(point, 120, {'da_T (truth)':da_T.data, 'persistence':persistence, 'full_lr_model':pred_full, '2d':pred_2d, 'no_Lat':pred_noLat, 'no_Lon':pred_noLon, 'no_depth':pred_noDepth, 'no_currents':pred_noCurrents, 'no_sal':pred_noSal, 'no_eta':pred_noEta})
 plt.savefig(rootdir+'PLOTS/multimodel_forecast_10yrs'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = rfplt.plt_3_timeseries(point, 120, 1200, 12000, {'da_T (truth)':da_T.data, 'persistence':persistence, 'full_lr_model':pred_full, '2d':pred_2d, 'no_Lat':pred_noLat, 'no_depth':pred_noDepth, 'no_currents':pred_noCurrents, 'no_sal':pred_noSal, 'no_eta':pred_noEta})
+fig = rfplt.plt_3_timeseries(point, 120, 1200, 12000, {'da_T (truth)':da_T.data, 'persistence':persistence, 'full_lr_model':pred_full, '2d':pred_2d, 'no_Lat':pred_noLat, 'no_Lon':pred_noLon, 'no_depth':pred_noDepth, 'no_currents':pred_noCurrents, 'no_sal':pred_noSal, 'no_eta':pred_noEta})
 plt.savefig(rootdir+'PLOTS/multimodel_forecast_1000yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]) , bbox_inches = 'tight', pad_inches = 0.1)
 

@@ -19,6 +19,8 @@ def create_expname(model_type, run_vars):
       print('ERROR, dimension neither two or three!!!')
    if run_vars['lat']:
       exp_name=exp_name+'Lat'
+   if run_vars['lon']:
+      exp_name=exp_name+'Lon'
    if run_vars['dep']:
       exp_name=exp_name+'Dep'
    if run_vars['current']:

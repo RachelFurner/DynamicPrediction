@@ -35,11 +35,11 @@ torch.cuda.empty_cache()
 # Set variables for this run
 #----------------------------
 from Tools import CreateExpName as cn
-run_vars={'dimension':3, 'lat':True, 'dep':True, 'current':True, 'sal':True, 'eta':False, 'poly_degree':1}
+run_vars={'dimension':3, 'lat':True, 'lon':True, 'dep':True, 'current':True, 'sal':True, 'eta':False, 'poly_degree':1}
 model_type = 'lr'
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_5000yrs_SelectedVars.nc'
+MITGCM_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
 
 read_data=True
 

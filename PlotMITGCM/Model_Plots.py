@@ -23,7 +23,7 @@ from matplotlib.cm import get_cmap
 dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 
 #Running with files from first few thousand years - model run is still going!
-mm_file  = dir + 'cat_tave_5000yrs_SelectedVars.nc'       # Monthly meaned output files
+mm_file  = dir + 'cat_tave_5000yrs_SelectedVars_masked.nc'       # Monthly meaned output files
 mon_file = dir + 'monitor.0000000000.t001_5000yrs.nc.gz'  # Monitor files - i.e. max/min quantities etc
 
 ds_mm    = xr.open_dataset(mm_file)

@@ -27,13 +27,9 @@ def get_stats(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_
    exp_te_mse = metrics.mean_squared_error(truth_te, exp_te_predictions)
   
    # Print to file
-   dir1 = '/data/hpcdata/users/racfur/DynamicPrediction/'
-   if model_type == 'lr':
-      dir2 = dir1+'RegressionOutputs/'
-   elif model_type == 'nn': 
-      dir2 = dir1+'NNOutputs/'
+   outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
-   stats_filename = dir2+'STATS/'+model_type+'_'+exp_name+'.txt'
+   stats_filename = outdir+'STATS/'+model_type+'_'+exp_name+'.txt'
    stats_file=open(stats_filename,"w")
 
    stats_file.write('\n')
@@ -53,14 +49,10 @@ def get_stats(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_
    return(exp_tr_mse, exp_te_mse)   
 
   
-def plot_results(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_te_predictions):
+def plot_results(model_type, data_name, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_te_predictions):
    # Expectation is that all values are the 'normalised' versions (i.e. predictions that have not been de-normalised).
   
-   dir1 = '/data/hpcdata/users/racfur/DynamicPrediction/'
-   if model_type == 'lr':
-      dir2 = dir1+'RegressionOutputs/'
-   elif model_type == 'nn': 
-      dir2 = dir1+'NNOutputs/'
+   outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
    # Plot normalised prediction against truth
    bottom = min(min(truth_tr), min(exp_tr_predicitons), min(truth_te), min(exp_te_predictions))
@@ -87,14 +79,14 @@ def plot_results(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, e
    ax2.set_xlim(bottom, top)
    ax2.set_ylim(bottom, top)
    
-   plt.savefig(dir2+'PLOTS/'+model_type+'_'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(outdir+'PLOTS/'+model_type+'_'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
   
  
    # de-normalise predicted values and plot against truth
 
    #Read in mean and std to normalise inputs
    print('read in info to normalise data')
-   norm_file=open(dir1+'/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt',"r")
+   norm_file=open(outdir+'../NORMALISING_PARAMS/normalising_parameters_'+data_name+'.txt',"r")
    count = len(norm_file.readlines(  ))
    input_mean=[]
    input_std =[]
@@ -146,6 +138,6 @@ def plot_results(model_type, exp_name, truth_tr, truth_te, exp_tr_predicitons, e
    ax2.set_xlim(bottom, top)
    ax2.set_ylim(bottom, top)
    
-   plt.savefig(dir2+'/PLOTS/'+model_type+'_'+exp_name+'_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(outdir+'/PLOTS/'+model_type+'_'+exp_name+'_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
    
    return()
