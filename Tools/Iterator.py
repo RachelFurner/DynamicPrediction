@@ -3,7 +3,7 @@
 
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
-from Tools import CreateExpName as cn
+from Tools import CreateDataName as cn
 
 import numpy as np
 from sklearn.preprocessing import PolynomialFeatures

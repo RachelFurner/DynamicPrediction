@@ -4,7 +4,7 @@
 print('import packages')
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
-from Tools import CreateExpName as cn
+from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
 import numpy as np

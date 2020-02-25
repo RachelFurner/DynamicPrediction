@@ -50,7 +50,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    for z in range(2,38,2):
        for x in range(2,7,2):
            for y in range(2,74,5):
-               for time in range(0, min(data_end_index, da_T.shape[0]-1), 100):  
+               for time in range(0, min(data_end_index, da_T.shape[0]-1), 10):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -88,27 +88,55 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    da_lat = None
    da_lon = None
    da_depth = None
+   del ds
+   del da_T
+   del da_S
+   del da_U
+   del da_V
+   del da_Eta
+   del da_lat
+   del da_lon
+   del da_depth
     
    inputs=np.asarray(inputs)
    outputs=np.asarray(outputs)
-  
+
+   in_shape = inputs.shape
+   out_shape = outputs.shape
+
+   print('inputs and outputs shape:')
+   print(inputs.shape)
+   print(outputs.shape)
+   #randomise the sample order, and split into test and train data
+   # Do outputs first, so can free up some memory before adding poly terms to inputs
+   split=int(split_ratio * inputs.shape[0])
+   print('split')
+   print(split)
+   
+   np.random.seed(5)
+   ordering = np.random.permutation(inputs.shape[0])
+   
+   outputs_tr = outputs[ordering][:split]
+   outputs_te = outputs[ordering][split:]
+   outputs = None
+   del outputs
+   print('outputs_tr.shape')
+   print(outputs_tr.shape)
+   print('outputs_te.shape')
+   print(outputs_te.shape)
+   
+   # Add polynomial terms to inputs array. Then split into test and train
    if run_vars['poly_degree'] > 1: 
        # Add polynomial combinations of the features
        # Note bias included at linear regressor stage, so not needed in input data
        polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False) 
        inputs = polynomial_features.fit_transform(inputs)
        
-   #randomise the sample order, and split into test and train data
-   split=int(split_ratio * inputs.shape[0])
-   
-   np.random.seed(5)
-   ordering = np.random.permutation(inputs.shape[0])
-   
    inputs_tr = inputs[ordering][:split]
-   outputs_tr = outputs[ordering][:split]
    inputs_te = inputs[ordering][split:]
-   outputs_te = outputs[ordering][split:]
-   
+   inputs = None
+   del inputs 
+
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
@@ -147,17 +175,24 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    inputs_te = None  
    outputs_tr = None  
    outputs_te = None  
- 
+   del inputs_tr, inputs_te, outputs_tr, outputs_te
+
    #-----------------
    # Save the arrays
    #-----------------
    inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+exp_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
+   norm_inputs_tr = None
+   norm_inputs_te = None
+   norm_outputs_tr = None
+   norm_outputs_te = None
+   del norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te
+
    # Open arrays from file
    norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
  
    print('shape for inputs and outputs: full; tr; te')
-   print(inputs.shape, outputs.shape)
+   print(in_shape, out_shape)
    print(norm_inputs_tr.shape, norm_outputs_tr.shape)
    print(norm_inputs_te.shape, norm_outputs_te.shape)
 
@@ -183,7 +218,6 @@ def ReadMITGCMfield(MITGCM_filename, split_ratio, exp_name):
          worth assessing impact of this at some stage
    '''
 
-   StepSize = 1 # how many output steps (months!) to predict over
    data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
    
    #------------------

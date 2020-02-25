@@ -4,7 +4,7 @@
 print('import packages')
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
-from Tools import CreateExpName as cn
+from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
 import numpy as np
@@ -21,7 +21,7 @@ import pickle
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'nn'
-exp_prefix = None
+exp_prefix = ''
 
 time = 10
 point = [5,5,5]
@@ -29,7 +29,7 @@ point = [5,5,5]
 #----------------------
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
-exp_name = cn.create_expname(model_type, run_vars)
+data_name = cn.create_dataname(model_type, run_vars)
 exp_name = exp_prefix+exp_name
 
 level = point[0]

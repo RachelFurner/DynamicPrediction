@@ -8,7 +8,7 @@ from comet_ml import Experiment
 
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
-from Tools import CreateExpName as cn
+from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
 
@@ -61,8 +61,8 @@ MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars_masked.nc'
 #--------------------------------
 # Calculate some other variables 
 #--------------------------------
-data_exp_name = cn.create_expname(model_type, run_vars)
-exp_name = exp_name_prefix+data_exp_name
+data_name = cn.create_dataname(model_type, run_vars)
+exp_name = exp_prefix+data_name
 
 #---------------------
 # Set up Comet stuff:
