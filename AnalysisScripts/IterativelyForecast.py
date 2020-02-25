@@ -22,8 +22,6 @@ model_type = 'nn'
 
 exp_prefix = ''
 
-iteratively_predict = False
-
 for_len_yrs = 100    # forecast length in years
 
 no_chunks = 100
@@ -31,7 +29,7 @@ no_chunks = 100
 #----------------------------
 for_len = int(for_len_yrs * 12)
 
-data_name = cn.create_dataname(model_type, run_vars)
+data_name = cn.create_dataname(run_vars)
 exp_name = exp_prefix+data_name
 
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
@@ -60,7 +58,7 @@ print(da_T.shape)
 
 import netCDF4 as nc4
 
-nc_file = nc4.Dataset(rootdir+'ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset(rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -96,23 +94,22 @@ print('Call iterator and make the predictions')
 predictions = np.zeros((for_len+1, z_size, y_size, x_size))
 predictions[:,:,:,:]=np.nan
 pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_IterativePredictions.npy'
-if iteratively_predict:
-   size_chunk = int(for_len/no_chunks)
-   print(size_chunk)
-   init = da_T[0,:,:,:]
-   for chunk in range(no_chunks):
-       print('')
-       print(chunk)
-       chunk_start = size_chunk*chunk
-       chunk_end = size_chunk*(chunk+1)+1
-       predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), model_type=model_type, init=init)
-       init = predictions[size_chunk*(chunk+1),:,:,:]
-       # Save to array
-       np.save(pred_filename, np.array(predictions))
-       # Save to netcdf file
-       nc_Ttave[:,:,:,:] = predictions
-       errors = predictions-da_T.data
-       nc_Errors[:,:,:,:] = errors 
+size_chunk = int(for_len/no_chunks)
+print(size_chunk)
+init = da_T[0,:,:,:]
+for chunk in range(no_chunks):
+   print('')
+   print(chunk)
+   chunk_start = size_chunk*chunk
+   chunk_end = size_chunk*(chunk+1)+1
+   predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), model_type=model_type, init=init)
+   init = predictions[size_chunk*(chunk+1),:,:,:]
+   # Save to array
+   np.save(pred_filename, np.array(predictions))
+   # Save to netcdf file
+   nc_Ttave[:,:,:,:] = predictions
+   errors = predictions-da_T.data
+   nc_Errors[:,:,:,:] = errors 
 predictions = np.load(pred_filename)
 print('predictions.shape')
 print(predictions.shape)

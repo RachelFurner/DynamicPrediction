@@ -12,7 +12,7 @@ import numpy as np
 import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
 
-def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
+def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -157,7 +157,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    norm_outputs_tr, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
-   norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt','w')
+   norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt','w')
    #loop over each input feature
    for i in range(inputs_tr.shape[1]):  
        norm_file.write('inputs_mean['+str(i)+']\n')
@@ -180,7 +180,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
    #-----------------
    # Save the arrays
    #-----------------
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+exp_name+'_InputsOutputs.npz'
+   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
    norm_inputs_tr = None
    norm_inputs_te = None
@@ -205,7 +205,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, exp_name, run_vars):
 ####################################################################################
 ####################################################################################
 ####################################################################################
-def ReadMITGCMfield(MITGCM_filename, split_ratio, exp_name):
+def ReadMITGCMfield(MITGCM_filename, split_ratio, data_name):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -271,14 +271,6 @@ def ReadMITGCMfield(MITGCM_filename, split_ratio, exp_name):
        input_temp  = np.concatenate((input_temp , da_Eta[time  ,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
        output_temp = np.concatenate((output_temp, da_Eta[time+1,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
-       #    #input_temp[0,level,:,:] = da_T[time,level,:,:]
-       #input_temp[0,1,:,:,:] = da_S[time,:,:,:]
-       #input_temp[0,2,:,:,:] = 0.5 * (da_U[time,:,:,0:-1]+da_U[time,:,:,1:])  # average to get onto same grid as T points
-       #input_temp[0,3,:,:,:] = 0.5 * (da_V[time,:,0:-1,:]+da_V[time,:,1:,:])  # average to get onto same grid as T points
-
-       # what to do about eta its a 2d array, so wrong shape. 1)could just copy to create 3d or 2) if adding different levels as additional channels then its the right shape anyway)
-       # if adding separate depth levels as part of a 3-d input, or as an extra channel, I presume we don't need to worry about adding this info explicitely...
-       
        inputs  = np.concatenate((inputs , input_temp.reshape(1, input_temp.shape[0], input_temp.shape[1], input_temp.shape[2])),axis=0)
        outputs = np.concatenate((outputs,output_temp.reshape(1,output_temp.shape[0],output_temp.shape[1],output_temp.shape[2])),axis=0)
        print(inputs.shape)
@@ -320,7 +312,7 @@ def ReadMITGCMfield(MITGCM_filename, split_ratio, exp_name):
    outputs_std = np.nanstd(outputs_tr, axis = (0,2,3))
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
-   meanstd_file = '/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'_WholeField.npz'
+   meanstd_file = '/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_WholeGrid_'+data_name+'.npz'
    np.savez(meanstd_file, inputs_mean, inputs_std, outputs_mean, outputs_std)
    # Open arrays from file
    inputs_mean, inputs_std, outputs_mean, outputs_std = np.load(meanstd_file).values()
@@ -339,7 +331,7 @@ def ReadMITGCMfield(MITGCM_filename, split_ratio, exp_name):
    #-----------------
    # Save the arrays
    #-----------------
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+exp_name+'_InputsOutputs_WholeField.npz'
+   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
    # Open arrays from file
    norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()

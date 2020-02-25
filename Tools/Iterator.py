@@ -76,6 +76,8 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
 
     predictions = np.empty((num_steps+1, z_size, y_size, x_size))
     predictions[:,:,:,:] = np.nan
+    outputs = np.empty((num_steps+1, z_size, y_size, x_size))
+    outputs[:,:,:,:] = np.nan
     # Set initial conditions to match either initial conditions passed to function, or temp at time 0
     if init is None:
         predictions[0,:,:,:] = da_T[0,:,:,:]
@@ -189,5 +191,6 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
            deltaT = (23.0/12.0)*out_t-(4.0/3.0)*out_tm1+(5.0/12.0)*out_tm2
         
         predictions[ t, z_lw:z_up, y_lw:y_up, x_lw:x_up ] = predictions[ t-1, z_lw:z_up, y_lw:y_up, x_lw:x_up ] + ( deltaT )
+        outputs[ t, z_lw:z_up, y_lw:y_up, x_lw:x_up ] = out_t
 
-    return(predictions)
+    return(predictions, outputs)

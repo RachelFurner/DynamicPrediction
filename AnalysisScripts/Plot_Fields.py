@@ -29,7 +29,7 @@ point = [5,5,5]
 #----------------------
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
-data_name = cn.create_dataname(model_type, run_vars)
+data_name = cn.create_dataname(run_vars)
 exp_name = exp_prefix+exp_name
 
 level = point[0]

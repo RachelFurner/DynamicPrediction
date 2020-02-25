@@ -51,10 +51,11 @@ hyper_params = {
 
 model_type = 'nn'
 
-read_data = False
-
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars_masked.nc'
+
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
+data_name = cn.create_dataname(run_vars)
 
 #---------------------
 # Set up Comet stuff:
@@ -68,13 +69,8 @@ if log_comet:
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
-if read_data:
-   print('reading data')
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCMfield(MITGCM_filename, 0.7, exp_name)
-   # no need to save here as saved in the Read Routine
-else:
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+exp_name+'_InputsOutputs_WholeField.npz'
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeField_'+data_name+'_InputsOutputs.npz'
+norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
    
 #-------------------------
 # Set up regression model

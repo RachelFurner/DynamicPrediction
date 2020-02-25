@@ -7,7 +7,7 @@
 #                        portions of code, and normalise. The arrays are saved, and also passed back on return. 
 # create_dataname - short routine to create part of an experiment name from model type and run variables.
 
-def create_dataname(model_type, run_vars):
+def create_dataname(run_vars):
    '''
    Small routine to take model type and runs variables and create part of an experiment name, detailing the input data being used
    '''

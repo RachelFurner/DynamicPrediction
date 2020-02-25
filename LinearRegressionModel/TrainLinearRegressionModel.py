@@ -27,7 +27,7 @@ print(struct.calcsize("P") * 8)
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':False, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':False, 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
 exp_prefix = ''
 
@@ -37,7 +37,7 @@ MITGCM_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
 #---------------------------
 # calculate other variables 
 #---------------------------
-data_name = cn.create_dataname(model_type, run_vars)
+data_name = cn.create_dataname(run_vars)
 exp_name = exp_prefix+data_name
 
 ## Calculate x,y position in each feature list for extracting 'now' value
@@ -51,7 +51,7 @@ else:
 #--------------------------------------------------------------
 # Open data from saved array
 #--------------------------------------------------------------
-inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_InputsOutputs.npz'
+inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
 norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
 
 #-------------------------------------------------------------

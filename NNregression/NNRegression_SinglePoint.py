@@ -54,14 +54,13 @@ exp_name_prefix = 'AsDB_'+str(hyper_params["no_layers"])+'hiddenlayer_'+str(hype
 
 model_type = 'nn'
 
-read_data = False
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars_masked.nc'
 
 #--------------------------------
 # Calculate some other variables 
 #--------------------------------
-data_name = cn.create_dataname(model_type, run_vars)
+data_name = cn.create_dataname(run_vars)
 exp_name = exp_prefix+data_name
 
 #---------------------
@@ -74,14 +73,10 @@ if comet_log:
    experiment.log_others(run_vars)
 
 #--------------------------------------------------------------
-# Call module to read in the data, or open it from saved array
+# Read in the data from saved array
 #--------------------------------------------------------------
-if read_data:
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, exp_name, run_vars)
-   # no need to save here as saved in the Read Routine
-else:
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_exp_name+'_InputsOutputs.npz'
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
+norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
 
 #-----------------------------------------------------------------
 # Set up regression model in PyTorch (so we can use GPUs!)
@@ -263,5 +258,5 @@ if comet_log:
         experiment.log_metric("test_mse", test_mse)
         experiment.log_metric("val_mse", val_mse)
 
-am.plot_results(model_type, data_exp_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+am.plot_results(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
 

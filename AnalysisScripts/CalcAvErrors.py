@@ -21,11 +21,8 @@ exp_prefix = ''
 
 iter_length = 12000  # in months
 
-calc_predictions = False
-
 #-----------
-data_name = cn.create_dataname(model_type, run_vars)
-
+data_name = cn.create_dataname(run_vars)
 exp_name = exp_prefix+data_name 
 
 #---------------------------------------------------
@@ -53,7 +50,7 @@ with open(pkl_filename, 'rb') as file:
 #---------------------
 import netCDF4 as nc4
 
-nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_SinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -75,25 +72,31 @@ nc_Z[:] = ds['Z'].data
 nc_Y[:] = ds['Y'].data
 nc_X[:] = ds['X'].data
 
-#-----------------------------------------------------------------------------------
-# Call iterator to get prediction for entire grid for one time step ahead at a time
-# i.e. each entry is the result of a single prediction using the 'truth' as inputs,
-# rather than iteratively predicting through time
-#-----------------------------------------------------------------------------------
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_SinglePredictions.npy'
+#-------------------------------------------------------------------------------------
+# Call iterator multiple time to get many predictions for entire grid for one time 
+# step ahead, which can then be averaged to get a spatial pattern of temporally 
+# averaged errors i.e. each entry here is the result of a single prediction using the 
+# 'truth' as inputs, rather than iteratively predicting through time
+#--------------------------------------------------------------------------------------
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_AveragedSinglePredictions.npz'
+
 if calc_predictions:
     predictions = np.zeros((truth.shape))
     predictions[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
-    for t in range(1,iter_length+1): # ignore first value, as we can't calcualte this - we'd need ds at t-1    
+    outputs = np.zeros((truth.shape))
+    outputs[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
+    for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with truth.
         print(t)
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
-        predictions[t,:,:,:] = it.interator( exp_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )[1:,:,:,:]
-    #Save as array
-    np.save(pred_filename, np.array(predictions))
-predictions = np.load(pred_filename)    
+        pred_temp, outputs_temp = it.interator( exp_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )
+        predictions[t,:,:,:] = pred_temp[1:,:,:,:]
+        outputs[t,:,:,:] = outputs_temp[1:,:,:,:]
+    #Save as arrays
+    np.savez(pred_filename, np.array(predictions), np.array(outputs))
+predictions, outputs = np.load(pred_filename)    
 
 #----------------------------
-# Calculate and plot things!
+# Calculate and plot errors!
 #----------------------------
 
 errors = (predictions[1:,:,:,:] - truth[1:,:,:,:])
@@ -114,3 +117,19 @@ nc_Tav_Errors[:,:,:] = t_av_errors
 # Plot s_av_errors as a timeseries
 fig = rfplt.plt_timeseries([], errors.shape[0], {'spatially averaged errors':s_av_errors}, ylim=None)
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_ErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+
+
+#------------------------------------------------------------------------------------
+# Calculate and plot histogram of deltaT between now and next from 'truth' and model
+#------------------------------------------------------------------------------------
+DeltaT_truth = truth[1:,:,:,:]-truth[:-1,:,:,:]
+DeltaT_predictions = outputs[1:,:,:,:]
+
+# Plot a histogram of these
+
+fig = rfplt.Plot_Histogram(DeltaT_truth[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTtruth_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(DeltaT_predictions[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTpredicted_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
