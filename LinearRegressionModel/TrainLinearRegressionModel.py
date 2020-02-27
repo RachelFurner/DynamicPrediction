@@ -21,18 +21,18 @@ import torch as torch
 
 torch.cuda.empty_cache()
 
-import struct
-print(struct.calcsize("P") * 8)
-
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':False, 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':False, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
+#exp_prefix = 'BalancedTrainingSet_'
 exp_prefix = ''
 
+ModifyTrainingBalance = False
+
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
+MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 #---------------------------
 # calculate other variables 
@@ -51,13 +51,20 @@ else:
 #--------------------------------------------------------------
 # Open data from saved array
 #--------------------------------------------------------------
+print('reading data')
 inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
 norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+
+# if neccessary, modify the training data to give a better balance of dynamicity of points
+#if ModifyTrainingBalance:
+   # use where on outputs to find training samples which fall into certain bins of dynamic activity.
+   # take first n of each of these (samples already random, so shouldn't create any systematic bias/issue here)
 
 #-------------------------------------------------------------
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
+print('training model')
 
 alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
 parameters = {'alpha': alpha_s}
@@ -78,6 +85,7 @@ with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(lr, pckl_file)
 
 # predict values and calculate the error
+print('predict values')
 lr_predicted_tr = lr.predict(norm_inputs_tr)
 lr_tr_mse = metrics.mean_squared_error(norm_outputs_tr, lr_predicted_tr)
 
@@ -87,7 +95,9 @@ lr_te_mse = metrics.mean_squared_error(norm_outputs_te, lr_predicted_te)
 #------------------
 # Assess the model
 #------------------
+print('get stats')
 
 am.get_stats(model_type, exp_name, norm_outputs_tr, norm_outputs_te, lr_predicted_tr, lr_predicted_te)
+print('plot results')
 am.plot_results(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, lr_predicted_tr, lr_predicted_te)
 

@@ -50,7 +50,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    for z in range(2,38,2):
        for x in range(2,7,2):
            for y in range(2,74,5):
-               for time in range(0, min(data_end_index, da_T.shape[0]-1), 10):  
+               for time in range(0, min(data_end_index, da_T.shape[0]-1), 100):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]

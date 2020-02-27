@@ -6,11 +6,11 @@ import netCDF4 as nc4
 import numpy as np
 
 # Open source file
-ncfile_in = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/cat_tave_5000yrs_SelectedVars.nc'
+ncfile_in = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/cat_tave_2000yrs_SelectedVars.nc'
 dset_in = nc4.Dataset(ncfile_in, 'r')
 
 # Open output file
-ncfile_out = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/cat_tave_5000yrs_SelectedVars_masked.nc'
+ncfile_out = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/cat_tave_2000yrs_SelectedVars_masked.nc'
 dset_out = nc4.Dataset(ncfile_out,'w', format='NETCDF4') #'w' stands for write
 
 # Create the dimensions of the file

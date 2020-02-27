@@ -32,7 +32,7 @@ lr_dir = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/'
 #-----------------------------------------------
 print('reading in ds')
 datadir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=datadir+'cat_tave_5000yrs_SelectedVars_masked.nc'
+data_filename=datadir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 da_T=ds['Ttave'][:12001,:,:,:]
 

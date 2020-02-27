@@ -39,7 +39,7 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
     z_size = da_T.shape[1]
 
     #Read in mean and std to normalise inputs - should move this outside of the loop!
-    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/normalising_parameters_'+exp_name+'.txt',"r")
+    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+exp_name+'.txt',"r")
     count = len(norm_file.readlines(  ))
     input_mean=[]
     input_std =[]
@@ -143,9 +143,8 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
         if run_vars['lon']:
            temp = da_lon[x_lw:x_up].values
            # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (z_subsize,1))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,y_subsize))
+           temp = np.tile(temp, (y_subsize,1))
+           temp = np.tile(temp, (z_subsize,1,1))
            temp = np.expand_dims(temp, axis=-1)
            inputs = np.concatenate( (inputs, temp), axis=-1) 
         if run_vars['dep']:

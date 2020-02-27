@@ -30,7 +30,7 @@ exp_name = exp_prefix+data_name
 #---------------------------------------------------
 print('reading in ds')
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
+data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 truth = ds['Ttave'][:iter_length+1,:,:,:].data
 

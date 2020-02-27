@@ -17,8 +17,8 @@ import pickle
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
-model_type = 'nn'
+run_vars={'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+model_type = 'lr'
 
 exp_prefix = ''
 
@@ -38,10 +38,7 @@ rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 #-------------------------------------------
 print('reading in ds')
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-if for_len_yrs < 500:
-   data_filename=DIR+'cat_tave_500yrs_SelectedVars_masked.nc'
-else:
-   data_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
+data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 da_T=ds['Ttave'][:for_len_yrs*12+1]   
 
@@ -102,7 +99,7 @@ for chunk in range(no_chunks):
    print(chunk)
    chunk_start = size_chunk*chunk
    chunk_end = size_chunk*(chunk+1)+1
-   predictions[chunk_start:chunk_end,:,:,:] = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), model_type=model_type, init=init)
+   predictions[chunk_start:chunk_end,:,:,:], outputs = it.interator(exp_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), model_type=model_type, init=init)
    init = predictions[size_chunk*(chunk+1),:,:,:]
    # Save to array
    np.save(pred_filename, np.array(predictions))

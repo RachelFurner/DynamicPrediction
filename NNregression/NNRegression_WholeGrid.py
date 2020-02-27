@@ -52,7 +52,7 @@ hyper_params = {
 model_type = 'nn'
 
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=mit_dir+'cat_tave_5000yrs_SelectedVars_masked.nc'
+MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
 data_name = cn.create_dataname(run_vars)

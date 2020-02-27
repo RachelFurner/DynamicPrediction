@@ -80,13 +80,11 @@ def plot_results(model_type, data_name, exp_name, truth_tr, truth_te, exp_tr_pre
    ax2.set_ylim(bottom, top)
    
    plt.savefig(outdir+'PLOTS/'+model_type+'_'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
-  
  
    # de-normalise predicted values and plot against truth
 
    #Read in mean and std to normalise inputs
-   print('read in info to normalise data')
-   norm_file=open(outdir+'../NORMALISING_PARAMS/normalising_parameters_'+data_name+'.txt',"r")
+   norm_file=open(outdir+'../NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt',"r")
    count = len(norm_file.readlines(  ))
    input_mean=[]
    input_std =[]

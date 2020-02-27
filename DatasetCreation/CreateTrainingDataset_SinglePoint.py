@@ -26,10 +26,10 @@ print(struct.calcsize("P") * 8)
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':False, 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':False, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_5000yrs_SelectedVars_masked.nc'
+MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 #---------------------------
 # calculate other variables 
