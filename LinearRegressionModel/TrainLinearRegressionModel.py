@@ -7,8 +7,9 @@
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
+#from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
+from Tools import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,7 +25,7 @@ torch.cuda.empty_cache()
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':False, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':False, 'poly_degree':2}
 model_type = 'lr'
 #exp_prefix = 'BalancedTrainingSet_'
 exp_prefix = ''
@@ -96,8 +97,62 @@ lr_te_mse = metrics.mean_squared_error(norm_outputs_te, lr_predicted_te)
 # Assess the model
 #------------------
 print('get stats')
-
-am.get_stats(model_type, exp_name, norm_outputs_tr, norm_outputs_te, lr_predicted_tr, lr_predicted_te)
+am.get_stats(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, lr_predicted_tr, lr_predicted_te)
 print('plot results')
 am.plot_results(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, lr_predicted_tr, lr_predicted_te)
 
+
+#-------------------------------------------------------------------
+# Plot some extra stuff.....
+#-------------------------------------------------
+
+#first de-normalise
+#Read in mean and std to normalise inputs
+norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt',"r")
+count = len(norm_file.readlines(  ))
+input_mean=[]
+input_std =[]
+norm_file.seek(0)
+for i in range( int( (count-4)/4) ):
+   a_str = norm_file.readline()
+   a_str = norm_file.readline() ;  input_mean.append(a_str.split())
+   a_str = norm_file.readline()
+   a_str = norm_file.readline() ;  input_std.append(a_str.split())
+a_str = norm_file.readline()
+a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
+a_str = norm_file.readline()
+a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
+norm_file.close()
+input_mean = np.array(input_mean).astype(float)
+input_std  = np.array(input_std).astype(float)
+input_mean = input_mean.reshape(1,input_mean.shape[0])
+input_std  = input_std.reshape(1,input_std.shape[0])
+print(output_mean, output_std)
+print(input_mean.shape, input_std.shape)
+print(input_mean, input_std)
+
+# denormalise the predictions and truth   
+denorm_lr_predicted_tr = lr_predicted_tr*output_std+output_mean
+denorm_lr_predicted_te = lr_predicted_te*output_std+output_mean
+denorm_outputs_tr = norm_outputs_tr*output_std+output_mean
+denorm_outputs_te = norm_outputs_te*output_std+output_mean
+
+# plot histograms:
+fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_truth_tr_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_outputs_te, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_truth_te_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_tr_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_lr_predicted_te, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_predictons_te_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+# Plot a histogram of predictions minus the truth
+fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_tr_hist', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_lr_predicted_te-denorm_outputs_te, 100)  # Remove points not being predicted (boundaries) from this
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_te_hist', bbox_inches = 'tight', pad_inches = 0.1)

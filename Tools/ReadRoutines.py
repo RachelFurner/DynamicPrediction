@@ -22,6 +22,8 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
      salinity, u, v, eta, lat, lon, and depth at the grid point and its neighbours all at time
      t as inputs.
    '''
+   info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/info_'+data_name+'.txt'
+   info_file=open(info_filename,"w")
 
    StepSize = 1 # how many output steps (months!) to predict over
    halo_size = 1
@@ -50,7 +52,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    for z in range(2,38,2):
        for x in range(2,7,2):
            for y in range(2,74,5):
-               for time in range(0, min(data_end_index, da_T.shape[0]-1), 100):  
+               for time in range(0, min(data_end_index, da_T.shape[0]-1), 20):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -101,17 +103,15 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    inputs=np.asarray(inputs)
    outputs=np.asarray(outputs)
 
+   info_file.write( 'max output : '+ str(np.max(outputs)) +'\n' )
+   info_file.write( 'min output : '+ str(np.min(outputs)) +'\n' )
+
    in_shape = inputs.shape
    out_shape = outputs.shape
 
-   print('inputs and outputs shape:')
-   print(inputs.shape)
-   print(outputs.shape)
    #randomise the sample order, and split into test and train data
    # Do outputs first, so can free up some memory before adding poly terms to inputs
    split=int(split_ratio * inputs.shape[0])
-   print('split')
-   print(split)
    
    np.random.seed(5)
    ordering = np.random.permutation(inputs.shape[0])
@@ -120,12 +120,11 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    outputs_te = outputs[ordering][split:]
    outputs = None
    del outputs
-   print('outputs_tr.shape')
-   print(outputs_tr.shape)
-   print('outputs_te.shape')
-   print(outputs_te.shape)
+   info_file.write('outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
+   info_file.write('outputs_te.shape : ' + str(outputs_te.shape) +'\n')
    
    # Add polynomial terms to inputs array. Then split into test and train
+   print('Add polynomial terms to inputs')
    if run_vars['poly_degree'] > 1: 
        # Add polynomial combinations of the features
        # Note bias included at linear regressor stage, so not needed in input data
@@ -136,10 +135,14 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    inputs_te = inputs[ordering][split:]
    inputs = None
    del inputs 
+   info_file.write(' inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
+   info_file.write(' inputs_te.shape : ' + str( inputs_te.shape) +'\n')
+   info_file.write('\n')
 
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
+   print('normalise')
    def normalise_data(train,test1):
        train_mean, train_std = np.mean(train), np.std(train)
        norm_train = (train - train_mean) / train_std
@@ -157,6 +160,10 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    norm_outputs_tr, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
+   # as npz file
+   mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
+   np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
+   # And as text file
    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt','w')
    #loop over each input feature
    for i in range(inputs_tr.shape[1]):  
@@ -180,6 +187,7 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    #-----------------
    # Save the arrays
    #-----------------
+   print('save arrays')
    inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
    norm_inputs_tr = None

@@ -34,12 +34,18 @@ def plot_depth_ax(ax, field, level, min_value=None, max_value=None, cmap=None):
     
     return(ax, im)
 
-def plot_depth_fld(field, field_name, level, title=None, min_value=None, max_value=None):
+def plot_depth_fld(field, field_name, level, title=None, min_value=None, max_value=None, diff=False):
     
     # Create a figure
     fig = plt.figure(figsize=(5,9))
     ax = plt.subplot(111)
-    ax, im = plot_depth_ax(ax, field, level, min_value, max_value)
+    if diff:
+       min_value = - max( abs(np.amin(field[level,:,:])), abs(np.amax(field[level,:,:])) )
+       max_value =   max( abs(np.amin(field[level,:,:])), abs(np.amax(field[level,:,:])) )
+       cmap = 'bwr'
+    else:
+       cmap = False
+    ax, im = plot_depth_ax(ax, field, level, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at z='+str(level))
 
@@ -110,12 +116,18 @@ def plot_yconst_crss_sec_ax(ax, field, y, min_value=None, max_value=None, cmap=N
     
     return(ax, im)
 
-def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_value=None):
+def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_value=None, diff=False):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
-    ax, im = plot_yconst_crss_sec_ax(ax, field, y, min_value, max_value)
+    if diff:
+       min_value = - max( abs(np.amin(field[:,y,:])), abs(np.amax(field[:,y,:])) )
+       max_value =   max( abs(np.amin(field[:,y,:])), abs(np.amax(field[:,y,:])) )
+       cmap = 'bwr'
+    else:
+       cmap = False
+    ax, im = plot_yconst_crss_sec_ax(ax, field, y, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at y='+str(y))
 
@@ -187,12 +199,18 @@ def plot_xconst_crss_sec_ax(ax, field, x, min_value=None, max_value=None, cmap=N
     
     return(ax, im)
 
-def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_value=None):
+def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_value=None, diff=False):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
-    ax, im = plot_xconst_crss_sec_ax(ax, field, x, min_value, max_value)
+    if diff:
+       min_value = - max( abs(np.amin(field[:,:,x])), abs(np.amax(field[:,:,x])) )
+       max_value =   max( abs(np.amin(field[:,:,x])), abs(np.amax(field[:,:,x])) )
+       cmap = 'bwr'
+    else:
+       cmap = False
+    ax, im = plot_xconst_crss_sec_ax(ax, field, x, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at x='+str(x))
 
@@ -300,6 +318,27 @@ def plt_timeseries(point, length, datasets, ylim=None):
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
+
+   return(fig)
+
+def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
+   
+   fig = plt.figure(figsize=(15 ,7))
+
+   ax=plt.subplot(211)
+   bottom = min(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])-1
+   top    = max(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])+1
+   #ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+
+   ax=plt.subplot(212)
+   bottom = min(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])-1
+   top    = max(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])+1
+   #ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+
+   plt.tight_layout()
+   plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
 
    return(fig)
 

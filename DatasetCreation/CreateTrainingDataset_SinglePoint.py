@@ -26,7 +26,7 @@ print(struct.calcsize("P") * 8)
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':False, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
@@ -47,7 +47,7 @@ else:
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
-norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, data_name, run_vars)
+norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.8, data_name, run_vars)
 
 #---------------------------------------------------------------------------------------------------------------
 # Plot inputs (temp at time t) against outputs (temp at time t+1), to see if variance changes with input values

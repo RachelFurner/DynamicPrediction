@@ -252,7 +252,7 @@ torch.cuda.empty_cache()
 # Assess the model
 #------------------
 
-test_mse, val_mse = am.get_stats(model_type, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+test_mse, val_mse = am.get_stats(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
 if comet_log:
     with experiment.test():
         experiment.log_metric("test_mse", test_mse)
