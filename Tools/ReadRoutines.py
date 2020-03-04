@@ -12,7 +12,7 @@ import numpy as np
 import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
 
-def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
+def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_name, run_vars):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -29,8 +29,10 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    halo_size = 1
    halo_list = (range(-halo_size, halo_size+1))
 
-   data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
-   
+   data_end_index = 1000 * 12   # look at first 1000 years only for now - also ensure dataset sizes aren't too huge!
+   trainval_split = int(data_end_index*trainval_split_ratio) # point at which to switch from testing data to validation data
+   valtest_split = int(data_end_index*valtest_split_ratio) # point at which to switch from testing data to validation data
+
    #------------------
    # Read in the data
    #------------------
@@ -45,14 +47,18 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    da_lon=ds['X'].values
    da_depth=ds['Z'].values
    
-   inputs = []
-   outputs = []
+   inputs_tr = []
+   outputs_tr = []
+   inputs_val = []
+   outputs_val = []
+   inputs_te = []
+   outputs_te = []
    
    # Read in inputs and outputs, subsampling in space and time for 'quasi-independence'
-   for z in range(2,38,2):
-       for x in range(2,7,2):
-           for y in range(2,74,5):
-               for time in range(0, min(data_end_index, da_T.shape[0]-1), 20):  
+   for z in range(2,38,1):
+       for x in range(2,7,1):
+           for y in range(2,74,1):
+               for time in range(0, trainval_split, 100):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -77,8 +83,64 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
                    if run_vars['dep']:
                        input_temp.append(da_depth[z])
    
-                   inputs.append(input_temp)
-                   outputs.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+                   inputs_tr.append(input_temp)
+                   outputs_tr.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+
+               for time in range(trainval_split, valtest_split, 100):  
+                   input_temp = []
+                   if run_vars['dimension'] == 2:
+                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                       if run_vars['sal']:
+                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                       if run_vars['current']:
+                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                   elif run_vars['dimension'] == 3:
+                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                       if run_vars['sal']:
+                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                       if run_vars['current']:
+                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                   if run_vars['eta']:
+                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                   if run_vars['lat']:
+                       input_temp.append(da_lat[y])
+                   if run_vars['lon']:
+                       input_temp.append(da_lon[x])
+                   if run_vars['dep']:
+                       input_temp.append(da_depth[z])
+   
+                   inputs_val.append(input_temp)
+                   outputs_val.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+
+               for time in range(valtest_split, data_end_index, 100):  
+                   input_temp = []
+                   if run_vars['dimension'] == 2:
+                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                       if run_vars['sal']:
+                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                       if run_vars['current']:
+                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                   elif run_vars['dimension'] == 3:
+                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                       if run_vars['sal']:
+                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                       if run_vars['current']:
+                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+                   if run_vars['eta']:
+                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+                   if run_vars['lat']:
+                       input_temp.append(da_lat[y])
+                   if run_vars['lon']:
+                       input_temp.append(da_lon[x])
+                   if run_vars['dep']:
+                       input_temp.append(da_depth[z])
+   
+                   inputs_te.append(input_temp)
+                   outputs_te.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
 
    # Release memory
    ds = None
@@ -100,64 +162,71 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    del da_lon
    del da_depth
     
-   inputs=np.asarray(inputs)
-   outputs=np.asarray(outputs)
+   inputs_tr   = np.asarray(inputs_tr)
+   outputs_tr  = np.asarray(outputs_tr)
+   inputs_val  = np.asarray(inputs_val)
+   outputs_val = np.asarray(outputs_val)
+   inputs_te   = np.asarray(inputs_te)
+   outputs_te  = np.asarray(outputs_te)
 
-   info_file.write( 'max output : '+ str(np.max(outputs)) +'\n' )
-   info_file.write( 'min output : '+ str(np.min(outputs)) +'\n' )
-
-   in_shape = inputs.shape
-   out_shape = outputs.shape
-
-   #randomise the sample order, and split into test and train data
-   # Do outputs first, so can free up some memory before adding poly terms to inputs
-   split=int(split_ratio * inputs.shape[0])
-   
-   np.random.seed(5)
-   ordering = np.random.permutation(inputs.shape[0])
-   
-   outputs_tr = outputs[ordering][:split]
-   outputs_te = outputs[ordering][split:]
-   outputs = None
-   del outputs
-   info_file.write('outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
-   info_file.write('outputs_te.shape : ' + str(outputs_te.shape) +'\n')
-   
-   # Add polynomial terms to inputs array. Then split into test and train
+   # Add polynomial terms to inputs array
    print('Add polynomial terms to inputs')
    if run_vars['poly_degree'] > 1: 
        # Add polynomial combinations of the features
        # Note bias included at linear regressor stage, so not needed in input data
        polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False) 
-       inputs = polynomial_features.fit_transform(inputs)
+       inputs_tr  = polynomial_features.fit_transform(inputs_tr)
+       inputs_val = polynomial_features.fit_transform(inputs_val)
+       inputs_te  = polynomial_features.fit_transform(inputs_te)
        
-   inputs_tr = inputs[ordering][:split]
-   inputs_te = inputs[ordering][split:]
-   inputs = None
-   del inputs 
-   info_file.write(' inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
-   info_file.write(' inputs_te.shape : ' + str( inputs_te.shape) +'\n')
-   info_file.write('\n')
+   # Randomise the sample order
+   
+   np.random.seed(5)
+   ordering_tr  = np.random.permutation(inputs_tr.shape[0])
+   ordering_val = np.random.permutation(inputs_val.shape[0])
+   ordering_te  = np.random.permutation(inputs_te.shape[0])
+   
+   inputs_tr = inputs_tr[ordering_tr]
+   outputs_tr = outputs_tr[ordering_tr]
+   inputs_val = inputs_val[ordering_val]
+   outputs_val = outputs_val[ordering_val]
+   inputs_te = inputs_te[ordering_te]
+   outputs_te = outputs_te[ordering_te]
 
+   info_file.write( 'max output : '+ str(max ( np.max(outputs_tr), np.max(outputs_val), np.max(outputs_te) ) ) +'\n' )
+   info_file.write( 'min output : '+ str(min ( np.min(outputs_tr), np.min(outputs_val), np.min(outputs_te) ) ) +'\n' )
+
+   info_file.write('  inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
+   info_file.write(' outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
+   info_file.write('\n')
+   info_file.write(' inputs_val.shape : ' + str( inputs_val.shape) +'\n')
+   info_file.write('outputs_val.shape : ' + str(outputs_val.shape) +'\n')
+   info_file.write('\n')
+   info_file.write('  inputs_te.shape : ' + str( inputs_te.shape) +'\n')
+   info_file.write(' outputs_te.shape : ' + str(outputs_te.shape) +'\n')
+   info_file.write('\n')
+   
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
    print('normalise')
-   def normalise_data(train,test1):
+   def normalise_data(train,val,test):
        train_mean, train_std = np.mean(train), np.std(train)
        norm_train = (train - train_mean) / train_std
-       norm_test1 = (test1 - train_mean) / train_std
-       return norm_train, norm_test1, train_mean, train_std
+       norm_val   = (val   - train_mean) / train_std
+       norm_test  = (test  - train_mean) / train_std
+       return norm_train, norm_val, norm_test, train_mean, train_std
    
    inputs_mean = np.zeros(inputs_tr.shape[1])
    inputs_std  = np.zeros(inputs_tr.shape[1])
-   norm_inputs_tr   = np.zeros(inputs_tr.shape)
-   norm_inputs_te   = np.zeros(inputs_te.shape)
+   norm_inputs_tr  = np.zeros(inputs_tr.shape)
+   norm_inputs_val = np.zeros(inputs_val.shape)
+   norm_inputs_te  = np.zeros(inputs_te.shape)
    # Loop over each input feature, normalising individually
    for i in range(inputs_tr.shape[1]):  
-       norm_inputs_tr[:, i], norm_inputs_te[:, i], inputs_mean[i], inputs_std[i] = normalise_data(inputs_tr[:, i], inputs_te[:,i])
+       norm_inputs_tr[:, i], norm_inputs_val[:,i], norm_inputs_te[:, i], inputs_mean[i], inputs_std[i] = normalise_data(inputs_tr[:, i], inputs_val[:,i], inputs_te[:,i])
    
-   norm_outputs_tr, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_te[:])
+   norm_outputs_tr, norm_outputs_val, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_val[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
    # as npz file
@@ -178,36 +247,37 @@ def ReadMITGCM(MITGCM_filename, split_ratio, data_name, run_vars):
    norm_file.close()
   
    # Free up memory
-   inputs_tr = None  
-   inputs_te = None  
-   outputs_tr = None  
-   outputs_te = None  
-   del inputs_tr, inputs_te, outputs_tr, outputs_te
+   #inputs_tr  = None  
+   #inputs_val = None  
+   #inputs_te  = None  
+   #outputs_tr  = None  
+   #outputs_val = None  
+   #outputs_te  = None  
+   #del inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te
 
    #-----------------
    # Save the arrays
    #-----------------
    print('save arrays')
    inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
-   np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te)
-   norm_inputs_tr = None
-   norm_inputs_te = None
-   norm_outputs_tr = None
-   norm_outputs_te = None
-   del norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te
+   np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te)
+   norm_inputs_tr  = None
+   norm_inputs_val = None
+   norm_inputs_te  = None
+   norm_outputs_tr  = None
+   norm_outputs_val = None
+   norm_outputs_te  = None
+   del norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
 
    # Open arrays from file
-   norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
  
-   print('shape for inputs and outputs: full; tr; te')
-   print(in_shape, out_shape)
+   print('shape for inputs and outputs: tr; val; te')
    print(norm_inputs_tr.shape, norm_outputs_tr.shape)
+   print(norm_inputs_val.shape, norm_outputs_val.shape)
    print(norm_inputs_te.shape, norm_outputs_te.shape)
 
-   inputs = None
-   outputs = None
-  
-   return norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te 
+   return inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te 
 
 ####################################################################################
 ####################################################################################

@@ -10,189 +10,69 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report
 import sklearn.metrics as metrics
 
-def get_stats(model_type, data_name, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_te_predictions):
-   # Expectation is that all values are the 'normalised' versions (i.e. predictions that have not been de-normalised).
-
-   # Calculate 'persistance' score - persistence prediction is just zero everywhere as we're predicting the trend
-   # For training data
-   predict_persistance_tr = np.zeros(truth_tr.shape)
-   pers_tr_mse = metrics.mean_squared_error(truth_tr, predict_persistance_tr)
-   # For validation data
-   predict_persistance_te = np.zeros(truth_te.shape)
-   pers_te_mse = metrics.mean_squared_error(truth_te, predict_persistance_te)
-
+def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name='norm'):
 
    # calculate stats
-   exp_tr_mse = metrics.mean_squared_error(truth_tr, exp_tr_predicitons)
-   exp_te_mse = metrics.mean_squared_error(truth_te, exp_te_predictions)
+   exp1_mse = metrics.mean_squared_error(truth1, exp1)
+   if pers1 is not None:
+      pers1_mse = metrics.mean_squared_error(truth1, pers1)
+
+   if truth2.any() and exp2.any():
+      exp2_mse = metrics.mean_squared_error(truth2, exp2)
+      if pers2 is not None:
+         pers2_mse = metrics.mean_squared_error(truth2, pers2)
   
    # Print to file
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
-   stats_filename = outdir+'STATS/'+model_type+'_'+exp_name+'.txt'
+   stats_filename = outdir+'STATS/'+model_type+'_'+exp_name+'_'+name+'.txt'
    stats_file=open(stats_filename,"w")
 
    stats_file.write('\n')
-   stats_file.write('Training Scores: \n')
+   stats_file.write(name1+' Scores: \n')
    stats_file.write('\n')
-   stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(pers_tr_mse)))
-   stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(exp_tr_mse)))
+   if pers1 is not None:
+      stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(pers1_mse)))
+   stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(exp1_mse)))
    stats_file.write('\n')
-   stats_file.write('--------------------------------------------------------')
-   stats_file.write('\n')
-   stats_file.write('Validation Scores: \n')
-   stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(pers_te_mse)))
-   stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(exp_te_mse)))
-   stats_file.write('\n')
+   if truth2.any() and exp2.any():
+      stats_file.write('--------------------------------------------------------')
+      stats_file.write('\n')
+      stats_file.write(name2+' Scores: \n')
+      if pers2 is not None:
+         stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(pers2_mse)))
+      stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(exp2_mse)))
+      stats_file.write('\n')
    stats_file.close()
 
-   # repeat but de-normalise first, so errors are in degrees
-   #Read in mean and std to normalise inputs
-   norm_file=open(outdir+'../NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt',"r")
-   count = len(norm_file.readlines(  ))
-   input_mean=[]
-   input_std =[]
-   norm_file.seek(0)
-   for i in range( int( (count-4)/4) ):
-      a_str = norm_file.readline()
-      a_str = norm_file.readline() ;  input_mean.append(a_str.split())
-      a_str = norm_file.readline()
-      a_str = norm_file.readline() ;  input_std.append(a_str.split())
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
-   norm_file.close()
-   input_mean = np.array(input_mean).astype(float)
-   input_std  = np.array(input_std).astype(float)
-   input_mean = input_mean.reshape(1,input_mean.shape[0])
-   input_std  = input_std.reshape(1,input_std.shape[0])
-
-   # denormalise the predictions and truth   
-   denorm_exp_tr_predicitons = exp_tr_predicitons*output_std+output_mean
-   denorm_exp_te_predictions = exp_te_predictions*output_std+output_mean
-   denorm_truth_tr = truth_tr*output_std+output_mean
-   denorm_truth_te = truth_te*output_std+output_mean
-   
-   # calculate stats
-   denorm_exp_tr_mse = metrics.mean_squared_error(denorm_truth_tr, denorm_exp_tr_predicitons)
-   denorm_exp_te_mse = metrics.mean_squared_error(denorm_truth_te, denorm_exp_te_predictions)
-
-   denorm_pers_tr_mse = metrics.mean_squared_error(denorm_truth_tr, predict_persistance_tr)
-   denorm_pers_te_mse = metrics.mean_squared_error(denorm_truth_te, predict_persistance_te)
-  
-   # Print to file
-   outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
-
-   stats_filename = outdir+'STATS/denormed_'+model_type+'_'+exp_name+'.txt'
-   stats_file=open(stats_filename,"w")
-
-   stats_file.write('\n')
-   stats_file.write('Training Scores: \n')
-   stats_file.write('\n')
-   stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(denorm_pers_tr_mse)))
-   stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(denorm_exp_tr_mse)))
-   stats_file.write('\n')
-   stats_file.write('--------------------------------------------------------')
-   stats_file.write('\n')
-   stats_file.write('Validation Scores: \n')
-   stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(denorm_pers_te_mse)))
-   stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(denorm_exp_te_mse)))
-   stats_file.write('\n')
-   stats_file.close()
-
-   
-
-   return(exp_tr_mse, exp_te_mse)   
+   return()   
 
   
-def plot_results(model_type, data_name, exp_name, truth_tr, truth_te, exp_tr_predicitons, exp_te_predictions):
-   # Expectation is that all values are the 'normalised' versions (i.e. predictions that have not been de-normalised).
+def plot_results(model_type, exp_name, truth, predicitons, name='norm', xlabel=None, ylabel=None):
   
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
-   # Plot normalised prediction against truth
-   bottom = min(min(truth_tr), min(exp_tr_predicitons), min(truth_te), min(exp_te_predictions))
-   top    = max(max(truth_tr), max(exp_tr_predicitons), max(truth_te), max(exp_te_predictions))
+   # Plot prediction against truth
+   bottom = min(min(truth), min(predicitons))
+   top    = max(max(truth), max(predicitons))
    bottom = bottom - 0.1*abs(top)
    top    = top + 0.1*abs(top)
-   
-   fig = plt.figure(figsize=(20,9.4))
-   ax1 = fig.add_subplot(121)
-   ax1.scatter(truth_tr, exp_tr_predicitons, edgecolors=(0, 0, 0))
-   ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
-   ax1.set_xlabel('Truth')
-   ax1.set_ylabel('Predicted')
-   ax1.set_title('Train')
-   ax1.set_xlim(bottom, top)
-   ax1.set_ylim(bottom, top)
-   
-   ax2 = fig.add_subplot(122)
-   ax2.scatter(truth_te, exp_te_predictions, edgecolors=(0, 0, 0))
-   ax2.plot([bottom, top], [bottom, top], 'k--', lw=1)
-   ax2.set_xlabel('Truth')
-   ax2.set_ylabel('Predicted')
-   ax2.set_title('Test')
-   ax2.set_xlim(bottom, top)
-   ax2.set_ylim(bottom, top)
-   
-   plt.savefig(outdir+'PLOTS/'+model_type+'_'+exp_name+'_norm_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
+  
+   if not xlabel:
+      xlabel = 'Truth'
+   if not ylabel:
+      ylabel = 'Predicted'
  
-   # de-normalise predicted values and plot against truth
-
-   #Read in mean and std to normalise inputs
-   norm_file=open(outdir+'../NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt',"r")
-   count = len(norm_file.readlines(  ))
-   input_mean=[]
-   input_std =[]
-   norm_file.seek(0)
-   for i in range( int( (count-4)/4) ):
-      a_str = norm_file.readline()
-      a_str = norm_file.readline() ;  input_mean.append(a_str.split())
-      a_str = norm_file.readline()
-      a_str = norm_file.readline() ;  input_std.append(a_str.split())
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
-   norm_file.close()
-   input_mean = np.array(input_mean).astype(float)
-   input_std  = np.array(input_std).astype(float)
-   input_mean = input_mean.reshape(1,input_mean.shape[0])
-   input_std  = input_std.reshape(1,input_std.shape[0])
-
-   # denormalise the predictions and truth   
-   denorm_exp_tr_predicitons = exp_tr_predicitons*output_std+output_mean
-   denorm_exp_te_predictions = exp_te_predictions*output_std+output_mean
-   denorm_truth_tr = truth_tr*output_std+output_mean
-   denorm_truth_te = truth_te*output_std+output_mean
-   
-   bottom = min(min(denorm_truth_tr), min(denorm_exp_tr_predicitons), min(denorm_truth_te), min(denorm_exp_te_predictions))
-   top    = max(max(denorm_truth_tr), max(denorm_exp_tr_predicitons), max(denorm_truth_te), max(denorm_exp_te_predictions))
-   bottom = bottom - 0.1*abs(top)
-   top    = top + 0.1*abs(top)
-  
-   # plot it 
-   fig = plt.figure(figsize=(20,9.4))
-   
-   ax1 = fig.add_subplot(121)
-   ax1.scatter(denorm_truth_tr, denorm_exp_tr_predicitons, edgecolors=(0, 0, 0))
+   fig = plt.figure(figsize=(9,9))
+   ax1 = fig.add_subplot(111)
+   ax1.scatter(truth, predicitons, edgecolors=(0, 0, 0))
    ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
-   ax1.set_xlabel('Truth')
-   ax1.set_ylabel('Predicted')
-   ax1.set_title('Train')
+   ax1.set_xlabel(xlabel)
+   ax1.set_ylabel(ylabel)
+   ax1.set_title(name)
    ax1.set_xlim(bottom, top)
    ax1.set_ylim(bottom, top)
    
-   ax2 = fig.add_subplot(122)
-   ax2.scatter(denorm_truth_te, denorm_exp_te_predictions, edgecolors=(0, 0, 0))
-   ax2.plot([bottom, top], [bottom, top], 'k--', lw=1)
-   ax2.set_xlabel('Truth')
-   ax2.set_ylabel('Predicted')
-   ax2.set_title('Test')
-   ax2.set_xlim(bottom, top)
-   ax2.set_ylim(bottom, top)
-   
-   plt.savefig(outdir+'/PLOTS/'+model_type+'_'+exp_name+'_predictedVtruth.png', bbox_inches = 'tight', pad_inches = 0.1)
-   
+   plt.savefig(outdir+'PLOTS/'+model_type+'_'+exp_name+'_'+xlabel+'V'+ylabel+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+ 
    return()

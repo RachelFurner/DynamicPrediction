@@ -93,7 +93,7 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
     predictions[1:,z_up:z_size,:,:] = da_T[1:num_steps+1,z_up:z_size,:,:]
 
     for t in range(1,num_steps+1):
-        print('    '+str(t))
+        #print('    '+str(t))
         out_tm2[:,:,:] = out_tm1[:,:,:]
         out_tm1[:,:,:] = out_t[:,:,:]
 

@@ -18,9 +18,9 @@ import netCDF4 as nc4
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = ''
+exp_prefix = 'test'
 
-calc_predictions = False
+calc_predictions = True 
 iter_length = 12000  # in months
 
 #-----------
@@ -42,7 +42,7 @@ print(Temp_truth.shape)
 #-------------------
 # Read in the model
 #-------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_type+'_'+data_name+'.pkl'
 with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
@@ -96,7 +96,7 @@ if calc_predictions:
     for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with Temp_truth.
         print(t)
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
-        predT_temp, predDelT_temp = it.interator( exp_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )
+        predT_temp, predDelT_temp = it.interator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )
         predictedTemp[t,:,:,:] = predT_temp[1:,:,:,:]
         predictedDelT[t,:,:,:] = predDelT_temp[1:,:,:,:]
     #Save as arrays
@@ -127,74 +127,39 @@ nc_DeltaTErrors[:,:,:,:] = DelT_errors
 nc_DelTav_Errors[:,:,:] = t_av_DelT_errors 
 nc_file.close()
 
-#-------------
-# Plot errors
-#-------------
-print('plot errors etc')
-# Plot a histogram of Temperature predictions minus the truth 
+#-----------------
+# Plot histograms
+#-----------------
+print('plot histograms')
 fig = rfplt.Plot_Histogram(Temp_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_Temp_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
-# Plot a histogram of deltaT predictions minus the true deltaT
 fig = rfplt.Plot_Histogram(DelT_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_DeltaT_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
-# Plot spatially averaged errors as a timeseries
-fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged Temp errors':s_av_Temp_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_TempErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged DelT errors':s_av_DelT_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
-
-# Plot histograms of deltaT from truth and predictions
 fig = rfplt.Plot_Histogram(DelT_truth[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTtruth_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(predictedDelT[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTpredicted_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
+#-----------------
+# Plot timeseries 
+#-----------------
+print('plot timeseries')
+fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged Temp errors':s_av_Temp_errors}, ylim=None)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_TempErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged DelT errors':s_av_DelT_errors}, ylim=None)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+
 ##########
-# Redo training script stats and plots with this large dataset....
-print('plot some truth vs prediction plots')
-fig = plt.figure(figsize=(20,9.4))
-   
-ax1 = fig.add_subplot(121)
-ax1.scatter(Temp_truth[1:,:,:,:], predictedTemp[1:,:,:,:], edgecolors=(0, 0, 0))
-#ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
-ax1.set_xlabel('Truth')
-ax1.set_ylabel('Predicted')
-ax1.set_title('Temp')
-#ax1.set_xlim(bottom, top)
-#ax1.set_ylim(bottom, top)
+# Redo stats and scatter plots with this large dataset....
+print('Plot scatter plots')
+am.plot_results(model_type, exp_name, Temp_truth[1:,:,:,:], predictedTemp[1:,:,:,:], name='Temperature_denorm')
+am.plot_results(model_type, exp_name, DelT_truth, predictedDelT[1:,:,:,:], name='denorm_DeltaT')
 
-ax2 = fig.add_subplot(122)
-ax2.scatter(DelT_truth, predictedDelT[1:,:,:,:], edgecolors=(0, 0, 0))
-#ax2.plot([bottom, top], [bottom, top], 'k--', lw=1)
-ax2.set_xlabel('Truth')
-ax2.set_ylabel('Predicted')
-ax2.set_title('DeltaT')
-#ax2.set_xlim(bottom, top)
-#ax2.set_ylim(bottom, top)
-
-outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
-plt.savefig(outdir+'/PLOTS/'+model_type+'_'+exp_name+'_predictedVtruth_FullDataset.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-print('calc stats and print to file')
+print('Calc stats and print to file')
 # calculate stats
-Temp_mse = metrics.mean_squared_error(Temp_truth[1:,:,:,:], predictedTemp[1:,:,:,:])
-DelT_mse = metrics.mean_squared_error(DelT_truth, predictedDelT[1:,:,:,:])
-
-# Print to file
-
-stats_filename = outdir+'STATS/'+model_type+'_'+exp_name+'_FullDataset.txt'
-stats_file=open(stats_filename,"w")
-
-stats_file.write('\n')
-stats_file.write('Temperature: \n')
-stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(Temp_mse)))
-stats_file.write('\n')
-stats_file.write('--------------------------------------------------------')
-stats_file.write('Delta Temperature: \n')
-stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(DelT_mse)))
-stats_file.write('\n')
-stats_file.close()
+am.get_stats(model_type, exp_name, name1='Temp', truth1=Temp_truth[1:,:,:,:], exp1=predictedTemp[1:,:,:,:],
+                                   name2='DeltaT', truth2=DelT_truth, exp2=predictedDelT, name='TempDeltaT_denorm')

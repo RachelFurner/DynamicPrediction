@@ -9,6 +9,7 @@ sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
+from Tools import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -47,23 +48,42 @@ else:
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
-norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.8, data_name, run_vars)
+denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.8, 0.9, data_name, run_vars)
 
 #---------------------------------------------------------------------------------------------------------------
-# Plot inputs (temp at time t) against outputs (temp at time t+1), to see if variance changes with input values
+# Plot inputs (temp at time t) against outputs (delta temp), to see if variance changes with input values
 #---------------------------------------------------------------------------------------------------------------
-fig = plt.figure(figsize=(14, 7))
+fig = plt.figure(figsize=(20, 6))
 
-ax1 = fig.add_subplot(121)
-ax1.scatter(norm_inputs_tr[:,xy_pos], norm_outputs_tr, edgecolors=(0, 0, 0))
+ax1 = fig.add_subplot(131)
+ax1.scatter(denorm_inputs_tr[:,xy_pos], denorm_outputs_tr, edgecolors=(0, 0, 0))
 ax1.set_xlabel('Inputs (t)')
-ax1.set_ylabel('Outputs (t+1)')
+ax1.set_ylabel('Outputs (delta t)')
 ax1.set_title('Training Data')
 
-ax2 = fig.add_subplot(122)
-ax2.scatter(norm_inputs_te[:,xy_pos], norm_outputs_te, edgecolors=(0, 0, 0))
+ax2 = fig.add_subplot(132)
+ax2.scatter(denorm_inputs_val[:,xy_pos], denorm_outputs_val, edgecolors=(0, 0, 0))
 ax2.set_xlabel('Inputs (t)')
-ax2.set_ylabel('Outputs (t+1)')
+ax2.set_ylabel('Outputs (delta t)')
+ax2.set_title('Validation Data')
+
+ax2 = fig.add_subplot(133)
+ax2.scatter(denorm_inputs_te[:,xy_pos], denorm_outputs_te, edgecolors=(0, 0, 0))
+ax2.set_xlabel('Inputs (t)')
+ax2.set_ylabel('Outputs (delta t)')
 ax2.set_title('Validation Data')
 
 plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_InputsvsOutputs', bbox_inches = 'tight', pad_inches = 0.1)
+
+#-----------------------------
+# Plot histograms of the data
+#-----------------------------
+fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100)  
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_TrainOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_outputs_val, 100)  
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_ValOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_outputs_te, 100)  
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_TestOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+
