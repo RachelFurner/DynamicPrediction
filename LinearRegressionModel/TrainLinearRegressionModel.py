@@ -18,9 +18,12 @@ import pickle
 from sklearn import linear_model
 import sklearn.metrics as metrics
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import classification_report
+
 import torch as torch
 
 torch.cuda.empty_cache()
+plt.rcParams.update({'font.size': 14})
 
 #----------------------------
 # Set variables for this run
@@ -30,7 +33,7 @@ model_type = 'lr'
 #exp_prefix = 'BalancedTrainingSet_'
 exp_prefix = ''
 
-TrainModel=False
+TrainModel=True 
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
@@ -39,15 +42,20 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
+
+# RF BUG TESTING!
+data_name = 'TEST_'+data_name
+
 exp_name = exp_prefix+data_name
 
-## Calculate x,y position in each feature list for extracting 'now' value
-if run_vars['dimension'] == 2:
-   xy_pos = 4
-elif run_vars['dimension'] == 3:
-   xy_pos = 13
-else:
-   print('ERROR, dimension neither two or three!!!')
+### Calculate x,y position in each feature list for extracting 'now' value
+# This probably doesn't work with the Polyfeatures.... need to check and/or rethink!
+#if run_vars['dimension'] == 2:
+#   xy_pos = 4
+#elif run_vars['dimension'] == 3:
+#   xy_pos = 13
+#else:
+#   print('ERROR, dimension neither two or three!!!')
 
 #--------------------------------------------------------------
 # Open data from saved array
@@ -64,19 +72,34 @@ pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/p
 if TrainModel:
     print('training model')
     
-    alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
-    parameters = {'alpha': alpha_s}
+    #alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
+    alpha_s = [0.00]
+    parameters = [{'alpha': alpha_s}]
     n_folds=3
     
     lr = linear_model.Ridge(fit_intercept=True)
     
     # set up regressor
-    lr_cv = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+    lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+    #lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='max_error', refit=True)
     
     # fit the model
     lr.fit(norm_inputs_tr, norm_outputs_tr)
     lr.get_params()
     
+    print("Best parameters set found on development set:")
+    print()
+    print(lr.best_params_)
+    print()
+    print("Grid scores on development set:")
+    print()
+    means = lr.cv_results_['mean_test_score']
+    stds = lr.cv_results_['std_test_score']
+    for mean, std, params in zip(means, stds, lr.cv_results_['params']):
+        print("%0.3f (+/-%0.03f) for %r"
+              % (mean, std * 2, params))
+    print()
+
     # pickle it
     with open(pkl_filename, 'wb') as pckl_file:
         pickle.dump(lr, pckl_file)
@@ -93,33 +116,25 @@ lr_tr_mse = metrics.mean_squared_error(norm_outputs_tr, norm_lr_predicted_tr)
 norm_lr_predicted_val = lr.predict(norm_inputs_val)
 lr_val_mse = metrics.mean_squared_error(norm_outputs_val, norm_lr_predicted_val)
 
+# run a few simple tests to check against iterator:
+in1 = np.zeros((1,norm_inputs_tr.shape[1]))
+in2 = np.ones((1,norm_inputs_tr.shape[1]))
+
+out1 = lr.predict(in1)
+out2 = lr.predict(in2)
+
+print(out1)
+print(out2)
+
 #------------------------------------------
 # De-normalise the outputs and predictions
 #------------------------------------------
-#Read in mean and std to normalise inputs
-norm_file=open('../../NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt',"r")
-count = len(norm_file.readlines(  ))
-input_mean=[]
-input_std =[]
-norm_file.seek(0)
-for i in range( int( (count-4)/4) ):
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  input_mean.append(a_str.split())
-   a_str = norm_file.readline()
-   a_str = norm_file.readline() ;  input_std.append(a_str.split())
-a_str = norm_file.readline()
-a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
-a_str = norm_file.readline()
-a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
-norm_file.close()
-input_mean = np.array(input_mean).astype(float)
-input_std  = np.array(input_std).astype(float)
-#input_mean = input_mean.reshape(1,input_mean.shape[0])
-#input_std  = input_std.reshape(1,input_std.shape[0])
+mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
 
 # denormalise inputs
-def denormalise_data(data,mean,std):
-    denorm_data = data * std + mean
+def denormalise_data(norm_data,mean,std):
+    denorm_data = norm_data * std + mean
     return denorm_data
 
 denorm_inputs_tr  = np.zeros(norm_inputs_tr.shape)
@@ -133,10 +148,6 @@ denorm_lr_predicted_tr = denormalise_data(norm_lr_predicted_tr, output_mean, out
 denorm_lr_predicted_val = denormalise_data(norm_lr_predicted_val, output_mean, output_std)
 denorm_outputs_tr = denormalise_data(norm_outputs_tr, output_mean, output_std)
 denorm_outputs_val = denormalise_data(norm_outputs_val, output_mean, output_std)
-#denorm_lr_predicted_tr = norm_lr_predicted_tr * output_std + output_mean
-#denorm_lr_predicted_val = norm_lr_predicted_val * output_std + output_mean
-#denorm_outputs_tr  = norm_outputs_tr * output_std + output_mean
-#denorm_outputs_val = norm_outputs_val * output_std + output_mean
 
 #------------------
 # Assess the model
@@ -161,13 +172,13 @@ am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_va
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_tr_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_train_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_predictons_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_tr_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_train_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
@@ -177,8 +188,19 @@ plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deno
 # Plot scatter plots of errors against outputs and inputs
 #---------------------------------------------------------
 am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training_denorm', xlabel='DeltaT', ylabel='Errors')
-am.plot_results(model_type, exp_name, denorm_inputs_tr[:,xy_pos], denorm_lr_predicted_tr-denorm_outputs_tr, name='training_denorm', xlabel='inputTemp', ylabel='Errors')
-
 am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val_denorm', xlabel='DeltaT', ylabel='Errors')
-am.plot_results(model_type, exp_name, denorm_inputs_val[:,xy_pos], denorm_lr_predicted_val-denorm_outputs_val, name='val_denorm', xlabel='inputTemp', ylabel='Errors')
+
+#fig = plt.figure(figsize=(9,9))
+#ax1 = fig.add_subplot(111)
+#ax1.scatter(denorm_inputs_tr[:,xy_pos], denorm_lr_predicted_tr-denorm_outputs_tr, edgecolors=(0, 0, 0))
+#ax1.set_xlabel('InputTemp')
+#ax1.set_ylabel('Errors')
+#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_inputtempVerrors_training_denorm.png', bbox_inches = 'tight', pad_inches = 0.1)
+#
+#fig = plt.figure(figsize=(9,9))
+#ax1 = fig.add_subplot(111)
+#ax1.scatter(denorm_inputs_val[:,xy_pos], denorm_lr_predicted_val-denorm_outputs_val, edgecolors=(0, 0, 0))
+#ax1.set_xlabel('InputTemp')
+#ax1.set_ylabel('Errors')
+#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_inputtempVerrors_val_denorm.png', bbox_inches = 'tight', pad_inches = 0.1)
 

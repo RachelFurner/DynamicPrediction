@@ -9,22 +9,29 @@ sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
 from Tools import Iterator as it
 from Tools import Model_Plotting as rfplt
+from Tools import AssessModel as am
 import xarray as xr
 import pickle
 import netCDF4 as nc4
+
+plt.rcParams.update({'font.size': 14})
 
 #----------------------------
 # Set variables for this run
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = 'test'
+exp_prefix = ''
 
 calc_predictions = True 
-iter_length = 12000  # in months
+iter_length = 10  # in months
 
 #-----------
 data_name = cn.create_dataname(run_vars)
+
+#RF BUG FIXING
+data_name = 'TEST_'+data_name
+
 exp_name = exp_prefix+data_name 
 
 #---------------------------------------------------
@@ -42,7 +49,7 @@ print(Temp_truth.shape)
 #-------------------
 # Read in the model
 #-------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_type+'_'+data_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
 with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
@@ -84,7 +91,7 @@ nc_X[:] = ds['X'].data
 # 'truth' as inputs, rather than iteratively predicting through time
 #--------------------------------------------------------------------------------------
 print('get predictions')
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+model_type+'_'+exp_name+'_AveragedSinglePredictions.npz'
+pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
     # Array to hold predicted values of Temperature
@@ -132,34 +139,37 @@ nc_file.close()
 #-----------------
 print('plot histograms')
 fig = rfplt.Plot_Histogram(Temp_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_Temp_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Temp_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(DelT_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_DeltaT_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DeltaT_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(DelT_truth[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTtruth_hist', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTtruth_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(predictedDelT[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deltaTpredicted_hist', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTpredicted_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------
 # Plot timeseries 
 #-----------------
 print('plot timeseries')
 fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged Temp errors':s_av_Temp_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_TempErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_TempErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged DelT errors':s_av_DelT_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
 
 ##########
 # Redo stats and scatter plots with this large dataset....
 print('Plot scatter plots')
-am.plot_results(model_type, exp_name, Temp_truth[1:,:,:,:], predictedTemp[1:,:,:,:], name='Temperature_denorm')
-am.plot_results(model_type, exp_name, DelT_truth, predictedDelT[1:,:,:,:], name='denorm_DeltaT')
+am.plot_results(model_type, exp_name, Temp_truth[1:,1:-1,1:-3,1:-2], predictedTemp[1:,1:-1,1:-3,1:-2], name='Temperature_denorm')
+am.plot_results(model_type, exp_name, DelT_truth[:,1:-1,1:-3,1:-2], predictedDelT[1:,1:-1,1:-3,1:-2], name='denorm_DeltaT')
 
 print('Calc stats and print to file')
 # calculate stats
-am.get_stats(model_type, exp_name, name1='Temp', truth1=Temp_truth[1:,:,:,:], exp1=predictedTemp[1:,:,:,:],
-                                   name2='DeltaT', truth2=DelT_truth, exp2=predictedDelT, name='TempDeltaT_denorm')
+am.get_stats(model_type, exp_name, name1='Temp', truth1=Temp_truth[1:,1:-1,1:-3,1:-2], exp1=predictedTemp[1:,1:-1,1:-3,1:-2],
+                                   name2='DeltaT', truth2=DelT_truth[:,1:-1,1:-3,1:-2], exp2=predictedDelT[1:,1:-1,1:-3,1:-2], name='TempDeltaT_denorm')
+
+
+

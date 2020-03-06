@@ -17,6 +17,8 @@ import xarray as xr
 import pickle
 from netCDF4 import Dataset
 
+plt.rcParams.update({'font.size': 14})
+
 #------------------------
 # Set plotting variables
 #------------------------

@@ -16,6 +16,8 @@ import os
 import xarray as xr
 import pickle
 
+plt.rcParams.update({'font.size': 14})
+
 #----------------------------
 # Set variables for this run
 #----------------------------
@@ -24,7 +26,7 @@ model_type = 'lr'
 exp_prefix = ''
 
 time = 10
-point = [5,5,5]
+point = [5,15,4]
 
 compare_w_truth = False
 

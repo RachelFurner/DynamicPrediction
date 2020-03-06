@@ -24,6 +24,9 @@ torch.cuda.empty_cache()
 
 import struct
 print(struct.calcsize("P") * 8)
+
+plt.rcParams.update({'font.size': 14})
+
 #----------------------------
 # Set variables for this run
 #----------------------------
@@ -37,43 +40,13 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 #---------------------------
 data_name = cn.create_dataname(run_vars)
 
-## Calculate x,y position in each feature list for extracting 'now' value
-if run_vars['dimension'] == 2:
-   xy_pos = 4
-elif run_vars['dimension'] == 3:
-   xy_pos = 13
-else:
-   print('ERROR, dimension neither two or three!!!')
+# RF BUG TESTING!
+data_name = 'TEST_'+data_name
 
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
 denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.8, 0.9, data_name, run_vars)
-
-#---------------------------------------------------------------------------------------------------------------
-# Plot inputs (temp at time t) against outputs (delta temp), to see if variance changes with input values
-#---------------------------------------------------------------------------------------------------------------
-fig = plt.figure(figsize=(20, 6))
-
-ax1 = fig.add_subplot(131)
-ax1.scatter(denorm_inputs_tr[:,xy_pos], denorm_outputs_tr, edgecolors=(0, 0, 0))
-ax1.set_xlabel('Inputs (t)')
-ax1.set_ylabel('Outputs (delta t)')
-ax1.set_title('Training Data')
-
-ax2 = fig.add_subplot(132)
-ax2.scatter(denorm_inputs_val[:,xy_pos], denorm_outputs_val, edgecolors=(0, 0, 0))
-ax2.set_xlabel('Inputs (t)')
-ax2.set_ylabel('Outputs (delta t)')
-ax2.set_title('Validation Data')
-
-ax2 = fig.add_subplot(133)
-ax2.scatter(denorm_inputs_te[:,xy_pos], denorm_outputs_te, edgecolors=(0, 0, 0))
-ax2.set_xlabel('Inputs (t)')
-ax2.set_ylabel('Outputs (delta t)')
-ax2.set_title('Validation Data')
-
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_InputsvsOutputs', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------------
 # Plot histograms of the data

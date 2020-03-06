@@ -38,27 +38,10 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
     y_size = da_T.shape[2]
     z_size = da_T.shape[1]
 
-    #Read in mean and std to normalise inputs - should move this outside of the loop!
-    norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+exp_name+'.txt',"r")
-    count = len(norm_file.readlines(  ))
-    input_mean=[]
-    input_std =[]
-    norm_file.seek(0)
-    for i in range( int( (count-4)/4) ):
-       a_str = norm_file.readline()
-       a_str = norm_file.readline() ;  input_mean.append(a_str.split())
-       a_str = norm_file.readline()
-       a_str = norm_file.readline() ;  input_std.append(a_str.split())
-    a_str = norm_file.readline() 
-    a_str = norm_file.readline() ;  output_mean = float(a_str.split()[0])
-    a_str = norm_file.readline() 
-    a_str = norm_file.readline() ;  output_std = float(a_str.split()[0])
-    norm_file.close()
-    input_mean = np.array(input_mean).astype(float)
-    input_std  = np.array(input_std).astype(float)
-    input_mean = input_mean.reshape(1,input_mean.shape[0])
-    input_std  = input_std.reshape(1,input_std.shape[0])
-  
+    #Read in mean and std to normalise inputs
+    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+    input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+    
     # Set region to predict for - we want to exclude boundary points, and near to boundary points 
     x_lw = 1
     x_up = x_size-2 

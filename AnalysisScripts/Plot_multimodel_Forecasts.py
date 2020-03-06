@@ -16,6 +16,8 @@ import os
 import xarray as xr
 import pickle
 
+plt.rcParams.update({'font.size': 14})
+
 #----------------------------
 # Set variables for this run
 #----------------------------

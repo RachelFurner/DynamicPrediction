@@ -13,6 +13,8 @@ from netCDF4 import Dataset
 from matplotlib.cm import get_cmap
 from scipy.stats import skew
 
+plt.rcParams.update({'font.size': 14})
+
 #################################
 # Plotting spatial depth fields #
 #################################
@@ -44,7 +46,7 @@ def plot_depth_fld(field, field_name, level, title=None, min_value=None, max_val
        max_value =   max( abs(np.amin(field[level,:,:])), abs(np.amax(field[level,:,:])) )
        cmap = 'bwr'
     else:
-       cmap = False
+       cmap = 'viridis'
     ax, im = plot_depth_ax(ax, field, level, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at z='+str(level))
@@ -126,7 +128,7 @@ def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_v
        max_value =   max( abs(np.amin(field[:,y,:])), abs(np.amax(field[:,y,:])) )
        cmap = 'bwr'
     else:
-       cmap = False
+       cmap = 'viridis'
     ax, im = plot_yconst_crss_sec_ax(ax, field, y, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at y='+str(y))
@@ -209,7 +211,7 @@ def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_v
        max_value =   max( abs(np.amin(field[:,:,x])), abs(np.amax(field[:,:,x])) )
        cmap = 'bwr'
     else:
-       cmap = False
+       cmap = 'viridis'
     ax, im = plot_xconst_crss_sec_ax(ax, field, x, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at x='+str(x))

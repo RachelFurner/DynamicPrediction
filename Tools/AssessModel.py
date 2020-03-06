@@ -13,13 +13,20 @@ import sklearn.metrics as metrics
 def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name='norm'):
 
    # calculate stats
+   truth1=truth1.reshape(-1)
+   exp1=exp1.reshape(-1)
    exp1_mse = metrics.mean_squared_error(truth1, exp1)
+
    if pers1 is not None:
+      pers1=pers1.reshape(-1)
       pers1_mse = metrics.mean_squared_error(truth1, pers1)
 
-   if truth2.any() and exp2.any():
+   if truth2 is not None and exp2 is not None:
+      truth2=truth2.reshape(-1)
+      exp2=exp2.reshape(-1)
       exp2_mse = metrics.mean_squared_error(truth2, exp2)
       if pers2 is not None:
+         pers2=pers2.reshape(-1)
          pers2_mse = metrics.mean_squared_error(truth2, pers2)
   
    # Print to file
@@ -35,7 +42,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
       stats_file.write('%30s %.10f; \n' % (' persistence rms score', np.sqrt(pers1_mse)))
    stats_file.write('%30s %.10f; \n' % (' '+exp_name+' rms score', np.sqrt(exp1_mse)))
    stats_file.write('\n')
-   if truth2.any() and exp2.any():
+   if truth2 is not None and exp2 is not None:
       stats_file.write('--------------------------------------------------------')
       stats_file.write('\n')
       stats_file.write(name2+' Scores: \n')
@@ -48,13 +55,16 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
    return()   
 
   
-def plot_results(model_type, exp_name, truth, predicitons, name='norm', xlabel=None, ylabel=None):
+def plot_results(model_type, exp_name, truth, predictions, name='norm', xlabel=None, ylabel=None):
   
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
+   truth=truth.reshape(-1)
+   predictions=predictions.reshape(-1)
+
    # Plot prediction against truth
-   bottom = min(min(truth), min(predicitons))
-   top    = max(max(truth), max(predicitons))
+   bottom = min(min(truth), min(predictions))
+   top    = max(max(truth), max(predictions))
    bottom = bottom - 0.1*abs(top)
    top    = top + 0.1*abs(top)
   
@@ -65,7 +75,7 @@ def plot_results(model_type, exp_name, truth, predicitons, name='norm', xlabel=N
  
    fig = plt.figure(figsize=(9,9))
    ax1 = fig.add_subplot(111)
-   ax1.scatter(truth, predicitons, edgecolors=(0, 0, 0))
+   ax1.scatter(truth, predictions, edgecolors=(0, 0, 0))
    ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
    ax1.set_xlabel(xlabel)
    ax1.set_ylabel(ylabel)

@@ -22,6 +22,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
      salinity, u, v, eta, lat, lon, and depth at the grid point and its neighbours all at time
      t as inputs.
    '''
+
    info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/info_'+data_name+'.txt'
    info_file=open(info_filename,"w")
 
@@ -58,7 +59,8 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    for z in range(2,38,1):
        for x in range(2,7,1):
            for y in range(2,74,1):
-               for time in range(0, trainval_split, 100):  
+               #for time in range(0, trainval_split, 100):  
+               for time in range(0, 10):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -86,7 +88,8 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
                    inputs_tr.append(input_temp)
                    outputs_tr.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
 
-               for time in range(trainval_split, valtest_split, 100):  
+               #for time in range(trainval_split, valtest_split, 100):  
+               for time in range(trainval_split, valtest_split, 1000):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -114,7 +117,8 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
                    inputs_val.append(input_temp)
                    outputs_val.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
 
-               for time in range(valtest_split, data_end_index, 100):  
+               #for time in range(valtest_split, data_end_index, 100):  
+               for time in range(valtest_split, data_end_index, 1000):  
                    input_temp = []
                    if run_vars['dimension'] == 2:
                        [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
@@ -230,37 +234,21 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
    # as npz file
-   mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
+   mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
-   # And as text file
-   norm_file=open('/data/hpcdata/users/racfur/DynamicPrediction/NORMALISING_PARAMS/NormalisingParameters_SinglePoint_'+data_name+'.txt','w')
-   #loop over each input feature
-   for i in range(inputs_tr.shape[1]):  
-       norm_file.write('inputs_mean['+str(i)+']\n')
-       norm_file.write(str(inputs_mean[i])+'\n')
-       norm_file.write('inputs_std['+str(i)+']\n')
-       norm_file.write(str(inputs_std[i])+'\n')
-   norm_file.write('outputs_mean\n')
-   norm_file.write(str(outputs_mean)+'\n')
-   norm_file.write('outputs_std\n')
-   norm_file.write(str(outputs_std)+'\n')
-   norm_file.close()
   
-   # Free up memory
-   #inputs_tr  = None  
-   #inputs_val = None  
-   #inputs_te  = None  
-   #outputs_tr  = None  
-   #outputs_val = None  
-   #outputs_te  = None  
-   #del inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te
-
    #-----------------
    # Save the arrays
    #-----------------
    print('save arrays')
    inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te)
+
+   print('shape for inputs and outputs: tr; val; te')
+   print(norm_inputs_tr.shape, norm_outputs_tr.shape)
+   print(norm_inputs_val.shape, norm_outputs_val.shape)
+   print(norm_inputs_te.shape, norm_outputs_te.shape)
+
    norm_inputs_tr  = None
    norm_inputs_val = None
    norm_inputs_te  = None
@@ -268,14 +256,6 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    norm_outputs_val = None
    norm_outputs_te  = None
    del norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
-
-   # Open arrays from file
-   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
- 
-   print('shape for inputs and outputs: tr; val; te')
-   print(norm_inputs_tr.shape, norm_outputs_tr.shape)
-   print(norm_inputs_val.shape, norm_outputs_val.shape)
-   print(norm_inputs_te.shape, norm_outputs_te.shape)
 
    return inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te 
 

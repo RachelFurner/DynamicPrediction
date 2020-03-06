@@ -20,7 +20,7 @@ import pickle
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
 
-exp_prefix = ''
+exp_prefix = 'no_ridge'
 
 for_len_yrs = 100    # forecast length in years
 
