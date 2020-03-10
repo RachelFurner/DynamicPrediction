@@ -20,7 +20,7 @@ import torch
 # Define iterator
 #-----------------
 
-def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr'):
+def interator(data_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr'):
 
     if start is None:
        start = 0
@@ -49,9 +49,9 @@ def interator(exp_name, run_vars, model, num_steps, ds, init=None, start=None, m
     y_up = y_size-3 
     z_lw = 1
     z_up = z_size-1 
-    x_subsize = x_size -3
-    y_subsize = y_size -4
-    z_subsize = z_size -2
+    x_subsize = x_size-3
+    y_subsize = y_size-4
+    z_subsize = z_size-2
 
     out_t   = np.zeros((z_subsize, y_subsize, x_subsize))
     out_tm1 = np.zeros((z_subsize, y_subsize, x_subsize))

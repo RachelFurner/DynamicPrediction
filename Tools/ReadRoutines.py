@@ -11,6 +11,7 @@
 import numpy as np
 import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
+from skimage.util import view_as_windows
 
 def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_name, run_vars):
 
@@ -30,6 +31,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    halo_size = 1
    halo_list = (range(-halo_size, halo_size+1))
 
+   start = 0
    data_end_index = 1000 * 12   # look at first 1000 years only for now - also ensure dataset sizes aren't too huge!
    trainval_split = int(data_end_index*trainval_split_ratio) # point at which to switch from testing data to validation data
    valtest_split = int(data_end_index*valtest_split_ratio) # point at which to switch from testing data to validation data
@@ -48,130 +50,378 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_lon=ds['X'].values
    da_depth=ds['Z'].values
    
-   inputs_tr = []
-   outputs_tr = []
-   inputs_val = []
-   outputs_val = []
-   inputs_te = []
-   outputs_te = []
-   
-   # Read in inputs and outputs, subsampling in space and time for 'quasi-independence'
-   for z in range(2,38,1):
-       for x in range(2,7,1):
-           for y in range(2,74,1):
-               #for time in range(0, trainval_split, 100):  
-               for time in range(0, 10):  
-                   input_temp = []
-                   if run_vars['dimension'] == 2:
-                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   elif run_vars['dimension'] == 3:
-                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                   if run_vars['eta']:
-                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   if run_vars['lat']:
-                       input_temp.append(da_lat[y])
-                   if run_vars['lon']:
-                       input_temp.append(da_lon[x])
-                   if run_vars['dep']:
-                       input_temp.append(da_depth[z])
-   
-                   inputs_tr.append(input_temp)
-                   outputs_tr.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+   #inputs_tr = []
+   #outputs_tr = []
+   #inputs_val = []
+   #outputs_val = []
+   #inputs_te = []
+   #outputs_te = []
+  
+   # Try Vectorising this is the same way as the iterator....
+   x_size = da_T.shape[3]
+   y_size = da_T.shape[2]
+   z_size = da_T.shape[1]
+   # Set region to predict for - we want to exclude boundary points, and near to boundary points 
+   x_lw = 1
+   x_up = x_size-2 
+   y_lw = 1
+   y_up = y_size-3 
+   z_lw = 1
+   z_up = z_size-1 
+   x_subsize = x_size-3
+   y_subsize = y_size-4
+   z_subsize = z_size-2
 
-               #for time in range(trainval_split, valtest_split, 100):  
-               for time in range(trainval_split, valtest_split, 1000):  
-                   input_temp = []
-                   if run_vars['dimension'] == 2:
-                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   elif run_vars['dimension'] == 3:
-                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                   if run_vars['eta']:
-                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   if run_vars['lat']:
-                       input_temp.append(da_lat[y])
-                   if run_vars['lon']:
-                       input_temp.append(da_lon[x])
-                   if run_vars['dep']:
-                       input_temp.append(da_depth[z])
-   
-                   inputs_val.append(input_temp)
-                   outputs_val.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+   #for t in range(start, trainval_split, 100):  
+   for t in range(start, 10):  
 
-               #for time in range(valtest_split, data_end_index, 100):  
-               for time in range(valtest_split, data_end_index, 1000):  
-                   input_temp = []
-                   if run_vars['dimension'] == 2:
-                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   elif run_vars['dimension'] == 3:
-                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['sal']:
-                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                       if run_vars['current']:
-                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
-                   if run_vars['eta']:
-                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
-                   if run_vars['lat']:
-                       input_temp.append(da_lat[y])
-                   if run_vars['lon']:
-                       input_temp.append(da_lon[x])
-                   if run_vars['dep']:
-                       input_temp.append(da_depth[z])
-   
-                   inputs_te.append(input_temp)
-                   outputs_te.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+        if run_vars['dimension'] == 2:
+           temp = view_as_windows(da_T[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        elif run_vars['dimension'] == 3:
+           temp = view_as_windows(da_T[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        else:
+           print('ERROR, dimension neither 2 nor 3')
+        if run_vars['eta']:
+           temp = view_as_windows(da_Eta[t-1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+           temp = np.tile(temp, (z_subsize,1,1,1,1))
+           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lat']:
+           temp = da_lat[y_lw:y_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (z_subsize,1))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lon']:
+           temp = da_lon[x_lw:x_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (y_subsize,1))
+           temp = np.tile(temp, (z_subsize,1,1))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['dep']:
+           temp = da_depth[z_lw:z_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,y_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
 
-   # Release memory
-   ds = None
-   da_T = None
-   da_S = None
-   da_U = None
-   da_V = None
-   da_Eta = None
-   da_lat = None
-   da_lon = None
-   da_depth = None
-   del ds
-   del da_T
-   del da_S
-   del da_U
-   del da_V
-   del da_Eta
-   del da_lat
-   del da_lon
-   del da_depth
-    
-   inputs_tr   = np.asarray(inputs_tr)
-   outputs_tr  = np.asarray(outputs_tr)
-   inputs_val  = np.asarray(inputs_val)
-   outputs_val = np.asarray(outputs_val)
-   inputs_te   = np.asarray(inputs_te)
-   outputs_te  = np.asarray(outputs_te)
+        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
+        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+
+        if t == start:
+           inputs_tr  = inputs 
+           outputs_tr = outputs
+        else:
+           inputs_tr  = np.concatenate( (inputs_tr , inputs ), axis=0)
+           outputs_tr = np.concatenate( (outputs_tr, outputs), axis=0)
+
+
+   #for t in range(trainval_split, valtest_split, 100):  
+   for t in range(trainval_split, valtest_split, 10000):  
+
+        if run_vars['dimension'] == 2:
+           temp = view_as_windows(da_T[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        elif run_vars['dimension'] == 3:
+           temp = view_as_windows(da_T[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        else:
+           print('ERROR, dimension neither 2 nor 3')
+        if run_vars['eta']:
+           temp = view_as_windows(da_Eta[t-1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+           temp = np.tile(temp, (z_subsize,1,1,1,1))
+           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lat']:
+           temp = da_lat[y_lw:y_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (z_subsize,1))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lon']:
+           temp = da_lon[x_lw:x_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (y_subsize,1))
+           temp = np.tile(temp, (z_subsize,1,1))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['dep']:
+           temp = da_depth[z_lw:z_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,y_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+
+        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
+        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+
+        if t == trainval_split:
+           inputs_val  = inputs 
+           outputs_val = outputs
+        else:
+           inputs_val  = np.concatenate( (inputs_val , inputs ), axis=0)
+           outputs_val = np.concatenate( (outputs_val, outputs), axis=0)
+
+
+   #for t in range(valtest_split, data_end_index, 1000):  
+   for t in range(valtest_split, data_end_index, 10000):  
+
+        if run_vars['dimension'] == 2:
+           temp = view_as_windows(da_T[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        elif run_vars['dimension'] == 3:
+           temp = view_as_windows(da_T[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
+           if run_vars['sal']:
+              temp = view_as_windows(da_S[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['current']:
+              temp = view_as_windows(da_U[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+              temp = view_as_windows(da_V[t-1,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+        else:
+           print('ERROR, dimension neither 2 nor 3')
+        if run_vars['eta']:
+           temp = view_as_windows(da_Eta[t-1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+           temp = np.tile(temp, (z_subsize,1,1,1,1))
+           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lat']:
+           temp = da_lat[y_lw:y_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (z_subsize,1))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['lon']:
+           temp = da_lon[x_lw:x_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.tile(temp, (y_subsize,1))
+           temp = np.tile(temp, (z_subsize,1,1))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        if run_vars['dep']:
+           temp = da_depth[z_lw:z_up]
+           # convert to 3d shape, plus additional dim of 1 for feature.
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,y_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           temp = np.tile(temp, (1,x_subsize))
+           temp = np.expand_dims(temp, axis=-1)
+           inputs = np.concatenate( (inputs, temp), axis=-1) 
+
+        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
+        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+
+        if t == valtest_split:
+           inputs_te  = inputs 
+           outputs_te = outputs
+        else:
+           inputs_te  = np.concatenate( (inputs_te , inputs ), axis=0)
+           outputs_te = np.concatenate( (outputs_te, outputs), axis=0)
+
+
+
+ 
+#   # Read in inputs and outputs, subsampling in space and time for 'quasi-independence'
+#   for z in range(2,38,1):
+#       for x in range(2,7,1):
+#           for y in range(2,74,1):
+#               #for time in range(0, trainval_split, 100):  
+#               for time in range(0, 10):  
+#                   input_temp = []
+#                   if run_vars['dimension'] == 2:
+#                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   elif run_vars['dimension'] == 3:
+#                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                   if run_vars['eta']:
+#                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   if run_vars['lat']:
+#                       input_temp.append(da_lat[y])
+#                   if run_vars['lon']:
+#                       input_temp.append(da_lon[x])
+#                   if run_vars['dep']:
+#                       input_temp.append(da_depth[z])
+#   
+#                   inputs_tr.append(input_temp)
+#                   outputs_tr.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+#
+#               #for time in range(trainval_split, valtest_split, 100):  
+#               for time in range(trainval_split, valtest_split, 1000):  
+#                   input_temp = []
+#                   if run_vars['dimension'] == 2:
+#                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   elif run_vars['dimension'] == 3:
+#                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                   if run_vars['eta']:
+#                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   if run_vars['lat']:
+#                       input_temp.append(da_lat[y])
+#                   if run_vars['lon']:
+#                       input_temp.append(da_lon[x])
+#                   if run_vars['dep']:
+#                       input_temp.append(da_depth[z])
+#   
+#                   inputs_val.append(input_temp)
+#                   outputs_val.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+#
+#               #for time in range(valtest_split, data_end_index, 100):  
+#               for time in range(valtest_split, data_end_index, 1000):  
+#                   input_temp = []
+#                   if run_vars['dimension'] == 2:
+#                       [input_temp.append(da_T[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                           [input_temp.append(da_V[time,z,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   elif run_vars['dimension'] == 3:
+#                       [input_temp.append(da_T[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['sal']:
+#                           [input_temp.append(da_S[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                       if run_vars['current']:
+#                           [input_temp.append(da_U[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                           [input_temp.append(da_V[time,z+z_offset,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list for z_offset in halo_list]
+#                   if run_vars['eta']:
+#                       [input_temp.append(da_Eta[time,y+y_offset,x+x_offset]) for x_offset in halo_list for y_offset in halo_list]
+#                   if run_vars['lat']:
+#                       input_temp.append(da_lat[y])
+#                   if run_vars['lon']:
+#                       input_temp.append(da_lon[x])
+#                   if run_vars['dep']:
+#                       input_temp.append(da_depth[z])
+#   
+#                   inputs_te.append(input_temp)
+#                   outputs_te.append([da_T[time+StepSize,z,y,x]-da_T[time,z,y,x]])
+#
+#   # Release memory
+#   ds = None
+#   da_T = None
+#   da_S = None
+#   da_U = None
+#   da_V = None
+#   da_Eta = None
+#   da_lat = None
+#   da_lon = None
+#   da_depth = None
+#   del ds
+#   del da_T
+#   del da_S
+#   del da_U
+#   del da_V
+#   del da_Eta
+#   del da_lat
+#   del da_lon
+#   del da_depth
+#    
+#   inputs_tr   = np.asarray(inputs_tr)
+#   outputs_tr  = np.asarray(outputs_tr)
+#   inputs_val  = np.asarray(inputs_val)
+#   outputs_val = np.asarray(outputs_val)
+#   inputs_te   = np.asarray(inputs_te)
+#   outputs_te  = np.asarray(outputs_te)
 
    # Add polynomial terms to inputs array
    print('Add polynomial terms to inputs')

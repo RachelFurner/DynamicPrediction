@@ -30,7 +30,6 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
-#exp_prefix = 'BalancedTrainingSet_'
 exp_prefix = ''
 
 TrainModel=True 
@@ -42,9 +41,6 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
-
-# RF BUG TESTING!
-data_name = 'TEST_'+data_name
 
 exp_name = exp_prefix+data_name
 
@@ -182,6 +178,9 @@ plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deno
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100) 
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_OUTPUTS_TR_TrainingScript_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 
 #---------------------------------------------------------
