@@ -46,7 +46,6 @@ hyper_params = {
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
     "no_layers": 0,    # no of *hidden* layers
-    "no_nodes": 1000
 }
 
 model_type = 'nn'
@@ -54,7 +53,7 @@ model_type = 'nn'
 mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 data_name = cn.create_dataname(run_vars)
 
 #---------------------
@@ -69,8 +68,8 @@ if log_comet:
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
-inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeField_'+data_name+'_InputsOutputs.npz'
-norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
    
 #-------------------------
 # Set up regression model
@@ -109,23 +108,20 @@ val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=hyper_param
 inputFeatures = norm_inputs_tr.shape[1]
 outputFeatures = norm_outputs_tr.shape[1]
 
-
+# inputs are (no_samples, 169channels, 78y, 11x).
+# Not doing pooling, as dataset small to begin with, and no computational need, or scientific justification....
 h = nn.Sequential(
             # downscale
-            nn.Conv2d(in_channels=norm_inputs_tr.shape[1], out_channels=128, kernel_size=(3,3), padding=(1,1)),  # inputs are (no_samples, 169channels, 78y, 11x)
+            nn.Conv2d(in_channels=norm_inputs_tr.shape[1], out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=(2,2), padding=(1,1)),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3,3), padding=(1,1)),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3),padding=(1,1)),
             nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=(2,2)),
 
             # upscale
-            nn.Upsample(scale_factor=2),
+            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=(3,3), padding=(1,1)),
-            nn.Upsample(size=(norm_inputs_tr.shape[-2],norm_inputs_tr.shape[-1])),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=128, out_channels=norm_inputs_tr.shape[1], kernel_size=(3,3), padding=(1,1))
+            nn.ConvTranspose2d(in_channels=256, out_channels=norm_inputs_tr.shape[1], kernel_size=(3,3), padding=(1,1)),
+            nn.ReLU(True)
              )
 h = h.cuda()
 

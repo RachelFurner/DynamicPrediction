@@ -21,16 +21,14 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = ''
+exp_prefix = 'MaxEr_Ridge'
 
 calc_predictions = True 
-iter_length = 10  # in months
+iter_length = 120   # in months
 
 #-----------
 data_name = cn.create_dataname(run_vars)
-
-#RF BUG FIXING
-data_name = 'TEST_'+data_name
+#data_name = 'Steps1to10_'+data_name
 
 exp_name = exp_prefix+data_name 
 
@@ -54,6 +52,18 @@ with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
 
+# run a few simple tests to check against iterator:
+in1 = np.zeros((1, 7260))
+in2 = np.ones((1, 7260))
+
+out1 = model.predict(in1)
+out2 = model.predict(in2)
+
+print('some quick test values:')
+print(out1)
+print(out2)
+
+
 #---------------------
 # Set up netcdf array
 #---------------------
@@ -72,11 +82,11 @@ nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
 nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
 nc_X = nc_file.createVariable('X', 'i4', 'X')
 nc_PredictedTemp = nc_file.createVariable('PredictedTemp', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_TempErrors = nc_file.createVariable('PredTemp-Truth', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_Tav_Errors = nc_file.createVariable('Averaged_PredTemp-Truth', 'f4', ('Z', 'Y', 'X'))
+nc_TempErrors = nc_file.createVariable('Errors_Temp', 'f4', ('T', 'Z', 'Y', 'X'))
+nc_Tav_Errors = nc_file.createVariable('Av_Errors_Temp', 'f4', ('Z', 'Y', 'X'))
 nc_PredictedDeltaT = nc_file.createVariable('PredictedDeltaT', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_DeltaTErrors = nc_file.createVariable('PredDelT-Truth', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_DelTav_Errors = nc_file.createVariable('Averaged_PredDelT-Truth', 'f4', ('Z', 'Y', 'X'))
+nc_DeltaTErrors = nc_file.createVariable('Errors_DelT', 'f4', ('T', 'Z', 'Y', 'X'))
+nc_DelTav_Errors = nc_file.createVariable('Av_Errors_DelT', 'f4', ('Z', 'Y', 'X'))
 
 # Fill some variables - rest done during iteration steps
 nc_T[:] = ds['T'].data[1:]
@@ -94,18 +104,22 @@ print('get predictions')
 pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
+
     # Array to hold predicted values of Temperature
     predictedTemp = np.zeros((Temp_truth.shape))
     predictedTemp[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
+
     # Array to hold de-normalised outputs from model, i.e. DeltaTemp (before applying any AB-timestepping methods)
     predictedDelT = np.zeros((Temp_truth.shape))
     predictedDelT[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
+
     for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with Temp_truth.
         print(t)
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
         predT_temp, predDelT_temp = it.interator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )
-        predictedTemp[t,:,:,:] = predT_temp[1:,:,:,:]
-        predictedDelT[t,:,:,:] = predDelT_temp[1:,:,:,:]
+        predictedTemp[t,:,:,:] = predT_temp[1,:,:,:]
+        predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
+
     #Save as arrays
     np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
 predictedTemp, predictedDelT = np.load(pred_filename).values()    
@@ -138,38 +152,33 @@ nc_file.close()
 # Plot histograms
 #-----------------
 print('plot histograms')
-fig = rfplt.Plot_Histogram(Temp_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Temp_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
+#fig = rfplt.Plot_Histogram(Temp_errors[:,1:-1,1:-3,1:-2], 100)  
+#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Temp_Errors_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = rfplt.Plot_Histogram(DelT_errors[:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DeltaT_yminusybar_hist', bbox_inches = 'tight', pad_inches = 0.1)
+fig = rfplt.Plot_Histogram(DelT_errors[:,1:-1,1:-3,1:-2], 100)  
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DeltaT_Errors_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = rfplt.Plot_Histogram(DelT_truth[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTtruth_hist', bbox_inches = 'tight', pad_inches = 0.1)
+fig = rfplt.Plot_Histogram(DelT_truth[:,1:-1,1:-3,1:-2], 100)  
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTtruth_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = rfplt.Plot_Histogram(predictedDelT[1:,1:-1,1:-3,1:-2], 100)  # Remove points not being predicted (boundaries) from this
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTpredicted_hist', bbox_inches = 'tight', pad_inches = 0.1)
+fig = rfplt.Plot_Histogram(predictedDelT[1:,1:-1,1:-3,1:-2], 100) 
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTpredicted_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------
 # Plot timeseries 
 #-----------------
 print('plot timeseries')
-fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged Temp errors':s_av_Temp_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_TempErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
-
 fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged DelT errors':s_av_DelT_errors}, ylim=None)
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
 
-##########
+#----------------------------------------------------------
 # Redo stats and scatter plots with this large dataset....
+#----------------------------------------------------------
 print('Plot scatter plots')
-am.plot_results(model_type, exp_name, Temp_truth[1:,1:-1,1:-3,1:-2], predictedTemp[1:,1:-1,1:-3,1:-2], name='Temperature_denorm')
 am.plot_results(model_type, exp_name, DelT_truth[:,1:-1,1:-3,1:-2], predictedDelT[1:,1:-1,1:-3,1:-2], name='denorm_DeltaT')
 
 print('Calc stats and print to file')
-# calculate stats
-am.get_stats(model_type, exp_name, name1='Temp', truth1=Temp_truth[1:,1:-1,1:-3,1:-2], exp1=predictedTemp[1:,1:-1,1:-3,1:-2],
-                                   name2='DeltaT', truth2=DelT_truth[:,1:-1,1:-3,1:-2], exp2=predictedDelT[1:,1:-1,1:-3,1:-2], name='TempDeltaT_denorm')
+am.get_stats(model_type, exp_name, name1='DeltaT', truth1=DelT_truth[:,1:-1,1:-3,1:-2], exp1=predictedDelT[1:,1:-1,1:-3,1:-2], name='DeltaT_denorm')
 
 
 

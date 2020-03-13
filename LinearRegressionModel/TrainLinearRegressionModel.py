@@ -7,7 +7,6 @@
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
-#from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
 from Tools import Model_Plotting as rfplt
 
@@ -30,7 +29,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = ''
+exp_prefix = 'mse_Ridge_'
 
 TrainModel=True 
 
@@ -41,17 +40,9 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
+#data_name = 'Steps1to10_'+data_name
 
 exp_name = exp_prefix+data_name
-
-### Calculate x,y position in each feature list for extracting 'now' value
-# This probably doesn't work with the Polyfeatures.... need to check and/or rethink!
-#if run_vars['dimension'] == 2:
-#   xy_pos = 4
-#elif run_vars['dimension'] == 3:
-#   xy_pos = 13
-#else:
-#   print('ERROR, dimension neither two or three!!!')
 
 #--------------------------------------------------------------
 # Open data from saved array
@@ -64,12 +55,12 @@ norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_v
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/pickle_'+exp_name+'.pkl'
 if TrainModel:
     print('training model')
     
-    #alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
-    alpha_s = [0.00]
+    alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
+    #alpha_s = [0.00]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
     
@@ -119,6 +110,7 @@ in2 = np.ones((1,norm_inputs_tr.shape[1]))
 out1 = lr.predict(in1)
 out2 = lr.predict(in2)
 
+print('some quick test values:')
 print(out1)
 print(out2)
 
@@ -153,14 +145,10 @@ predict_persistance_tr = np.zeros(denorm_outputs_tr.shape)
 predict_persistance_val = np.zeros(denorm_outputs_val.shape)
 
 print('get stats')
-am.get_stats(model_type, exp_name, name1='Training', truth1=norm_outputs_tr, exp1=norm_lr_predicted_tr, pers1=predict_persistance_tr,
-                                name2='Validation',  truth2=norm_outputs_val, exp2=norm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal_norm')
 am.get_stats(model_type, exp_name, name1='Training', truth1=denorm_outputs_tr, exp1=denorm_lr_predicted_tr, pers1=predict_persistance_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal_denorm')
 
 print('plot results')
-am.plot_results(model_type, exp_name, norm_outputs_tr, norm_lr_predicted_tr, name='training_norm')
-am.plot_results(model_type, exp_name, norm_outputs_val, norm_lr_predicted_val, name='val_norm')
 am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='training_denorm')
 am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_val, name='val_denorm')
 
@@ -168,19 +156,19 @@ am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_va
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_train_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_train_predictions_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_prediction_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_val_predictions_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_train_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_train_errors_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_errors_val_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_val_errors_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_denorm_OUTPUTS_TR_TrainingScript_histogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_tr_outputs_TrainingScript_histogram', bbox_inches = 'tight', pad_inches = 0.1)
 
 
 #---------------------------------------------------------
@@ -188,18 +176,4 @@ plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_deno
 #---------------------------------------------------------
 am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training_denorm', xlabel='DeltaT', ylabel='Errors')
 am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val_denorm', xlabel='DeltaT', ylabel='Errors')
-
-#fig = plt.figure(figsize=(9,9))
-#ax1 = fig.add_subplot(111)
-#ax1.scatter(denorm_inputs_tr[:,xy_pos], denorm_lr_predicted_tr-denorm_outputs_tr, edgecolors=(0, 0, 0))
-#ax1.set_xlabel('InputTemp')
-#ax1.set_ylabel('Errors')
-#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_inputtempVerrors_training_denorm.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig = plt.figure(figsize=(9,9))
-#ax1 = fig.add_subplot(111)
-#ax1.scatter(denorm_inputs_val[:,xy_pos], denorm_lr_predicted_val-denorm_outputs_val, edgecolors=(0, 0, 0))
-#ax1.set_xlabel('InputTemp')
-#ax1.set_ylabel('Errors')
-#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_type+'_'+exp_name+'_inputtempVerrors_val_denorm.png', bbox_inches = 'tight', pad_inches = 0.1)
 

@@ -22,9 +22,6 @@ import torch as torch
 
 torch.cuda.empty_cache()
 
-import struct
-print(struct.calcsize("P") * 8)
-
 plt.rcParams.update({'font.size': 14})
 
 #----------------------------
@@ -40,13 +37,12 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 #---------------------------
 data_name = cn.create_dataname(run_vars)
 
-# RF BUG TESTING!
-data_name = 'TEST_'+data_name
+#data_name = 'Steps1to10_'+data_name
 
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array
 #--------------------------------------------------------------
-denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.8, 0.9, data_name, run_vars)
+denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, 0.9, data_name, run_vars)
 
 #-----------------------------
 # Plot histograms of the data

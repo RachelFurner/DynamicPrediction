@@ -28,7 +28,7 @@ exp_prefix = ''
 time = 10
 point = [5,15,4]
 
-compare_w_truth = False
+compare_w_truth = True 
 
 #----------------------
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
@@ -61,8 +61,8 @@ print(da_T.shape)
 #----------------------
 pred_dir = rootdir+'ITERATED_PREDICTION_ARRAYS/'
 
-pred_filename = pred_dir+model_type+'_'+exp_name+'_IterativePredictions.npy'
-field = np.load(pred_filename)
+pred_filename = pred_dir+'TEST_'+exp_name+'_IterativePredictions.npz'
+field, delT = np.load(pred_filename).values()
 
 #--------------------------
 # Plot spatial depth plots
