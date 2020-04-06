@@ -27,11 +27,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True, 'density':True, 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = 'mse_Ridge_'
+exp_prefix = ''
 
-TrainModel=True 
+TrainModel = True
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
@@ -40,7 +40,6 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
-#data_name = 'Steps1to10_'+data_name
 
 exp_name = exp_prefix+data_name
 
@@ -59,8 +58,8 @@ pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/p
 if TrainModel:
     print('training model')
     
-    alpha_s = [0.00, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
-    #alpha_s = [0.00]
+    #alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
+    alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.1, 1.0]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
     
@@ -174,6 +173,6 @@ plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_denorm_tr_outputs_T
 #---------------------------------------------------------
 # Plot scatter plots of errors against outputs and inputs
 #---------------------------------------------------------
-am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training_denorm', xlabel='DeltaT', ylabel='Errors')
-am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val_denorm', xlabel='DeltaT', ylabel='Errors')
+am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training_denorm', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val_denorm', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 

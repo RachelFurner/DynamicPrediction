@@ -50,14 +50,24 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_lon=ds['X'].values
    da_depth=ds['Z'].values
    
-   #inputs_tr = []
-   #outputs_tr = []
-   #inputs_val = []
-   #outputs_val = []
-   #inputs_te = []
-   #outputs_te = []
-  
-   # Try Vectorising this is the same way as the iterator....
+   if run_vars['density']:
+      # Here we calculate the density anomoly, using the simplified equation of state,
+      # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
+      a0      = .1655
+      b0      = .76554
+      lambda1 = .05952
+      lambda2 = .00054914
+      nu      = .0024341
+      mu1     = .0001497
+      mu2     = .00001109
+      rho0    = 1026.
+      Tmp_anom = da_T-10.
+      Sal_anom = da_S-35.
+      depth    = da_depth.reshape(1,-1,1,1)
+      dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * depth) * Tmp_anom
+                   +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * depth) * Sal_anom
+                   -nu * Tmp_anom * Sal_anom) / rho0
+
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
    z_size = da_T.shape[1]
@@ -73,8 +83,6 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    z_subsize = z_size-2
 
    for t in range(start, trainval_split, 80):  
-   #for t in range(start, 10):  
-        print(t)
 
         if run_vars['dimension'] == 2:
            temp = view_as_windows(da_T[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
@@ -90,6 +98,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
         elif run_vars['dimension'] == 3:
            temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
            inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
@@ -102,6 +114,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
               temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
         else:
@@ -166,6 +182,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
         elif run_vars['dimension'] == 3:
            temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
            inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
@@ -178,6 +198,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
               temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
         else:
@@ -242,6 +266,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
         elif run_vars['dimension'] == 3:
            temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
            inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
@@ -254,6 +282,10 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
               temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+              inputs = np.concatenate( (inputs, temp), axis=-1) 
+           if run_vars['density']:
+              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
               temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
               inputs = np.concatenate( (inputs, temp), axis=-1) 
         else:
@@ -324,7 +356,6 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    # Add polynomial terms to inputs array
    print('Add polynomial terms to inputs')
    if run_vars['poly_degree'] > 1: 
-       # Add polynomial combinations of the features
        # Note bias included at linear regressor stage, so not needed in input data
        polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False) 
        inputs_tr  = polynomial_features.fit_transform(inputs_tr)
@@ -381,7 +412,6 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    norm_outputs_tr, norm_outputs_val, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_val[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
-   # as npz file
    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
   
@@ -441,17 +471,14 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    da_S=ds['Stave'].values
    da_U=ds['uVeltave'].values
    U_temp = 0.5 * (da_U[:,:,:,0:-1]+da_U[:,:,:,1:])  # average to get onto same grid as T points
-   print('U_temp.shape:')
-   print(U_temp.shape)
    da_V=ds['vVeltave'].values
    V_temp = 0.5 * (da_V[:,:,0:-1,:]+da_V[:,:,1:,:])  # average to get onto same grid as T points
-   print('V_temp.shape:')
-   print(V_temp.shape)
    da_Eta=ds['ETAtave'].values
    da_depth=ds['Z'].values
+   da_mask=ds['Mask'].values
    
-   inputs  = np.zeros((0,4*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels*z_dim of each channel, y_dim, x_dim)
-   outputs = np.zeros((0,4*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels*z_dim of each channel, y_dim, x_dim)
+   inputs  = np.zeros((0,5*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels*z_dim of each channel, y_dim, x_dim)
+   outputs = np.zeros((0,5*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels*z_dim of each channel, y_dim, x_dim)
    
    # Read in inputs and outputs, subsample in time for 'quasi-independence'
    for time in range(start, min(data_end_index, da_T.shape[0]-1), 10):  
@@ -481,6 +508,10 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
        input_temp  = np.concatenate((input_temp , da_Eta[time  ,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
        output_temp = np.concatenate((output_temp, da_Eta[time+1,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
+       for level in range(da_mask.shape[0]):
+           input_temp  = np.concatenate((input_temp , da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+
        inputs  = np.concatenate((inputs , input_temp.reshape(1, input_temp.shape[0], input_temp.shape[1], input_temp.shape[2])),axis=0)
        outputs = np.concatenate((outputs,output_temp.reshape(1,output_temp.shape[0],output_temp.shape[1],output_temp.shape[2])),axis=0)
        print(inputs.shape)
@@ -495,17 +526,18 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    da_Eta = None
    da_lat = None
    da_depth = None
+   da_mask = None
     
    inputs=np.asarray(inputs)
    outputs=np.asarray(outputs)
   
    #randomise the sample order, and split into test and train data
-   trainval_split=int(trainval_split_ratio * inputs.shape[0])
-   valtest_split=int(valtest_split_ratio * inputs.shape[0])
-   
    np.random.seed(5)
    ordering = np.random.permutation(inputs.shape[0])
 
+   trainval_split=int(trainval_split_ratio * inputs.shape[0])
+   valtest_split=int(valtest_split_ratio * inputs.shape[0])
+   
    inputs_tr = inputs[ordering][:trainval_split]
    outputs_tr = outputs[ordering][:trainval_split]
    inputs_val = inputs[ordering][trainval_split:valtest_split]
@@ -532,7 +564,7 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
    # Open arrays from file
-   inputs_mean, inputs_std, outputs_mean, outputs_std = np.load(meanstd_file).values()
+   inputs_mean, inputs_std, outputs_mean, outputs_std = np.load(mean_std_file).values()
   
    # Normalise inputs and outputs 
    norm_inputs_tr = np.zeros((inputs_tr.shape))

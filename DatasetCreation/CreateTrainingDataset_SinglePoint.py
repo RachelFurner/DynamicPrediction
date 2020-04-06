@@ -14,6 +14,7 @@ from Tools import Model_Plotting as rfplt
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+import xarray as xr
 
 from sklearn import linear_model
 import sklearn.metrics as metrics
@@ -27,7 +28,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True, 'poly_degree':2}
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
@@ -39,9 +40,15 @@ data_name = cn.create_dataname(run_vars)
 
 #data_name = 'Steps1to10_'+data_name
 
-#--------------------------------------------------------------
-# Call module to read in the data, or open it from saved array
-#--------------------------------------------------------------
+#-------------------
+# Read in land mask
+#-------------------
+ds = xr.open_dataset(MITGCM_filename)
+land_mask = ds['Mask'].values
+
+#---------------------------------
+# Call module to read in the data
+#---------------------------------
 denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, 0.9, data_name, run_vars)
 
 #-----------------------------

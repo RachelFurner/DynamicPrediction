@@ -5,6 +5,11 @@
 import netCDF4 as nc4
 import numpy as np
 
+
+#-----------------------------------------------------------------------------
+# Mask Land based on knowing the locations where land is and manually masking
+#-----------------------------------------------------------------------------
+
 # Open source file
 ncfile_in = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/cat_tave_2000yrs_SelectedVars.nc'
 dset_in = nc4.Dataset(ncfile_in, 'r')
@@ -31,29 +36,35 @@ for name, var in dset_in.variables.items():
     dset_out.variables[name][:] = dset_in.variables[name][:]
 
 # Overwite data with land mask
-dset_out.variables['ETAtave'][:,-2:,:]=np.nan
-dset_out.variables['ETAtave'][:,16:,-1:]=np.nan
+dset_out.variables['ETAtave'][:,-2:,:] = -999
+dset_out.variables['ETAtave'][:,16:,-1:] = -999
 
-dset_out.variables['Stave'][:,:,-2:,:]=np.nan
-dset_out.variables['Stave'][:,:,16:,-1:]=np.nan
-dset_out.variables['Stave'][:,32:,:,-1:]=np.nan
+dset_out.variables['Stave'][:,:,-2:,:] = -999
+dset_out.variables['Stave'][:,:,16:,-1:] = -999
+dset_out.variables['Stave'][:,32:,:,-1:] = -999
 
-dset_out.variables['Ttave'][:,:,-2:,:]=np.nan
-dset_out.variables['Ttave'][:,:,16:,-1:]=np.nan
-dset_out.variables['Ttave'][:,32:,:,-1:]=np.nan
+dset_out.variables['Ttave'][:,:,-2:,:] = -999
+dset_out.variables['Ttave'][:,:,16:,-1:] = -999
+dset_out.variables['Ttave'][:,32:,:,-1:] = -999
 
-dset_out.variables['uVeltave'][:,:,-2:,:]=np.nan
-dset_out.variables['uVeltave'][:,:,16:,-1:]=np.nan
-dset_out.variables['uVeltave'][:,32:,:,-1:]=np.nan
+dset_out.variables['uVeltave'][:,:,-2:,:] = -999
+dset_out.variables['uVeltave'][:,:,16:,-1:] = -999
+dset_out.variables['uVeltave'][:,32:,:,-1:] = -999
 
-dset_out.variables['vVeltave'][:,:,-2:,:]=np.nan
-dset_out.variables['vVeltave'][:,:,16:,-1:]=np.nan
-dset_out.variables['vVeltave'][:,32:,:,-1:]=np.nan
+dset_out.variables['vVeltave'][:,:,-2:,:] = -999
+dset_out.variables['vVeltave'][:,:,16:,-1:] = -999
+dset_out.variables['vVeltave'][:,32:,:,-1:] = -999
 
-dset_out.variables['wVeltave'][:,:,-2:,:]=np.nan
-dset_out.variables['wVeltave'][:,:,16:,-1:]=np.nan
-dset_out.variables['wVeltave'][:,32:,:,-1:]=np.nan
+dset_out.variables['wVeltave'][:,:,-2:,:] = -999
+dset_out.variables['wVeltave'][:,:,16:,-1:] = -999
+dset_out.variables['wVeltave'][:,32:,:,-1:] = -999
+
+# output the mask
+Mask = dset_out.createVariable('Mask', 'i4', ('Z', 'Y', 'X'))
+dset_out.variables['Mask'][:,:,:]=1
+dset_out.variables['Mask'][:,-2:,:]=0
+dset_out.variables['Mask'][:,16:,-1:]=0
+dset_out.variables['Mask'][32:,:,-1:]=0
 
 # Save the file
 dset_out.close()
-

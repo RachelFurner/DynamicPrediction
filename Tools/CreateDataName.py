@@ -29,5 +29,7 @@ def create_dataname(run_vars):
       exp_name=exp_name+'Sal'
    if run_vars['eta']:
       exp_name=exp_name+'Eta'
+   if run_vars['density']:
+      exp_name=exp_name+'Dns'
    exp_name = exp_name+'PolyDeg'+str(run_vars['poly_degree'])
    return exp_name 
