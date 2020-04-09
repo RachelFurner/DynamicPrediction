@@ -30,7 +30,7 @@ data_prefix='WithThroughFlow_'
 model_prefix=''
 exp_prefix = iterate_method+'_'
 
-for_len_yrs = 2   # forecast length in years
+for_len_yrs = 1/2   # forecast length in years
 no_chunks = 1
 start = 0        # Can't iterate, as the code crashes when it reaches NaN's, so just have to manually do one at a time.
 
@@ -91,6 +91,7 @@ nc_Temp = nc_file.createVariable('Pred_Temp', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_DelT = nc_file.createVariable('Pred_DelT', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_Errors = nc_file.createVariable('Errors', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_SpongeMask = nc_file.createVariable('sponge_mask', 'i4', ('Z', 'Y', 'X'))
+nc_Mask = nc_file.createVariable('Mask', 'i4', ('Z', 'Y', 'X'))
 
 # Fill some variables - rest done during iteration steps
 nc_Z[:] = ds['Z'].data
@@ -116,7 +117,7 @@ if run_iterations:
       print(chunk)
       chunk_start = size_chunk*chunk
       chunk_end = size_chunk*(chunk+1)+1
-      tmp_pred, tmp_out, sponge_mask = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)),
+      tmp_pred, tmp_out, sponge_mask, mask = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)),
                                    init=init, model_type=model_type, method=iterate_method)
       if chunk == 0:
          Pred_Temp = tmp_pred  # initialise these arrays, and keep both initial state and prediction for this first step
@@ -136,20 +137,30 @@ if run_iterations:
       errors = Pred_Temp-da_T.data[:length,:,:,:]
       nc_Errors[:,:,:,:] = errors 
       nc_SpongeMask[:,:,:] = sponge_mask
+      nc_Mask[:,:,:] = mask
 Pred_Temp, Pred_DelT = np.load(pred_filename).values()
 length = Pred_Temp.shape[0]
 errors = Pred_Temp-da_T.data[:length,:,:,:]
 print('Pred_Temp.shape')
 print(Pred_Temp.shape)
 
-fig = rfplt.Plot_Histogram(errors[1:,1:-1,1:-3,1:-2], 100)
+print(errors.shape)
+print(mask.shape)
+mask_4d=np.broadcast_to(mask,errors.shape)
+print(mask_4d.shape)
+fig = rfplt.Plot_Histogram(errors[mask_4d==1], 100)
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Errors_IterationSCRIPT_hist_'+str(start), bbox_inches = 'tight', pad_inches = 0.1)
 
 print('Calc stats and print to file')
-print(da_T.data[1:,1:-1,1:-3,1:-2].shape)
-print(da_T.data[:-1,1:-1,1:-3,1:-2].shape)
-print(Pred_DelT[1:,1:-1,1:-3,1:-2].shape)
-am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=da_T.data[1:,1:-1,1:-3,1:-2]-da_T.data[:-1,1:-1,1:-3,1:-2], exp1=Pred_DelT[1:,1:-1,1:-3,1:-2], name='Iter_DeltaT_denorm_'+str(start))
+print(da_T.data.shape)
+print(da_T.data[mask_4d==1].shape)
+if np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1]).any():
+   print( 'Pred_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1])) ) )
+if np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1].any():
+   print( 'true_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1]) ) )
+
+am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1],
+                                                          exp1=(Pred_DelT[1:,:,:,:])[mask_4d[1:,:,:,:]==1], name='Iter_DeltaT_denorm_'+str(start))
 
 for point in [ [5,15,4] ]:
    fig = rfplt.plt_timeseries(point, 120, {model_type: Pred_Temp})

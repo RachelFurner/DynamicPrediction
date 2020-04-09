@@ -106,28 +106,9 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     ## Region 2: West side, Southern edge, above the depth where the land split carries on. One cell strip where throughflow enters.
     ## Region 3: East side, Southern edge, above the depth where the land split carries on. Two column strip where throughflow enters.
 
-    # Move East most data to column on West side, to allow viewaswindows to deal with throughflow for region 2
-    da_T2     = np.concatenate((da_T[:,:,:,-1:], da_T[:,:,:,:-1]),axis=3)
-    da_S2     = np.concatenate((da_S[:,:,:,-1:], da_S[:,:,:,:-1]),axis=3)
-    da_U2     = np.concatenate((da_U[:,:,:,-1:], da_U[:,:,:,:-1]),axis=3)
-    da_V2     = np.concatenate((da_V[:,:,:,-1:], da_V[:,:,:,:-1]),axis=3)
-    da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
-    da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
-    dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
- 
-    # Move West most data to column on East side, to allow viewaswindows to deal with throughflow for region3
-    da_T3     = np.concatenate((da_T[:,:,:,1:], da_T[:,:,:,:1]),axis=3)
-    da_S3     = np.concatenate((da_S[:,:,:,1:], da_S[:,:,:,:1]),axis=3)
-    da_U3     = np.concatenate((da_U[:,:,:,1:], da_U[:,:,:,:1]),axis=3)
-    da_V3     = np.concatenate((da_V[:,:,:,1:], da_V[:,:,:,:1]),axis=3)
-    da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
-    da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
-    dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
-
     # Set upper and lower points for all three regions
-    #Note for region 2 the 0 column is what was the -1 column, and for region 3 the -1 column is now what was the zero column!
-    x_lw = [1, 1, x_size-3]
-    x_up = [x_size-2, 2, x_size-1]   # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
+    x_lw = [1, 0, x_size-2]
+    x_up = [x_size-2, 1, x_size]   # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
     y_lw = [1, 1, 1]
     y_up = [y_size-3, 15, 15]        # one higher than the point we want to forecast for, i.e. first point we're not forecasting
     z_lw = [1, 1, 1]
@@ -136,7 +117,63 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     y_subsize = [y_size-4, 14, 14]
     z_subsize = [z_size-2, 30, 30]
 
-    # Create a sponge layer in which to merge MITGCM and LR predictions
+    # Move East most data to column on West side, to allow viewaswindows to deal with throughflow for region 2
+    da_T2     = np.concatenate((da_T[:,:,:,-1:], da_T[:,:,:,:-1]),axis=3)
+    da_S2     = np.concatenate((da_S[:,:,:,-1:], da_S[:,:,:,:-1]),axis=3)
+    da_U2     = np.concatenate((da_U[:,:,:,-1:], da_U[:,:,:,:-1]),axis=3)
+    da_V2     = np.concatenate((da_V[:,:,:,-1:], da_V[:,:,:,:-1]),axis=3)
+    da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
+    da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
+    dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
+    # Move West most data to column on East side, to allow viewaswindows to deal with throughflow for region3
+    da_T3     = np.concatenate((da_T[:,:,:,1:], da_T[:,:,:,:1]),axis=3)
+    da_S3     = np.concatenate((da_S[:,:,:,1:], da_S[:,:,:,:1]),axis=3)
+    da_U3     = np.concatenate((da_U[:,:,:,1:], da_U[:,:,:,:1]),axis=3)
+    da_V3     = np.concatenate((da_V[:,:,:,1:], da_V[:,:,:,:1]),axis=3)
+    da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
+    da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
+    dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
+    # Add new set of indices to account for moved boundaries
+    x_lw_nudged = [1, 1, x_size-3]
+    x_up_nudged = [x_size-2, 2, x_size-1] 
+
+    ## Set all boundary and near land data to match 'da_T'
+    ## Could do this properly, ignoring througflow region, but easier this way, and shouldn't
+    ## matter as throughflow region will just be overwritten later
+    predictions[1:,0:z_lw[0],:,:]      = da_T[1:num_steps+1,0:z_lw[0],:,:]
+    predictions[1:,z_up[0]:z_size,:,:] = da_T[1:num_steps+1,z_up[0]:z_size,:,:]
+    predictions[1:,:,0:y_lw[0],:]      = da_T[1:num_steps+1,:,0:y_lw[0],:]
+    predictions[1:,:,y_up[0]:y_size,:] = da_T[1:num_steps+1,:,y_up[0]:y_size,:]
+    predictions[1:,:,:,0:x_lw[0]]      = da_T[1:num_steps+1,:,:,0:x_lw[0]]
+    predictions[1:,:,:,x_up[0]:x_size] = da_T[1:num_steps+1,:,:,x_up[0]:x_size]
+
+    # Create mask of points to predict for vs not to predict for	
+    land_mask = np.ones((z_size, y_size, x_size))
+    land_mask[:, :, :] = 1   # Set all other than surface, bottom and edges to be ones.	
+    land_mask[:,-2:,:] = 0   # Mask Northern boundary
+    land_mask[:,16:,-1:] = 0 # Mask Eastern edge in northern part of domain through depth
+    land_mask[32:,:16,-1:] = 0 # Mask Eastern edge in southern part of domain for deep water only
+    land_mask = land_mask.astype(int)  
+   
+    bdy_mask = np.ones((z_size, y_size, x_size))
+    bdy_mask[ 0,:,:] = 0         # Mask surface layer
+    bdy_mask[-1,:,:] = 0         # Mask bottom layer
+    bdy_mask[:,  0, :] = 0       # Mask Southern-most row
+    bdy_mask[:, -3, :] = 0       # Mask Northen-most row next to land
+    bdy_mask[:, 15:, 0] = 0      # Mask Western boundary in northern part, through depth
+    bdy_mask[31:, :15, 0] = 0    # Mask Western boundary in southern part, in deep water only
+    bdy_mask[:, 15:, -2] = 0     # Mask Eastern boundary in northern part, next to the land, through depth
+    bdy_mask[31:, :15, -2] = 0   # Mask Eastern boundary in northern part, next to the land, through depth
+    bdy_mask[31, :16, -1] = 0    # Mask strip above the underwater ridge                                  
+    bdy_mask[:31, 15, -1] = 0    # Mask grid point just South of land split for shallow depths                             
+    bdy_mask = bdy_mask.astype(int)  
+
+    # combine both to a single mask of all point that we don't forecast
+    mask = np.ones((z_size, y_size, x_size))
+    mask[bdy_mask==0] = 0
+    mask[land_mask==0] = 0
+    
+    # Create a sponge layer for points next to mask in which to merge MITGCM and LR predictions
     sponge_mask = np.zeros((z_size, y_size, x_size))
     # Set points next to the mask 'edges'
     sponge_mask[ 1   ,   :  ,   :  ] = 1   # Near Surface
@@ -151,16 +188,6 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     sponge_mask[ 1:32, 14   , -3:  ] = 1   # just below land boundary on East for surface layers
     sponge_mask[32:-1,  1:-3, -3   ] = 1   # Along entire East land split/boundary at depth
     sponge_mask = sponge_mask.astype(int)
-
-    ## Set all boundary and near land data to match 'da_T'
-    ## Could do this properly, ignoring througflow region, but easier this way, and shouldn't
-    ## matter as throughflow region will just be overwritten later
-    predictions[1:,0:z_lw[0],:,:]      = da_T[1:num_steps+1,0:z_lw[0],:,:]
-    predictions[1:,z_up[0]:z_size,:,:] = da_T[1:num_steps+1,z_up[0]:z_size,:,:]
-    predictions[1:,:,0:y_lw[0],:]      = da_T[1:num_steps+1,:,0:y_lw[0],:]
-    predictions[1:,:,y_up[0]:y_size,:] = da_T[1:num_steps+1,:,y_up[0]:y_size,:]
-    predictions[1:,:,:,0:x_lw[0]]      = da_T[1:num_steps+1,:,:,0:x_lw[0]]
-    predictions[1:,:,:,x_up[0]:x_size] = da_T[1:num_steps+1,:,:,x_up[0]:x_size]
 
     for t in range(1,num_steps+1):
         print('    '+str(t))
@@ -194,15 +221,21 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               eta   = da_Eta3
               lon   = da_lon3
 
-
            inputs = rr.GetInputs( run_vars,
                                   temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], dens[t-1,:,:,:],
                                   eta[t-1,:,:], lat, lon, depth,
-                                  z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw[region], x_up[region],
+                                  z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
                                   z_subsize[region], y_subsize[region], x_subsize[region] )
+           
+           # if region 2 or 3, Move West/East strip back to where it belongs
+           if region == 1:
+              inputs = np.concatenate((inputs[:,:,:,:1], inputs[:,:,:,1:]),axis=3)
+           if region == 2:
+              inputs = np.concatenate((inputs[:,:,:,-1:], inputs[:,:,:,:-1]),axis=3)
+ 
            # reshape from grid (z,y,x,features) to list (no_points, features)
            inputs = inputs.reshape(( z_subsize[region] * y_subsize[region] * x_subsize[region], inputs.shape[-1] ))
- 
+
            if run_vars['poly_degree'] > 1: 
               # Add polynomial combinations of the features
               polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
@@ -232,29 +265,55 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
            # reshape out
            out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] = \
                                        out_temp.reshape((z_subsize[region], y_subsize[region], x_subsize[region]))
+           if np.isnan(out_t).any():
+               print( 'out_t array contains a NaN at ' + str( np.argwhere(np.isnan(out_t)) ) )
 
            if method=='AB1': # Euler forward
               deltaT = out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
            elif method=='AB2':
-              deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                        -0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
+              if t==1: 
+                 deltaT = out_t
+              if t==2: 
+                 deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                           -0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
            elif method=='AB3':
-              deltaT = ( (23.0/12.0) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                         - (4.0/3.0) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                        + (5.0/12.0) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
+              if t==1: 
+                 deltaT = out_t
+              if t==2: 
+                 deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                           -0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
+              elif t>=3:   
+                 deltaT = ( (23.0/12.0) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                            - (4.0/3.0) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                           + (5.0/12.0) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
            elif method=='AB5':
-              deltaT = ( (1901./720.) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                       - (2774./720.) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                       + (2616./720.) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                       + (1274./720.) * out_tm3[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-                        + (251./720.) * out_tm4[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
+              if t==1: 
+                 deltaT = out_t
+              if t==2: 
+                 deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - 0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
+              if t==3:   
+                 deltaT = ( (23.0/12.0) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - (16.0/12.0) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          +  (5.0/12.0) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
+              if t==4:
+                 deltaT = ( (55./24.) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - (59./24.) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          + (37./24.) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - ( 9./24.) * out_tm3[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
+              elif t==4:
+                 deltaT = ( (1901./720.) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - (2774./720.) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          + (2616./720.) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          - (1274./720.) * out_tm3[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+                          +  (251./720.) * out_tm4[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
            
            predictions[ t, z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] =   \
                                predictions[ t-1, z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] + ( deltaT )
 
-           outputs[ t, z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] =    \
-                                                    out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
-        
+           outputs[ t, z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] =   \
+                                        out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
+         
         # Do combination of lr prediction and gcm prediction in the sponge region
         predictions[t,:,:,:][sponge_mask==1] = 0.5 * predictions[t,:,:,:][sponge_mask==1] + 0.5 * da_T[t,:,:,:][sponge_mask==1]
 
@@ -270,4 +329,4 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
            out_tm2[:,:,:] = out_tm1[:,:,:]
            out_tm1[:,:,:] = out_t[:,:,:]
 
-    return(predictions, outputs, sponge_mask)
+    return(predictions, outputs, sponge_mask, mask)
