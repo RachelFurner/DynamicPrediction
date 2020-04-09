@@ -13,6 +13,78 @@ import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
 from skimage.util import view_as_windows
 
+def GetInputs(run_vars, Temp, Sal, U, V, dns, Eta, lat, lon, depth, z_lw, z_up, y_lw, y_up, x_lw, x_up, z_subsize, y_subsize, x_subsize):
+   # Confusing nomenclature... temp stands for temporary. Temp (capitalised) stands for Temperature.
+   if run_vars['dimension'] == 2:
+      temp = view_as_windows(Temp[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+      inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+      if run_vars['sal']:
+         temp = view_as_windows(Sal[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+      if run_vars['current']:
+         temp = view_as_windows(U[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         temp = view_as_windows(V[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+      if run_vars['density']:
+         temp = view_as_windows(dns[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+   elif run_vars['dimension'] == 3:
+      temp = view_as_windows(Temp[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+      inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
+      if run_vars['sal']:
+         temp = view_as_windows(Sal[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+      if run_vars['current']:
+         temp = view_as_windows(U[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         temp = view_as_windows(V[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+      if run_vars['density']:
+         temp = view_as_windows(dns[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, temp), axis=-1) 
+   else:
+      print('ERROR, dimension neither 2 nor 3')
+   if run_vars['eta']:
+      temp = view_as_windows(Eta[y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+      temp = np.tile(temp, (z_subsize,1,1,1,1))
+      temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+      inputs = np.concatenate( (inputs, temp), axis=-1) 
+   if run_vars['lat']:
+      temp = lat[y_lw:y_up]
+      # convert to 3d shape, plus additional dim of 1 for feature.
+      temp = np.tile(temp, (z_subsize,1))
+      temp = np.expand_dims(temp, axis=-1)
+      temp = np.tile(temp, (1,x_subsize))
+      temp = np.expand_dims(temp, axis=-1)
+      inputs = np.concatenate( (inputs, temp), axis=-1) 
+   if run_vars['lon']:
+      temp = lon[x_lw:x_up]
+      # convert to 3d shape, plus additional dim of 1 for feature.
+      temp = np.tile(temp, (y_subsize,1))
+      temp = np.tile(temp, (z_subsize,1,1))
+      temp = np.expand_dims(temp, axis=-1)
+      inputs = np.concatenate( (inputs, temp), axis=-1) 
+   if run_vars['dep']:
+      temp = depth[z_lw:z_up]
+      # convert to 3d shape, plus additional dim of 1 for feature.
+      temp = np.expand_dims(temp, axis=-1)
+      temp = np.tile(temp, (1,y_subsize))
+      temp = np.expand_dims(temp, axis=-1)
+      temp = np.tile(temp, (1,x_subsize))
+      temp = np.expand_dims(temp, axis=-1)
+      inputs = np.concatenate( (inputs, temp), axis=-1) 
+
+   return(inputs)
+
 def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_name, run_vars):
 
    '''
@@ -49,18 +121,18 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_lat=ds['Y'].values
    da_lon=ds['X'].values
    da_depth=ds['Z'].values
-   
+  
    if run_vars['density']:
       # Here we calculate the density anomoly, using the simplified equation of state,
       # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-      a0      = .1655
-      b0      = .76554
-      lambda1 = .05952
-      lambda2 = .00054914
-      nu      = .0024341
-      mu1     = .0001497
-      mu2     = .00001109
-      rho0    = 1026.
+      a0       = .1655
+      b0       = .76554
+      lambda1  = .05952
+      lambda2  = .00054914
+      nu       = .0024341
+      mu1      = .0001497
+      mu2      = .00001109
+      rho0     = 1026.
       Tmp_anom = da_T-10.
       Sal_anom = da_S-35.
       depth    = da_depth.reshape(1,-1,1,1)
@@ -71,267 +143,235 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
    z_size = da_T.shape[1]
+
    # Set region to predict for - we want to exclude boundary points, and near to boundary points 
-   x_lw = 1
-   x_up = x_size-2 
-   y_lw = 1
-   y_up = y_size-3 
-   z_lw = 1
-   z_up = z_size-1 
-   x_subsize = x_size-3
-   y_subsize = y_size-4
-   z_subsize = z_size-2
+   # Split into three regions:
+
+   # Region 1: main part of domain, ignoring one point above/below land/domain edge at north and south borders, and
+   # ignoring one point down entire West boundary, and two points down entire East boundary (i.e. acting as though 
+   # land split carries on all the way to the bottom of the domain)
+   x_lw_1 = 1
+   x_up_1 = x_size-2       # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
+   y_lw_1 = 1
+   y_up_1 = y_size-3       # one higher than the point we want to forecast for, i.e. first point we're not forecasting
+   z_lw_1 = 1
+   z_up_1 = z_size-1       # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
+   x_subsize_1 = x_size-3
+   y_subsize_1 = y_size-4
+   z_subsize_1 = z_size-2
+
+   ## Region 2: West side, Southern edge, above the depth where the land split carries on. One cell strip where throughflow enters.
+   # Move East most data to column on West side, to allow viewaswindows to deal with throughflow
+   da_T2     = np.concatenate((da_T[:,:,:,-1:], da_T[:,:,:,:-1]),axis=3)
+   da_S2     = np.concatenate((da_S[:,:,:,-1:], da_S[:,:,:,:-1]),axis=3)
+   da_U2     = np.concatenate((da_U[:,:,:,-1:], da_U[:,:,:,:-1]),axis=3)
+   da_V2     = np.concatenate((da_V[:,:,:,-1:], da_V[:,:,:,:-1]),axis=3)
+   da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
+   da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
+   dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
+   x_lw_2 = 1   # Note zero column is now what was at the -1 column!
+   x_up_2 = 2              # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
+   y_lw_2 = 1
+   y_up_2 = 15             # one higher than the point we want to forecast for, i.e. first point we're not forecasting
+   z_lw_2 = 1
+   z_up_2 = 31             # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
+   x_subsize_2 = 1
+   y_subsize_2 = 14
+   z_subsize_2 = 30
+
+   ## Region 3: East side, Southern edge, above the depth where the land split carries on. Two column strip where throughflow enters.
+   # Move West most data to column on East side, to allow viewaswindows to deal with throughflow
+   da_T3     = np.concatenate((da_T[:,:,:,1:], da_T[:,:,:,:1]),axis=3)
+   da_S3     = np.concatenate((da_S[:,:,:,1:], da_S[:,:,:,:1]),axis=3)
+   da_U3     = np.concatenate((da_U[:,:,:,1:], da_U[:,:,:,:1]),axis=3)
+   da_V3     = np.concatenate((da_V[:,:,:,1:], da_V[:,:,:,:1]),axis=3)
+   da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
+   da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
+   dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
+   x_lw_3 = x_size-3     #Note the -1 column is now what was the zero column!
+   x_up_3 = x_size-1             # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
+   y_lw_3 = 1
+   y_up_3 = 15             # one higher than the point we want to forecast for, i.e. first point we're not forecasting
+   z_lw_3 = 1
+   z_up_3 = 31             # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
+   x_subsize_3 = 2
+   y_subsize_3 = 14
+   z_subsize_3 = 30
+
 
    for t in range(start, trainval_split, 80):  
 
-        if run_vars['dimension'] == 2:
-           temp = view_as_windows(da_T[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        elif run_vars['dimension'] == 3:
-           temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        else:
-           print('ERROR, dimension neither 2 nor 3')
-        if run_vars['eta']:
-           temp = view_as_windows(da_Eta[t,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
-           temp = np.tile(temp, (z_subsize,1,1,1,1))
-           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lat']:
-           temp = da_lat[y_lw:y_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (z_subsize,1))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lon']:
-           temp = da_lon[x_lw:x_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (y_subsize,1))
-           temp = np.tile(temp, (z_subsize,1,1))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['dep']:
-           temp = da_depth[z_lw:z_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,y_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        #---------#
+        # Region1 #
+        #---------#
+        inputs_1 = GetInputs(run_vars,
+                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], dns_anom[t,:,:,:],
+                           da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
-        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
 
         # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
-        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
+        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
 
         if t == start:
-           inputs_tr  = inputs 
-           outputs_tr = outputs
+           inputs_tr  = inputs_1 
+           outputs_tr = outputs_1
         else:
-           inputs_tr  = np.concatenate( (inputs_tr , inputs ), axis=0)
-           outputs_tr = np.concatenate( (outputs_tr, outputs), axis=0)
+           inputs_tr  = np.concatenate( (inputs_tr , inputs_1 ), axis=0)
+           outputs_tr = np.concatenate( (outputs_tr, outputs_1), axis=0)
+
+        #---------#
+        # Region2 #
+        #---------#
+        inputs_2 = GetInputs(run_vars,
+                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], dns_anom2[t,:,:,:],
+                           da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
+
+        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
+        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+
+        inputs_tr  = np.concatenate( (inputs_tr , inputs_2 ), axis=0)
+        outputs_tr = np.concatenate( (outputs_tr, outputs_2), axis=0)
+
+        #---------#
+        # Region3 #
+        #---------#
+        inputs_3 = GetInputs(run_vars,
+                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], dns_anom3[t,:,:,:],
+                           da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+
+        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
+        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+
+        inputs_tr  = np.concatenate( (inputs_tr , inputs_3 ), axis=0)
+        outputs_tr = np.concatenate( (outputs_tr, outputs_3), axis=0)
 
 
    for t in range(trainval_split, valtest_split, 80):  
 
-        if run_vars['dimension'] == 2:
-           temp = view_as_windows(da_T[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        elif run_vars['dimension'] == 3:
-           temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        else:
-           print('ERROR, dimension neither 2 nor 3')
-        if run_vars['eta']:
-           temp = view_as_windows(da_Eta[t,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
-           temp = np.tile(temp, (z_subsize,1,1,1,1))
-           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lat']:
-           temp = da_lat[y_lw:y_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (z_subsize,1))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lon']:
-           temp = da_lon[x_lw:x_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (y_subsize,1))
-           temp = np.tile(temp, (z_subsize,1,1))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['dep']:
-           temp = da_depth[z_lw:z_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,y_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        #---------#
+        # Region1 #
+        #---------#
+        inputs_1 = GetInputs(run_vars,
+                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], dns_anom[t,:,:,:],
+                           da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
-        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
 
         # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
-        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
+        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
 
         if t == trainval_split:
-           inputs_val  = inputs 
-           outputs_val = outputs
+           inputs_val  = inputs_1 
+           outputs_val = outputs_1
         else:
-           inputs_val  = np.concatenate( (inputs_val , inputs ), axis=0)
-           outputs_val = np.concatenate( (outputs_val, outputs), axis=0)
+           inputs_val  = np.concatenate( (inputs_val , inputs_1 ), axis=0)
+           outputs_val = np.concatenate( (outputs_val, outputs_1), axis=0)
+
+        #---------#
+        # Region2 #
+        #---------#
+        inputs_2 = GetInputs(run_vars,
+                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], dns_anom2[t,:,:,:],
+                           da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
+
+        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
+        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+
+        inputs_val  = np.concatenate( (inputs_val , inputs_2 ), axis=0)
+        outputs_val = np.concatenate( (outputs_val, outputs_2), axis=0)
+
+        #---------#
+        # Region3 #
+        #---------#
+        inputs_3 = GetInputs(run_vars,
+                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], dns_anom3[t,:,:,:],
+                           da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+
+        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
+        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+
+        inputs_val  = np.concatenate( (inputs_val , inputs_3 ), axis=0)
+        outputs_val = np.concatenate( (outputs_val, outputs_3), axis=0)
 
 
    for t in range(valtest_split, data_end_index, 80):  
 
-        if run_vars['dimension'] == 2:
-           temp = view_as_windows(da_T[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        elif run_vars['dimension'] == 3:
-           temp = view_as_windows(da_T[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-           inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
-           if run_vars['sal']:
-              temp = view_as_windows(da_S[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['current']:
-              temp = view_as_windows(da_U[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-              temp = view_as_windows(da_V[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-           if run_vars['density']:
-              temp = view_as_windows(dns_anom[t,z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-              temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-              inputs = np.concatenate( (inputs, temp), axis=-1) 
-        else:
-           print('ERROR, dimension neither 2 nor 3')
-        if run_vars['eta']:
-           temp = view_as_windows(da_Eta[t,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
-           temp = np.tile(temp, (z_subsize,1,1,1,1))
-           temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lat']:
-           temp = da_lat[y_lw:y_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (z_subsize,1))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['lon']:
-           temp = da_lon[x_lw:x_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.tile(temp, (y_subsize,1))
-           temp = np.tile(temp, (z_subsize,1,1))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
-        if run_vars['dep']:
-           temp = da_depth[z_lw:z_up]
-           # convert to 3d shape, plus additional dim of 1 for feature.
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,y_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           temp = np.tile(temp, (1,x_subsize))
-           temp = np.expand_dims(temp, axis=-1)
-           inputs = np.concatenate( (inputs, temp), axis=-1) 
+        #---------#
+        # Region1 #
+        #---------#
+        inputs_1 = GetInputs(run_vars,
+                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], dns_anom[t,:,:,:],
+                           da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
-        outputs = da_T[t+StepSize,z_lw:z_up,y_lw:y_up,x_lw:x_up]-da_T[t,z_lw:z_up,y_lw:y_up,x_lw:x_up]
+        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
 
         # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs  =  inputs.reshape((z_subsize*y_subsize*x_subsize,inputs.shape[-1]))
-        outputs = outputs.reshape((z_subsize*y_subsize*x_subsize,1))
+        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
+        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
 
         if t == valtest_split:
-           inputs_te  = inputs 
-           outputs_te = outputs
+           inputs_te  = inputs_1 
+           outputs_te = outputs_1
         else:
-           inputs_te  = np.concatenate( (inputs_te , inputs ), axis=0)
-           outputs_te = np.concatenate( (outputs_te, outputs), axis=0)
+           inputs_te  = np.concatenate( (inputs_te , inputs_1 ), axis=0)
+           outputs_te = np.concatenate( (outputs_te, outputs_1), axis=0)
+
+        #---------#
+        # Region2 #
+        #---------#
+        inputs_2 = GetInputs(run_vars,
+                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], dns_anom2[t,:,:,:],
+                           da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
+
+        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
+        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+
+        inputs_te  = np.concatenate( (inputs_te , inputs_2 ), axis=0)
+        outputs_te = np.concatenate( (outputs_te, outputs_2), axis=0)
+
+        #---------#
+        # Region3 #
+        #---------#
+        inputs_3 = GetInputs(run_vars,
+                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], dns_anom3[t,:,:,:],
+                           da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+
+        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+
+        # reshape from grid (z,y,x,features) to list (no_points, features)
+        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
+        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+
+        inputs_te  = np.concatenate( (inputs_te , inputs_3 ), axis=0)
+        outputs_te = np.concatenate( (outputs_te, outputs_3), axis=0)
+
 
    # Release memory
    ds = None
@@ -340,8 +380,20 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_U = None
    da_V = None
    da_Eta = None
-   da_lat = None
    da_lon = None
+   da_T2 = None
+   da_S2 = None
+   da_U2 = None
+   da_V2 = None
+   da_Eta2 = None
+   da_lon2 = None
+   da_T3 = None
+   da_S3 = None
+   da_U3 = None
+   da_V3 = None
+   da_Eta3 = None
+   da_lon3 = None
+   da_lat = None
    da_depth = None
    del ds
    del da_T
@@ -349,8 +401,20 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    del da_U
    del da_V
    del da_Eta
-   del da_lat
    del da_lon
+   del da_T2
+   del da_S2
+   del da_U2
+   del da_V2
+   del da_Eta2
+   del da_lon2
+   del da_T3
+   del da_S3
+   del da_U3
+   del da_V3
+   del da_Eta3
+   del da_lon3
+   del da_lat
    del da_depth
 
    # Add polynomial terms to inputs array
