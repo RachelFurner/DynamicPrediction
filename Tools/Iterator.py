@@ -21,7 +21,7 @@ import torch
 # Define iterator
 #-----------------
 
-def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr', method='AB1'):
+def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr', method='AB1', outs=None):
 
     if start is None:
        start = 0
@@ -74,32 +74,41 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     print(mean_std_file)
     input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
     
+    out_t   = np.zeros((z_size, y_size, x_size))
     if method=='AB1': # Euler forward
        print('using AB1')
-       out_t   = np.zeros((z_size, y_size, x_size))
     elif method=='AB2':
        print('using AB2')
-       out_t   = np.zeros((z_size, y_size, x_size))
-       out_tm1 = np.zeros((z_size, y_size, x_size))
+       if outs == None:
+          out_tm1 = np.zeros((z_size, y_size, x_size))
+       else:
+          out_tm1 = outs['tm1']
     elif method=='AB3':
        print('using AB3')
-       out_t   = np.zeros((z_size, y_size, x_size))
-       out_tm1 = np.zeros((z_size, y_size, x_size))
-       out_tm2 = np.zeros((z_size, y_size, x_size))
+       if outs == None:
+          out_tm1 = np.zeros((z_size, y_size, x_size))
+          out_tm2 = np.zeros((z_size, y_size, x_size))
+       else:
+          out_tm1 = outs['tm1']
+          out_tm2 = outs['tm2']
     elif method=='AB5':
        print('using AB5')
-       out_t   = np.zeros((z_size, y_size, x_size))
-       out_tm1 = np.zeros((z_size, y_size, x_size))
-       out_tm2 = np.zeros((z_size, y_size, x_size))
-       out_tm3 = np.zeros((z_size, y_size, x_size))
-       out_tm4 = np.zeros((z_size, y_size, x_size))
+       if outs == None:
+          out_tm1 = np.zeros((z_size, y_size, x_size))
+          out_tm2 = np.zeros((z_size, y_size, x_size))
+          out_tm3 = np.zeros((z_size, y_size, x_size))
+          out_tm4 = np.zeros((z_size, y_size, x_size))
+       else:
+          out_tm1 = outs['tm1']
+          out_tm2 = outs['tm2']
+          out_tm3 = outs['tm3']
+          out_tm4 = outs['tm4']
     else:
        print('ERROR!!!! No suitable method given (i.e. AB1, etc)')
        stop
 
     # Set regions to predict for - we want to exclude boundary points, and near to boundary points 
     # Split into three regions:
- 
     # Region 1: main part of domain, ignoring one point above/below land/domain edge at north and south borders, and
     # ignoring one point down entire West boundary, and two points down entire East boundary (i.e. acting as though 
     # land split carries on all the way to the bottom of the domain)
@@ -197,7 +206,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
            lat   = da_lat
            depth = da_depth
            if region == 0:
-              temp  = da_T
+              temp  = predictions
               sal   = da_S
               U     = da_U
               V     = da_V
@@ -205,7 +214,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               eta   = da_Eta
               lon   = da_lon
            if region == 1:
-              temp  = da_T2
+              temp  = np.concatenate((predictions[:,:,:,-1:], predictions[:,:,:,:-1]),axis=3)
               sal   = da_S2
               U     = da_U2
               V     = da_V2
@@ -213,7 +222,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               eta   = da_Eta2
               lon   = da_lon2
            if region == 2:
-              temp  = da_T3
+              temp  = np.concatenate((predictions[:,:,:,1:], predictions[:,:,:,:1]),axis=3)
               sal   = da_S3
               U     = da_U3
               V     = da_V3
@@ -226,12 +235,8 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
                                   eta[t-1,:,:], lat, lon, depth,
                                   z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
                                   z_subsize[region], y_subsize[region], x_subsize[region] )
-           
-           # if region 2 or 3, Move West/East strip back to where it belongs
-           if region == 1:
-              inputs = np.concatenate((inputs[:,:,:,:1], inputs[:,:,:,1:]),axis=3)
-           if region == 2:
-              inputs = np.concatenate((inputs[:,:,:,-1:], inputs[:,:,:,:-1]),axis=3)
+           # Note no need to move the strip back to left or right, as this is just a shape region, not connected to a particular location, its
+           # placed in the right place of the domain when it is stored in out!
  
            # reshape from grid (z,y,x,features) to list (no_points, features)
            inputs = inputs.reshape(( z_subsize[region] * y_subsize[region] * x_subsize[region], inputs.shape[-1] ))
@@ -271,37 +276,37 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
            if method=='AB1': # Euler forward
               deltaT = out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
            elif method=='AB2':
-              if t==1: 
+              if t==1 and outs == None: 
                  deltaT = out_t
-              if t==2: 
+              else: 
                  deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                            -0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
            elif method=='AB3':
-              if t==1: 
+              if t==1 and outs == None: 
                  deltaT = out_t
-              if t==2: 
+              if t==2 and outs == None: 
                  deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                            -0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
-              elif t>=3:   
+              else:   
                  deltaT = ( (23.0/12.0) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                             - (4.0/3.0) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                            + (5.0/12.0) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
            elif method=='AB5':
-              if t==1: 
+              if t==1 and outs == None: 
                  deltaT = out_t
-              if t==2: 
+              if t==2 and outs == None: 
                  deltaT = ( 1.5 *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           - 0.5 * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
-              if t==3:   
+              if t==3 and outs == None:   
                  deltaT = ( (23.0/12.0) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           - (16.0/12.0) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           +  (5.0/12.0) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] )
-              if t==4:
+              if t==4 and outs == None:
                  deltaT = ( (55./24.) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           - (59./24.) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           + (37./24.) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           - ( 9./24.) * out_tm3[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]  )
-              elif t==4:
+              else:
                  deltaT = ( (1901./720.) *   out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           - (2774./720.) * out_tm1[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
                           + (2616./720.) * out_tm2[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ]
@@ -328,5 +333,12 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
            out_tm3[:,:,:] = out_tm2[:,:,:]
            out_tm2[:,:,:] = out_tm1[:,:,:]
            out_tm1[:,:,:] = out_t[:,:,:]
-
-    return(predictions, outputs, sponge_mask, mask)
+    if method=='AB1':
+       outs = {}
+    if method=='AB2':
+       outs = {'tm1': out_tm1}
+    if method=='AB3':
+       outs = {'tm1': out_tm1, 'tm2':out_tm2}
+    if method=='AB4':
+       outs = {'tm1': out_tm1, 'tm2':out_tm2,  'tm3':out_tm3, 'tm4':out_tm4}
+    return(predictions, outputs, sponge_mask, mask, outs)

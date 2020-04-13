@@ -19,18 +19,21 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
-exp_prefix = 'MaxEr_Ridge'
+
+data_prefix='WithThroughFlow_'
+model_prefix = ''
+exp_prefix = ''
 
 calc_predictions = True 
-iter_length = 120   # in months
+iter_length = 12000  # in months
 
 #-----------
 data_name = cn.create_dataname(run_vars)
-#data_name = 'Steps1to10_'+data_name
-
-exp_name = exp_prefix+data_name 
+data_name = data_prefix+data_name
+model_name = model_prefix+data_name
+exp_name = exp_prefix+model_name
 
 #---------------------------------------------------
 # Read in netcdf file for 'truth' and get shape
@@ -40,6 +43,7 @@ DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 Temp_truth = ds['Ttave'][:iter_length+1,:,:,:].data
+mask = ds['Mask'].values
 
 print('Temp_truth.shape')
 print(Temp_truth.shape)
@@ -47,22 +51,22 @@ print(Temp_truth.shape)
 #-------------------
 # Read in the model
 #-------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/pickle_'+model_name+'.pkl'
+print(pkl_filename)
 with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
 
-# run a few simple tests to check against iterator:
-in1 = np.zeros((1, 7260))
-in2 = np.ones((1, 7260))
-
-out1 = model.predict(in1)
-out2 = model.predict(in2)
-
-print('some quick test values:')
-print(out1)
-print(out2)
-
+## run a few simple tests to check against iterator:
+#in1 = np.zeros((1, 7260))
+#in2 = np.ones((1, 7260))
+#
+#out1 = model.predict(in1)
+#out2 = model.predict(in2)
+#
+#print('some quick test values:')
+#print(out1)
+#print(out2)
 
 #---------------------
 # Set up netcdf array
@@ -94,8 +98,8 @@ nc_Z[:] = ds['Z'].data
 nc_Y[:] = ds['Y'].data
 nc_X[:] = ds['X'].data
 
-#-------------------------------------------------------------------------------------
-# Call iterator multiple time to get many predictions for entire grid for one time 
+#--------------------------------------------------------------------------------------
+# Call iterator multiple times to get many predictions for entire grid for one time 
 # step ahead, which can then be averaged to get a spatial pattern of temporally 
 # averaged errors i.e. each entry here is the result of a single prediction using the 
 # 'truth' as inputs, rather than iteratively predicting through time
@@ -116,7 +120,7 @@ if calc_predictions:
     for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with Temp_truth.
         print(t)
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
-        predT_temp, predDelT_temp = it.interator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)) )
+        predT_temp, predDelT_temp, sponge_mask, mask = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)), method='AB1' )
         predictedTemp[t,:,:,:] = predT_temp[1,:,:,:]
         predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
 
@@ -149,36 +153,24 @@ nc_DelTav_Errors[:,:,:] = t_av_DelT_errors
 nc_file.close()
 
 #-----------------
-# Plot histograms
-#-----------------
-print('plot histograms')
-#fig = rfplt.Plot_Histogram(Temp_errors[:,1:-1,1:-3,1:-2], 100)  
-#plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Temp_Errors_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.Plot_Histogram(DelT_errors[:,1:-1,1:-3,1:-2], 100)  
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DeltaT_Errors_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.Plot_Histogram(DelT_truth[:,1:-1,1:-3,1:-2], 100)  
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTtruth_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.Plot_Histogram(predictedDelT[1:,1:-1,1:-3,1:-2], 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_deltaTpredicted_CalcErSCRIPT_hist', bbox_inches = 'tight', pad_inches = 0.1)
-
-#-----------------
 # Plot timeseries 
 #-----------------
-print('plot timeseries')
-fig = rfplt.plt_timeseries([], Temp_errors.shape[0], {'spatially averaged DelT errors':s_av_DelT_errors}, ylim=None)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_DelTErrorTimeSeries', bbox_inches = 'tight', pad_inches = 0.1)
+print('plot timeseries of the error')
+fig = plt.figure(figsize=(14 ,3))
 
-#----------------------------------------------------------
-# Redo stats and scatter plots with this large dataset....
-#----------------------------------------------------------
-print('Plot scatter plots')
-am.plot_results(model_type, exp_name, DelT_truth[:,1:-1,1:-3,1:-2], predictedDelT[1:,1:-1,1:-3,1:-2], name='denorm_DeltaT')
+ax=plt.subplot(111)
+ax.plot(s_av_DelT_errors)
+ax.set_ylabel('Errors')
+ax.set_xlabel('No of months')
+plt.tight_layout()
+plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'timeseries_DelT_Error', bbox_inches = 'tight', pad_inches = 0.1)
 
-print('Calc stats and print to file')
-am.get_stats(model_type, exp_name, name1='DeltaT', truth1=DelT_truth[:,1:-1,1:-3,1:-2], exp1=predictedDelT[1:,1:-1,1:-3,1:-2], name='DeltaT_denorm')
-
-
-
+##----------------------------------------------------------
+## Redo stats and scatter plots with this large dataset....
+##----------------------------------------------------------
+#print('Plot scatter plots')
+#am.plot_results(model_type, exp_name, DelT_truth[:,1:-1,1:-3,1:-2], predictedDelT[1:,1:-1,1:-3,1:-2], name='denorm_DeltaT')
+#
+#print('Calc stats and print to file')
+#am.get_stats(model_type, exp_name, name1='DeltaT', truth1=DelT_truth[:,1:-1,1:-3,1:-2], exp1=predictedDelT[1:,1:-1,1:-3,1:-2], name='DeltaT_denorm')
