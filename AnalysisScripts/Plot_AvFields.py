@@ -19,47 +19,70 @@ from netCDF4 import Dataset
 
 plt.rcParams.update({'font.size': 14})
 
-#------------------------
-# Set plotting variables
-#------------------------
-point = [5,5,5]
+#----------------------------
+# Set variables for this run
+#----------------------------
+point = [5,10,6]
 
-#----------------------
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/'
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+model_type = 'lr'
+
+data_prefix='WithThroughFlow_'
+model_prefix = ''
+exp_prefix = ''
+
+#-----------
+data_name = cn.create_dataname(run_vars)
+data_name = data_prefix+data_name
+model_name = model_prefix+data_name
+exp_name = exp_prefix+model_name
+
+rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
 level = point[0]
 y_coord = point[1]
 x_coord = point[2]
 
-#-----------------------------------------------
-print('reading in ds')
-data_filename=rootdir+'ITERATED_PREDICTION_ARRAYS/3dLatLonDepUVSalEtaPolyDeg2_AveragedSinglePredictions.nc'
+#-------------------
+# Read in land mask 
+#-------------------
+DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
+MITGCM_ds = xr.open_dataset(MITGCM_filename)
+land_mask=MITGCM_ds['Mask'].values
+
+#------------------------
+print('reading in data')
+#------------------------
+data_filename=rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc'
 ds = xr.open_dataset(data_filename)
-da_AvTempError=ds['Averaged PredTemp-Truth'][:,:,:]
+da_AvTempError=ds['Av_Errors_Temp'].values
 
+# mask data
+AvTempError = np.where(land_mask==1, da_AvTempError, np.nan)
 
-z_size = da_AvTempError.shape[0]
-y_size = da_AvTempError.shape[1]
-x_size = da_AvTempError.shape[2]
+z_size = AvTempError.shape[0]
+y_size = AvTempError.shape[1]
+x_size = AvTempError.shape[2]
 
-print('da_AvTempError.shape')
-print(da_AvTempError.shape)
+print('AvTempError.shape')
+print(AvTempError.shape)
 
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
-fig, ax, im = rfplt.plot_depth_fld(da_AvTempError[:,:,:], 'Temperature from Model', level, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_depth_fld(AvTempError[:,:,:], 'Temperature from Model', level, title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/AvTempErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_yconst_crss_sec(da_AvTempError[:,:,:], 'Temperature Predictions', y_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_yconst_crss_sec(AvTempError[:,:,:], 'Temperature Predictions', y_coord, title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/AvTempErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_xconst_crss_sec(da_AvTempError[:,:,:], 'Temperature Predictions', x_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_xconst_crss_sec(AvTempError[:,:,:], 'Temperature Predictions', x_coord, title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/AvTempErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 

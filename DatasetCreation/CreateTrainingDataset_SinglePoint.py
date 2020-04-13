@@ -33,12 +33,13 @@ run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True ,
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
+data_prefix = 'WithThroughFlow'
 #---------------------------
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
 
-#data_name = 'Steps1to10_'+data_name
+data_name = data_prefix+'_'+data_name
 
 #-------------------
 # Read in land mask
@@ -55,11 +56,11 @@ denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm
 # Plot histograms of the data
 #-----------------------------
 fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_TrainOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_outputs_val, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_ValOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_outputs_te, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_TestOutputsHistogram', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 

@@ -23,12 +23,12 @@ def plot_depth_ax(ax, field, level, min_value=None, max_value=None, cmap=None):
 
     # Assumes field is (z, y, x)
     if not min_value:
-       min_value = np.amin(field[level,:,:])  # Lowest value
+       min_value = np.nanmin(field[level,:,:])  # Lowest value
     # Need to work this bit out....
     #if var[0] == 'S':
     #    min_value = 33.5
     if not max_value:
-       max_value = np.amax(field[level,:,:])   # Highest value
+       max_value = np.nanmax(field[level,:,:])   # Highest value
 
     im = ax.pcolormesh(field[level,:,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.set_xlabel('x (\'longitude\')')
@@ -39,12 +39,16 @@ def plot_depth_ax(ax, field, level, min_value=None, max_value=None, cmap=None):
 def plot_depth_fld(field, field_name, level, title=None, min_value=None, max_value=None, diff=False):
     
     # Create a figure
-    fig = plt.figure(figsize=(5,9))
+    fig = plt.figure(figsize=(4,8))
     ax = plt.subplot(111)
     if diff:
-       min_value = - max( abs(np.amin(field[level,:,:])), abs(np.amax(field[level,:,:])) )
-       max_value =   max( abs(np.amin(field[level,:,:])), abs(np.amax(field[level,:,:])) )
+       min_value = - max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
+       max_value =   max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
        cmap = 'bwr'
+       print('min_value:')
+       print(min_value)
+       print('max_value:')
+       print(max_value)
     else:
        cmap = 'viridis'
     ax, im = plot_depth_ax(ax, field, level, min_value, max_value, cmap)
@@ -64,13 +68,13 @@ def plot_depth_fld(field, field_name, level, title=None, min_value=None, max_val
 
 def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, title=None):
     
-    flds_min_value = min( np.amin(field1[level,:,:]), np.amin(field2[level,:,:]) )
-    flds_max_value = max( np.amax(field1[level,:,:]), np.amax(field2[level,:,:]) )
+    flds_min_value = min( np.nanmin(field1[level,:,:]), np.nanmin(field2[level,:,:]) )
+    flds_max_value = max( np.nanmax(field1[level,:,:]), np.amax(field2[level,:,:]) )
 
-    diff_min_value = -max( abs(np.amin(field1[level,:,:]-field2[level,:,:])), abs(np.amax(field1[level,:,:]-field2[level,:,:])) )
-    diff_max_value =  max( abs(np.amin(field1[level,:,:]-field2[level,:,:])), abs(np.amax(field1[level,:,:]-field2[level,:,:])) )
+    diff_min_value = -max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
+    diff_max_value =  max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
  
-    fig = plt.figure(figsize=(15,9))
+    fig = plt.figure(figsize=(14,8))
     ax1 = plt.subplot(131)
     ax2 = plt.subplot(132)
     ax3 = plt.subplot(133)
@@ -104,12 +108,12 @@ def plot_yconst_crss_sec_ax(ax, field, y, min_value=None, max_value=None, cmap=N
     # Assumes field is (z, y, x)
 
     if not min_value:
-       min_value = np.amin(field[:,y,:])  # Lowest value
+       min_value = np.nanmin(field[:,y,:])  # Lowest value
     # Need to work this bit out....
     #if var[0] == 'S':
     #    min_value = 33.5
     if not max_value:
-       max_value = np.amax(field[:,y,:])   # Highest value
+       max_value = np.nanmax(field[:,y,:])   # Highest value
 
     im = ax.pcolormesh(field[:,y,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
@@ -124,8 +128,8 @@ def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_v
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
     if diff:
-       min_value = - max( abs(np.amin(field[:,y,:])), abs(np.amax(field[:,y,:])) )
-       max_value =   max( abs(np.amin(field[:,y,:])), abs(np.amax(field[:,y,:])) )
+       min_value = - max( abs(np.nanmin(field[:,y,:])), abs(np.nanmax(field[:,y,:])) )
+       max_value =   max( abs(np.nanmin(field[:,y,:])), abs(np.nanmax(field[:,y,:])) )
        cmap = 'bwr'
     else:
        cmap = 'viridis'
@@ -146,13 +150,13 @@ def plot_yconst_crss_sec(field, field_name, y, title=None, min_value=None, max_v
 
 def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, title=None):
     
-    flds_min_value = min( np.amin(field1[:,y,:]), np.amin(field2[:,y,:]) )
-    flds_max_value = max( np.amax(field1[:,y,:]), np.amax(field2[:,y,:]) )
+    flds_min_value = min( np.nanmin(field1[:,y,:]), np.nanmin(field2[:,y,:]) )
+    flds_max_value = max( np.nanmax(field1[:,y,:]), np.amax(field2[:,y,:]) )
 
-    diff_min_value = -max( abs(np.amin(field1[:,y,:]-field2[:,y,:])), abs(np.amax(field1[:,y,:]-field2[:,y,:])) )
-    diff_max_value =  max( abs(np.amin(field1[:,y,:]-field2[:,y,:])), abs(np.amax(field1[:,y,:]-field2[:,y,:])) )
+    diff_min_value = -max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
+    diff_max_value =  max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
  
-    fig = plt.figure(figsize=(9,15))
+    fig = plt.figure(figsize=(9,17))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
@@ -186,12 +190,12 @@ def plot_xconst_crss_sec_ax(ax, field, x, min_value=None, max_value=None, cmap=N
     # Assumes field is (z, y, x)
 
     if not min_value:
-       min_value = np.amin(field[:,:,x])  # Lowest value
+       min_value = np.nanmin(field[:,:,x])  # Lowest value
     # Need to work this bit out....
     #if var[0] == 'S':
     #    min_value = 33.5
     if not max_value:
-       max_value = np.amax(field[:,:,x])   # Highest value
+       max_value = np.nanmax(field[:,:,x])   # Highest value
 
     im = ax.pcolormesh(field[:,:,x], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
@@ -207,8 +211,8 @@ def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_v
     fig = plt.figure(figsize=(9,5))
     ax = plt.subplot(111)
     if diff:
-       min_value = - max( abs(np.amin(field[:,:,x])), abs(np.amax(field[:,:,x])) )
-       max_value =   max( abs(np.amin(field[:,:,x])), abs(np.amax(field[:,:,x])) )
+       min_value = - max( abs(np.nanmin(field[:,:,x])), abs(np.nanmax(field[:,:,x])) )
+       max_value =   max( abs(np.nanmin(field[:,:,x])), abs(np.nanmax(field[:,:,x])) )
        cmap = 'bwr'
     else:
        cmap = 'viridis'
@@ -229,13 +233,13 @@ def plot_xconst_crss_sec(field, field_name, x, title=None, min_value=None, max_v
 
 def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, title=None):
     
-    flds_min_value = min( np.amin(field1[:,:,x]), np.amin(field2[:,:,x]) )
-    flds_max_value = max( np.amax(field1[:,:,x]), np.amax(field2[:,:,x]) )
+    flds_min_value = min( np.nanmin(field1[:,:,x]), np.nanmin(field2[:,:,x]) )
+    flds_max_value = max( np.nanmax(field1[:,:,x]), np.amax(field2[:,:,x]) )
 
-    diff_min_value = -max( abs(np.amin(field1[:,:,x]-field2[:,:,x])), abs(np.amax(field1[:,:,x]-field2[:,:,x])) )
-    diff_max_value =  max( abs(np.amin(field1[:,:,x]-field2[:,:,x])), abs(np.amax(field1[:,:,x]-field2[:,:,x])) )
+    diff_min_value = -max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
+    diff_max_value =  max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
  
-    fig = plt.figure(figsize=(9,15))
+    fig = plt.figure(figsize=(9,17))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
@@ -274,7 +278,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
           if ii.shape[0]==0:
               end=length
           else: 
-              end=min(np.amin(ii),length)
+              end=min(np.nanmin(ii),length)
           ax.plot(dataset[:end])
 
       elif len(point) == 1:
@@ -282,7 +286,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
           if ii.shape[0]==0:
               end=length
           else: 
-              end=min(np.amin(ii),length)
+              end=min(np.nanmin(ii),length)
           ax.plot(dataset[:end, point[0]])
 
       elif len(point) == 2:
@@ -290,7 +294,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
           if ii.shape[0]==0:
               end=length
           else: 
-              end=min(np.amin(ii),length)
+              end=min(np.nanmin(ii),length)
           ax.plot(dataset[:end, point[0], point[1]])
 
       elif len(point) == 3:
@@ -298,7 +302,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
           if ii.shape[0]==0:
               end=length
           else: 
-              end=min(np.amin(ii),length)
+              end=min(np.nanmin(ii),length)
           ax.plot(dataset[:end, point[0], point[1], point[2]])
 
       my_legend.append(name)
@@ -328,14 +332,14 @@ def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
    fig = plt.figure(figsize=(15 ,7))
 
    ax=plt.subplot(211)
-   bottom = min(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])-1
-   top    = max(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])+1
+   bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
+   top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
    #ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
 
    ax=plt.subplot(212)
-   bottom = min(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])-1
-   top    = max(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])+1
+   bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
+   top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
    #ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
 
@@ -349,20 +353,20 @@ def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
    fig = plt.figure(figsize=(15 ,11))
 
    ax=plt.subplot(311)
-   bottom = min(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])-1
-   top    = max(datasets['da_T (truth)'][:length1, point[0], point[1], point[2]])+1
+   bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
+   top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
    ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
 
    ax=plt.subplot(312)
-   bottom = min(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])-1
-   top    = max(datasets['da_T (truth)'][:length2, point[0], point[1], point[2]])+1
+   bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
+   top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
    ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
 
    ax=plt.subplot(313)
-   bottom = min(datasets['da_T (truth)'][:length3, point[0], point[1], point[2]])-1
-   top    = max(datasets['da_T (truth)'][:length3, point[0], point[1], point[2]])+1
+   bottom = min(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])-1
+   top    = max(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])+1
    ylim=[bottom, top]
    ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim)
 
@@ -383,5 +387,5 @@ def Plot_Histogram(data, no_bins):
 
     plt.hist(data, bins = no_bins)
     plt.yscale('log')
-    plt.annotate('skew = '+str(skew(data)), (0.15,0.85), xycoords='figure fraction')
+    plt.annotate('skew = '+str(np.round(skew(data),5)), (0.1,0.9), xycoords='figure fraction')
     return(fig)
