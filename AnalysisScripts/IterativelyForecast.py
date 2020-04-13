@@ -24,15 +24,15 @@ import netCDF4 as nc4
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
-iterate_method = 'AB1'
+iterate_method = 'AB3'
 
 data_prefix='WithThroughFlow_'
 model_prefix=''
-exp_prefix = iterate_method+'_'
+exp_prefix = 'estDelT_'+iterate_method+'_'
 
-for_len_yrs = 1/2   # forecast length in years
-no_chunks = 1
-start = 0        # Can't iterate, as the code crashes when it reaches NaN's, so just have to manually do one at a time.
+for_len_yrs = 2    # forecast length in years
+no_chunks = 24
+start = 5        # Allow for a variety of start points, from different MITGCM init states
 
 run_iterations = True 
 
@@ -45,15 +45,14 @@ model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
-#-------------------------------------------
-# Read in netcdf file for shape and 'truth'
-#-------------------------------------------
+#-------------------------------------------------------------------
+# Read in netcdf file for shape, 'truth', and other variable inputs
+#-------------------------------------------------------------------
 print('reading in ds')
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
-ds = xr.open_dataset(data_filename)
-ds = ds.isel(T=slice(start,start+for_len+1))
-#da_T=ds['Ttave'][start:start+for_len+1]   
+ds_orig = xr.open_dataset(data_filename)
+ds = ds_orig.isel(T=slice(start,start+for_len+1))
 da_T=ds['Ttave']
 
 z_size = da_T.shape[1]
@@ -111,20 +110,42 @@ size_chunk = int(for_len/no_chunks)
 print(size_chunk)
 init = da_T[0,:,:,:]
 
+## Set up initial out_tm1, out_tm2 etc for AB methods
+if iterate_method == 'AB1':
+   outs = {}
+elif iterate_method == 'AB2':
+   ds_outs = ds_orig.isel(T=slice(start-1,start+1))
+   da_T_outs=ds_outs['Ttave']
+   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:])}
+elif iterate_method == 'AB3':
+   ds_outs = ds_orig.isel(T=slice(start-2,start+1))
+   da_T_outs=ds_outs['Ttave']
+   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
+           'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:])}
+elif iterate_method == 'AB5':
+   ds_outs = ds_orig.isel(T=slice(start-4,start+1))
+   da_T_outs=ds_outs['Ttave']
+   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
+           'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:]),
+           'tm3':(da_T_outs[-3,:,:,:]-da_T_outs[-4,:,:,:]),
+           'tm4':(da_T_outs[-4,:,:,:]-da_T_outs[-5,:,:,:])}
+
 if run_iterations:
    for chunk in range(no_chunks):
       print('')
       print(chunk)
       chunk_start = size_chunk*chunk
       chunk_end = size_chunk*(chunk+1)+1
-      tmp_pred, tmp_out, sponge_mask, mask = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)),
-                                   init=init, model_type=model_type, method=iterate_method)
+      tmp_pred, tmp_out, sponge_mask, mask, outs = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)),
+                                   init=init, model_type=model_type, method=iterate_method, outs=outs)
       if chunk == 0:
-         Pred_Temp = tmp_pred  # initialise these arrays, and keep both initial state and prediction for this first step
-         Pred_DelT = tmp_out       # initialise these arrays, and keep both initial state and prediction for this first step            
+         # initialise these arrays, and keep both initial state and prediction for this first step
+         Pred_Temp = tmp_pred 
+         Pred_DelT = tmp_out 
       else:
-         Pred_Temp = np.concatenate( (Pred_Temp, tmp_pred[1:,:,:,:]), axis=0 )  # concatenate on time axis. take prediction only - ignore istate
-         Pred_DelT = np.concatenate( (Pred_DelT,  tmp_out[1:,:,:,:]), axis=0 )  # concatenate on time axis. take prediction only - ignore istate
+         # concatenate on time axis. take prediction only - ignore istate
+         Pred_Temp = np.concatenate( (Pred_Temp, tmp_pred[1:,:,:,:]), axis=0 )  
+         Pred_DelT = np.concatenate( (Pred_DelT,  tmp_out[1:,:,:,:]), axis=0 ) 
    
       init = Pred_Temp[-1,:,:,:]
       # Save to array
@@ -143,27 +164,23 @@ length = Pred_Temp.shape[0]
 errors = Pred_Temp-da_T.data[:length,:,:,:]
 print('Pred_Temp.shape')
 print(Pred_Temp.shape)
-
-print(errors.shape)
-print(mask.shape)
 mask_4d=np.broadcast_to(mask,errors.shape)
-print(mask_4d.shape)
-fig = rfplt.Plot_Histogram(errors[mask_4d==1], 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_Errors_IterationSCRIPT_hist_'+str(start), bbox_inches = 'tight', pad_inches = 0.1)
 
-print('Calc stats and print to file')
-print(da_T.data.shape)
-print(da_T.data[mask_4d==1].shape)
 if np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1]).any():
    print( 'Pred_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1])) ) )
 if np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1].any():
    print( 'true_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1]) ) )
 
-am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1],
-                                                          exp1=(Pred_DelT[1:,:,:,:])[mask_4d[1:,:,:,:]==1], name='Iter_DeltaT_denorm_'+str(start))
+#print('Calc stats and print to file')
+#am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1],
+#                                                          exp1=(Pred_DelT[1:,:,:,:])[mask_4d[1:,:,:,:]==1], name='Iter_DeltaT_denorm_'+str(start))
 
 for point in [ [5,15,4] ]:
-   fig = rfplt.plt_timeseries(point, 120, {model_type: Pred_Temp})
-   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_multimodel_forecast_10yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'+str(start), bbox_inches = 'tight', pad_inches = 0.1)
+   fig = rfplt.plt_timeseries(point, 120, {model_type:Pred_Temp, 'MITGCM':da_T})
+   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
+                                                               +str(start)+'_10yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
+   fig = rfplt.plt_timeseries(point, 1200, {model_type: Pred_Temp, 'MITGCM':da_T})
+   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
+                                                               +str(start)+'_100yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
    
 
