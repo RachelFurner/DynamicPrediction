@@ -27,21 +27,22 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True, 'density':True, 'poly_degree':2}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True, 'density':True, 'poly_degree':2}
 model_type = 'lr'
-data_prefix = 'WithThroughFlow_'
-exp_prefix = ''
+time_step = '24hr'
+data_prefix = ''
+exp_prefix = 'MaxEr_'
 
 TrainModel = True
 
-DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
+DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
 
 #---------------------------
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
-data_name = data_prefix+data_name
+data_name = time_step+'_'+data_prefix+data_name
 
 exp_name = exp_prefix+data_name
 
@@ -65,15 +66,16 @@ if TrainModel:
     print('training model')
     
     #alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
-    alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.1, 1.0]
+    #alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.1, 1.0]
+    alpha_s = [0.003, 0.01, 0.1, 1.0]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
     
     lr = linear_model.Ridge(fit_intercept=True)
     
     # set up regressor
-    lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
-    #lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='max_error', refit=True)
+    #lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
+    lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='max_error', refit=True)
     
     # fit the model
     lr.fit(norm_inputs_tr, norm_outputs_tr)
@@ -100,24 +102,11 @@ with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    lr = pickle.load(file)
 
-# predict values and calculate the error
+# predict values
 print('predict values')
 norm_lr_predicted_tr = lr.predict(norm_inputs_tr)
-lr_tr_mse = metrics.mean_squared_error(norm_outputs_tr, norm_lr_predicted_tr)
 
 norm_lr_predicted_val = lr.predict(norm_inputs_val)
-lr_val_mse = metrics.mean_squared_error(norm_outputs_val, norm_lr_predicted_val)
-
-# run a few simple tests to check against iterator:
-in1 = np.zeros((1,norm_inputs_tr.shape[1]))
-in2 = np.ones((1,norm_inputs_tr.shape[1]))
-
-out1 = lr.predict(in1)
-out2 = lr.predict(in2)
-
-print('some quick test values:')
-print(out1)
-print(out2)
 
 #------------------------------------------
 # De-normalise the outputs and predictions

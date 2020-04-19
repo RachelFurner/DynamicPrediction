@@ -24,13 +24,15 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [5,10,6]
 
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
 data_prefix='WithThroughFlow_'
 model_prefix = ''
 exp_prefix = ''
 
+DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 #-----------
 data_name = cn.create_dataname(run_vars)
 data_name = data_prefix+data_name
@@ -46,8 +48,6 @@ x_coord = point[2]
 #-------------------
 # Read in land mask 
 #-------------------
-DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 MITGCM_ds = xr.open_dataset(MITGCM_filename)
 land_mask=MITGCM_ds['Mask'].values
 
@@ -72,17 +72,17 @@ print(AvTempError.shape)
 # Plot spatial depth plots
 #--------------------------
 fig, ax, im = rfplt.plot_depth_fld(AvTempError[:,:,:], 'Temperature from Model', level, title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/AvTempErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
 fig, ax, im = rfplt.plot_yconst_crss_sec(AvTempError[:,:,:], 'Temperature Predictions', y_coord, title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/AvTempErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
 fig, ax, im = rfplt.plot_xconst_crss_sec(AvTempError[:,:,:], 'Temperature Predictions', x_coord, title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/AvTempErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 

@@ -28,12 +28,18 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
 
     da_T=ds['Ttave'][start:start+num_steps+1,:,:,:].values
     da_S=ds['Stave'][start:start+num_steps+1,:,:,:].values
-    da_U=ds['uVeltave'][start:start+num_steps+1,:,:,:].values
-    da_V=ds['vVeltave'][start:start+num_steps+1,:,:,:].values
+    da_U_temp=ds['uVeltave'][start:start+num_steps+1,:,:,:].values
+    da_V_temp=ds['vVeltave'][start:start+num_steps+1,:,:,:].values
+    da_Kwx=ds['Kwx'].values
+    da_Kwy=ds['Kwy'].values
+    da_Kwz=ds['Kwz'].values
     da_Eta=ds['ETAtave'][start:start+num_steps+1,:,:].values
     da_lat=ds['Y'][:].values
     da_lon=ds['X'][:].values
     da_depth=ds['Z'][:].values
+    # Calc U and V by averaging surrounding points, to get on same grid as other variables
+    da_U = (da_U_temp[:,:,:,:-1]+da_U_temp[:,:,:,1:])/2.
+    da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
     if run_vars['density']:
        # Here we calculate the density anomoly, using the simplified equation of state,
        # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
@@ -131,6 +137,9 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     da_S2     = np.concatenate((da_S[:,:,:,-1:], da_S[:,:,:,:-1]),axis=3)
     da_U2     = np.concatenate((da_U[:,:,:,-1:], da_U[:,:,:,:-1]),axis=3)
     da_V2     = np.concatenate((da_V[:,:,:,-1:], da_V[:,:,:,:-1]),axis=3)
+    da_Kwx2   = np.concatenate((da_Kwx[:,:,:,-1:], da_Kwx[:,:,:,:-1]),axis=3)
+    da_Kwy2   = np.concatenate((da_Kwy[:,:,:,-1:], da_Kwy[:,:,:,:-1]),axis=3)
+    da_Kwz2   = np.concatenate((da_Kwz[:,:,:,-1:], da_Kwz[:,:,:,:-1]),axis=3)
     da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
     da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
     dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
@@ -139,6 +148,9 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     da_S3     = np.concatenate((da_S[:,:,:,1:], da_S[:,:,:,:1]),axis=3)
     da_U3     = np.concatenate((da_U[:,:,:,1:], da_U[:,:,:,:1]),axis=3)
     da_V3     = np.concatenate((da_V[:,:,:,1:], da_V[:,:,:,:1]),axis=3)
+    da_Kwx3   = np.concatenate((da_Kwx[:,:,:,1:], da_Kwx[:,:,:,:1]),axis=3)
+    da_Kwy3   = np.concatenate((da_Kwy[:,:,:,1:], da_Kwy[:,:,:,:1]),axis=3)
+    da_Kwz3   = np.concatenate((da_Kwz[:,:,:,1:], da_Kwz[:,:,:,:1]),axis=3)
     da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
     da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
     dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
@@ -210,6 +222,9 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               sal   = da_S
               U     = da_U
               V     = da_V
+              Kwx   = da_Kwx
+              Kwy   = da_Kwy
+              Kwz   = da_Kwz
               dens  = dns_anom
               eta   = da_Eta
               lon   = da_lon
@@ -218,6 +233,9 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               sal   = da_S2
               U     = da_U2
               V     = da_V2
+              Kwx   = da_Kwx2
+              Kwy   = da_Kwy2
+              Kwz   = da_Kwz2
               dens  = dns_anom2
               eta   = da_Eta2
               lon   = da_lon2
@@ -226,13 +244,16 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               sal   = da_S3
               U     = da_U3
               V     = da_V3
+              Kwx   = da_Kwx3
+              Kwy   = da_Kwy3
+              Kwz   = da_Kwz3
               dens  = dns_anom3
               eta   = da_Eta3
               lon   = da_lon3
 
            inputs = rr.GetInputs( run_vars,
-                                  temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], dens[t-1,:,:,:],
-                                  eta[t-1,:,:], lat, lon, depth,
+                                  temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[[t-1,:,:,:], Kwy[[t-1,:,:,:], Kwz[[t-1,:,:,:],
+                                  dens[t-1,:,:,:], eta[t-1,:,:], lat, lon, depth,
                                   z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
                                   z_subsize[region], y_subsize[region], x_subsize[region] )
            # Note no need to move the strip back to left or right, as this is just a shape region, not connected to a particular location, its

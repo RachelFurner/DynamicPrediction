@@ -4,8 +4,6 @@
 #----------------------------
 print('Import neccessary packages')
 #----------------------------
-from comet_ml import Experiment
-
 import sys
 sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
@@ -37,7 +35,7 @@ torch.cuda.empty_cache()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True ,'density':True, 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True ,'density':True, 'poly_degree':2}
 time_step='1mnth'
 
 exp_prefix = 'NNasLinearRegressor_'
@@ -54,12 +52,14 @@ epochs = 100
 # Calculate some other variables 
 #--------------------------------
 data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+data_name
 exp_name = exp_prefix+data_name
 
 #--------------------------------------------------------------
 # Read in the data from saved array
 #--------------------------------------------------------------
 inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
+print(inputsoutputs_file)
 norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
 
 del norm_inputs_te
@@ -140,30 +140,30 @@ for epoch in range(epochs):
     train_loss_epoch_temp = 0.0
     
     # optimise batch at a time, using train_loader
-    for inputs, outputs in train_loader:
+    for batch_inputs, batch_outputs in train_loader:
        # Converting inputs and labels to Variable
        if torch.cuda.is_available():
-           inputs = Variable(inputs.cuda().float())
-           labels = Variable(outputs.cuda().float())
+           batch_inputs = Variable(batch_inputs.cuda().float())
+           batch_labels = Variable(batch_outputs.cuda().float())
        else:
-           inputs = Variable(inputs.float())
-           labels = Variable(outputs.float())
+           batch_inputs = Variable(batch_inputs.float())
+           batch_labels = Variable(batch_outputs.float())
    
        # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
        optimizer.zero_grad()
    
        # get predictions from the model, given the inputs
-       predictions = model(inputs)
+       predictions = model(batch_inputs)
    
        # get loss for the predicted output
-       loss = criterion(predictions, labels)
+       loss = criterion(predictions, batch_labels)
        # get gradients w.r.t to parameters
        loss.backward()
    
        # update parameters
        optimizer.step()
 
-       train_loss_batch.append(loss.item()/inputs.shape[0])
+       train_loss_batch.append(loss.item()/batch_inputs.shape[0])
        train_loss_epoch_temp += loss.item()
    
     epoch_loss = train_loss_epoch_temp / norm_inputs_tr.shape[0]
@@ -184,9 +184,10 @@ ax2.set_ylabel('Training Loss')
 ax2.set_yscale('log')
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_TrainingLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-#torch.save({'h_state_dict': h.state_dict(),
-#            'opt_state_dict': opt.state_dict(),
-#	   }, '/data/hpcdata/users/racfur/DynamicPrediction/LorenzOutputs/MODELS/AB'+str(order+1)+'_model_'+str(n_run)+'.pt')
+print('pickle model')
+pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+exp_name+'.pkl'
+with open(pkl_filename, 'wb') as pckl_file:
+    pickle.dump(model, pckl_file)
 
 
 #------------------------

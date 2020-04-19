@@ -19,15 +19,20 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
-data_prefix='WithThroughFlow_'
+data_prefix='24hrTimeStep_'
 model_prefix = ''
 exp_prefix = ''
 
 calc_predictions = True 
-iter_length = 12000  # in months
+iter_length = 1000  # in months/days
+
+#DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+#data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
+DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+data_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
 
 #-----------
 data_name = cn.create_dataname(run_vars)
@@ -39,8 +44,6 @@ exp_name = exp_prefix+model_name
 # Read in netcdf file for 'truth' and get shape
 #---------------------------------------------------
 print('reading in ds')
-DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds = xr.open_dataset(data_filename)
 Temp_truth = ds['Ttave'][:iter_length+1,:,:,:].data
 mask = ds['Mask'].values
@@ -120,7 +123,7 @@ if calc_predictions:
     for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with Temp_truth.
         print(t)
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
-        predT_temp, predDelT_temp, sponge_mask, mask = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)), method='AB1' )
+        predT_temp, predDelT_temp, sponge_mask, mask, outs = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)), method='AB1' )
         predictedTemp[t,:,:,:] = predT_temp[1,:,:,:]
         predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
 

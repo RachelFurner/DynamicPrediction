@@ -22,22 +22,28 @@ import netCDF4 as nc4
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 iterate_method = 'AB3'
 
-data_prefix='WithThroughFlow_'
+data_prefix='24hrTimeStep_'
 model_prefix=''
-exp_prefix = 'estDelT_'+iterate_method+'_'
+exp_prefix = iterate_method+'_'
 
-for_len_yrs = 2    # forecast length in years
-no_chunks = 24
+#for_len_yrs = 10   # forecast length in years
+#for_len = int(for_len_yrs * 12)
+for_len = 360
+no_chunks = 12
 start = 5        # Allow for a variety of start points, from different MITGCM init states
 
 run_iterations = True 
 
+#DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+#data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
+DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+data_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
+
 #----------------------------
-for_len = int(for_len_yrs * 12)
 
 data_name = cn.create_dataname(run_vars)
 data_name = data_prefix+data_name
@@ -49,8 +55,6 @@ rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 # Read in netcdf file for shape, 'truth', and other variable inputs
 #-------------------------------------------------------------------
 print('reading in ds')
-DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 ds_orig = xr.open_dataset(data_filename)
 ds = ds_orig.isel(T=slice(start,start+for_len+1))
 da_T=ds['Ttave']

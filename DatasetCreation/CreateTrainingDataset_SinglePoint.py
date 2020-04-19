@@ -28,18 +28,22 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'density':True, 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True, 'poly_degree':2}
 
+time_step = '1mnth'
+data_prefix = ''
+
+#DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+#MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
-data_prefix = 'WithThroughFlow'
 #---------------------------
 # calculate other variables 
 #---------------------------
-data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+cn.create_dataname(run_vars)
 
-data_name = data_prefix+'_'+data_name
+data_name = data_prefix+data_name
 
 #-------------------
 # Read in land mask
@@ -50,7 +54,7 @@ land_mask = ds['Mask'].values
 #---------------------------------
 # Call module to read in the data
 #---------------------------------
-denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, 0.9, data_name, run_vars)
+denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, 0.9, data_name, run_vars, time_step=time_step)
 
 #-----------------------------
 # Plot histograms of the data

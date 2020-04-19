@@ -38,19 +38,19 @@ torch.cuda.empty_cache()
 #--------------------------------------
 comet_log = True 
 
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':1}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+time_step='1mnth'
 
 hyper_params = {
     "batch_size": 64,
     "num_epochs": 200, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
-    "no_layers": 4,    # no of *hidden* layers
-    "no_nodes": 119
+    "no_layers": 1,    # no of *hidden* layers
+    "no_nodes": 10878  # match number of features for now
 }
 
-exp_name_prefix = 'AsDB_'+str(hyper_params["no_layers"])+'hiddenlayer_'+str(hyper_params["no_nodes"])+'nodes_withPoly_'
-#exp_name_prefix = str(hyper_params["no_layers"])+'hiddenlayer_withPoly_'
+exp_prefix = str(hyper_params["no_layers"])+'hiddenlayer_'
 
 model_type = 'nn'
 
@@ -61,6 +61,7 @@ MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 # Calculate some other variables 
 #--------------------------------
 data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+data_name
 exp_name = exp_prefix+data_name
 
 #---------------------
@@ -76,12 +77,47 @@ if comet_log:
 # Read in the data from saved array
 #--------------------------------------------------------------
 inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
-norm_inputs_tr, norm_inputs_te, norm_outputs_tr, norm_outputs_te = np.load(inputsoutputs_file).values()
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
 
-#-----------------------------------------------------------------
-# Set up regression model in PyTorch (so we can use GPUs!)
-#-----------------------------------------------------------------
+del norm_inputs_te
+del norm_outputs_te
+
+norm_inputs_tr  = norm_inputs_tr[:100]
+norm_inputs_val = norm_inputs_val[:100]
+norm_outputs_tr  = norm_outputs_tr[:100]
+norm_outputs_val = norm_outputs_val[:100]
+
+#-------------------------
+# Set up regression model
+#-------------------------
+class NetworkRegression(torch.nn.Module):
+    def __init__(self, inputSize, outputSize, hyper_params):
+        super(NetworkRegression, self).__init__()
+        if hyper_params["no_layers"] == 1:
+            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
+        elif hyper_params["no_layers"] == 2:
+            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
+        elif hyper_params["no_layers"] == 3:
+            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
+        elif hyper_params["no_layers"] == 4:
+            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
+    def forward(self, x):
+        out = self.linear(x)
+        return out
+
+#------------------------
 # Store data as Dataset'
+#------------------------
 
 class MITGCM_Dataset(data.Dataset):
     """Dataset of MITGCM outputs"""
@@ -105,41 +141,25 @@ class MITGCM_Dataset(data.Dataset):
         return self.ds_inputs.shape[0]
 
 
+#------------------------
 # Instantiate the dataset
+#------------------------
 Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
-Test_Dataset  = MITGCM_Dataset(norm_inputs_te, norm_outputs_te)
+Val_Dataset  = MITGCM_Dataset(norm_inputs_val, norm_outputs_val)
 
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
-val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=hyper_params["batch_size"])
+val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
 
-inputFeatures = norm_inputs_tr.shape[1]
-outputFeatures = norm_outputs_tr.shape[1]
+#--------------
+# Set up model
+#--------------
+inputDim = norm_inputs_tr.shape[1]
+outputDim = norm_outputs_tr.shape[1]
 
-if hyper_params["no_layers"] == 0:
-    h = nn.Sequential( nn.Linear( inputFeatures, outputFeatures) )
-elif hyper_params["no_layers"] == 1:
-    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
-                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
-elif hyper_params["no_layers"] == 2:
-    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
-elif hyper_params["no_layers"] == 3:
-    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
-elif hyper_params["no_layers"] == 4:
-    h = nn.Sequential( nn.Linear(inputFeatures, hyper_params["no_nodes"]), nn.Tanh(),
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                       nn.Linear(hyper_params["no_nodes"], outputFeatures) )
+model = NetworkRegression(inputDim, outputDim, hyper_params)
+model.to(device)
 
-# Send to GPU
-h.to(device)
-
-optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
+optimizer = torch.optim.Adam( model.parameters(), lr=hyper_params["learning_rate"] )
 
 train_loss_batch = []
 train_loss_epoch = []
@@ -148,8 +168,8 @@ val_loss_epoch = []
 # Train the model:
 with experiment.train():
     for epoch in range(hyper_params["num_epochs"]):
-        train_loss_temp = 0.0
-        val_loss_temp = 0.0
+        train_loss_epoch_temp = 0.0
+        val_loss_epoch_temp = 0.0
         for inputs, outputs in train_loader:
         
             # Converting inputs and labels to Variable and send to GPU if available
@@ -160,16 +180,16 @@ with experiment.train():
                 inputs = Variable(inputs.float())
                 outputs = Variable(outputs.float())
             
-            h.train(True)
-    
-            # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
+            model.train(True)
+
+            # Clear gradient buffers because we don't want any gradient from previous batch to carry forward
             optimizer.zero_grad()
         
             # get prediction from the model, given the inputs
-            predicted = h(inputs)
+            predictions = model(inputs)
         
             # get loss for the predicted output
-            loss = hyper_params["criterion"](predicted, outputs)
+            loss = hyper_params["criterion"](predictions, outputs)
             # get gradients w.r.t to parameters
             loss.backward()
         
@@ -177,33 +197,33 @@ with experiment.train():
             optimizer.step()
             
             train_loss_batch.append(loss.item())
-            train_loss_temp += loss.item()
+            train_loss_epoch_temp += loss.item()
 
-        for inputs, outputs in val_loader:
+        for batch_inputs, batch_outputs in val_loader:
         
             # Converting inputs and labels to Variable and send to GPU if available
             if torch.cuda.is_available():
-                inputs = Variable(inputs.cuda().float())
-                outputs = Variable(outputs.cuda().float())
+                batch_inputs = Variable(batch_inputs.cuda().float())
+                batch_outputs = Variable(batch_outputs.cuda().float())
             else:
-                inputs = Variable(inputs.float())
-                outputs = Variable(outputs.float())
+                batch_inputs = Variable(batch_inputs.float())
+                batch_outputs = Variable(batch_outputs.float())
             
-            h.train(False)
+            model.train(False)
     
             # get prediction from the model, given the inputs
-            predicted = h(inputs)
+            predicted = model(batch_inputs)
         
             # get loss for the predicted output
-            loss = hyper_params["criterion"](predicted, outputs)
+            loss = hyper_params["criterion"](predicted, batch_outputs)
     
             val_loss_temp += loss.item()     
     
-        train_loss_epoch.append(train_loss_temp / inputs.shape[0] )
-        val_loss_epoch.append(val_loss_temp / inputs.shape[0] )
-        print(inputs.shape)
-        print('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
-        print('epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
+        epoch_loss = train_loss_epoch_temp / norm_inputs_tr.shape[0]
+        print('epoch {}, loss {}'.format(epoch, epoch_loss))
+        train_loss_epoch.append(epoch_loss )
+        #val_loss_epoch.append(val_loss_temp / inputs.shape[0] )
+
         # Log to Comet.ml
         if comet_log:
            experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
@@ -212,51 +232,92 @@ with experiment.train():
 del inputs, outputs, predicted 
 torch.cuda.empty_cache()
  
-weight_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/weights_'+exp_name+'.txt'
-weight_file = open(weight_filename, 'w')
-np.set_printoptions(threshold=np.inf)
-weight_file.write(str(h[0].weight.data.cpu().numpy()))
-
 print('pickle model')
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'.pkl'
+pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+exp_name+'.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
-    pickle.dump(h, pckl_file)
+    pickle.dump(model, pckl_file)
 
 #-----------------------------------------------------
 # Create full set of predictions and assess the model
 #-----------------------------------------------------
 
-nn_predicted_tr = np.zeros((norm_outputs_tr.shape))
-nn_predicted_te = np.zeros((norm_outputs_te.shape))
+norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
+norm_predicted_val = np.zeros((norm_outputs_val.shape))
 # Loop through to predict for dataset, as memory limits mean we can't do this all at once.
 # Maybe some clever way of doing this with the dataloader?
 chunk = int(norm_inputs_tr.shape[0]/5)
 for i in range(5):
    if torch.cuda.is_available():
-      tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]).cuda().float())
+      norm_tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk]).cuda().float())
    else:
-      tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr).float())
-   nn_predicted_tr[i*chunk:(i+1)*chunk-1] = h(tr_inputs_temp).cpu().detach().numpy()
-   del tr_inputs_temp
+      norm_tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk]).float())
+   norm_predicted_tr[i*chunk:(i+1)*chunk] = model(norm_tr_inputs_temp).cpu().detach().numpy()
+   del norm_tr_inputs_temp
    torch.cuda.empty_cache()
 
 if torch.cuda.is_available():
-   te_inputs_temp = Variable(torch.from_numpy(norm_inputs_te).cuda().float())
+   norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).cuda().float())
 else:
-   te_inputs_temp = Variable(torch.from_numpy(norm_inputs_te).float())
-nn_predicted_te = h(te_inputs_temp).cpu().detach().numpy()
-del te_inputs_temp 
+   norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).float())
+norm_predicted_val = model(val_inputs_temp).cpu().detach().numpy()
+del val_inputs_temp 
 torch.cuda.empty_cache()
+
+#------------------------------------------
+# De-normalise the outputs and predictions
+#------------------------------------------
+mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_1mnth_'+data_name+'_MeanStd.npz'
+input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+
+# denormalise inputs
+def denormalise_data(norm_data,mean,std):
+    denorm_data = norm_data * std + mean
+    return denorm_data
+
+denorm_inputs_tr  = np.zeros(norm_inputs_tr.shape)
+denorm_inputs_val = np.zeros(norm_inputs_val.shape)
+for i in range(norm_inputs_tr.shape[1]):  
+    denorm_inputs_tr[:, i]  = denormalise_data(norm_inputs_tr[:, i] , input_mean[i], input_std[i])
+    denorm_inputs_val[:, i] = denormalise_data(norm_inputs_val[:, i], input_mean[i], input_std[i])
+
+# denormalise the predictions and true outputs   
+denorm_predicted_tr = denormalise_data(norm_predicted_tr, output_mean, output_std)
+denorm_predicted_val = denormalise_data(norm_predicted_val, output_mean, output_std)
+denorm_outputs_tr = denormalise_data(norm_outputs_tr, output_mean, output_std)
+denorm_outputs_val = denormalise_data(norm_outputs_val, output_mean, output_std)
 
 #------------------
 # Assess the model
 #------------------
+# Calculate 'persistance' score - persistence prediction is just zero everywhere as we're predicting the trend
+predict_persistance_tr = np.zeros(denorm_outputs_tr.shape)
+predict_persistance_val = np.zeros(denorm_outputs_val.shape)
 
-test_mse, val_mse = am.get_stats(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+print('get stats')
+test_mse, val_mse =am.get_stats(model_type, exp_name, name1='Training', truth1=denorm_outputs_tr, exp1=denorm_predicted_tr, pers1=predict_persistance_tr, 
+                                name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_predicted_val, pers2=predict_persistance_val, name='TrainVal')
 if comet_log:
     with experiment.test():
         experiment.log_metric("test_mse", test_mse)
         experiment.log_metric("val_mse", val_mse)
 
-am.plot_results(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+
+print('plot results')
+am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_predicted_tr, name='training')
+am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_predicted_val, name='val')
+
+#-------------------------------------------------------------------
+# plot histograms:
+#-------------------------------------------------
+fig = rfplt.Plot_Histogram(denorm_predicted_tr, 100) 
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_predicted_val, 100)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+
+fig = rfplt.Plot_Histogram(denorm_predicted_tr-denorm_outputs_tr, 100)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+
+
+
 
