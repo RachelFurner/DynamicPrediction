@@ -25,6 +25,8 @@ def create_dataname(run_vars):
       exp_name=exp_name+'Dep'
    if run_vars['current']:
       exp_name=exp_name+'UV'
+   if run_vars['bolus_vel']:
+      exp_name=exp_name+'Bol'
    if run_vars['sal']:
       exp_name=exp_name+'Sal'
    if run_vars['eta']:
