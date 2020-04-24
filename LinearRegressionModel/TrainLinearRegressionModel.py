@@ -29,14 +29,21 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True, 'density':True, 'poly_degree':2}
 model_type = 'lr'
-time_step = '24hr'
+time_step = '24hrs'
+#time_step = '1mnth'
 data_prefix = ''
-exp_prefix = 'MaxEr_'
+exp_prefix = ''
 
 TrainModel = True
 
-DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
+if time_step == '1mnth':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+   MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+elif time_step == '24hrs':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+else:
+   print('ERROR - No proper time step given')
 
 #---------------------------
 # calculate other variables 
@@ -65,17 +72,14 @@ pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/p
 if TrainModel:
     print('training model')
     
-    #alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10, 30]
-    #alpha_s = [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.1, 1.0]
-    alpha_s = [0.003, 0.01, 0.1, 1.0]
+    alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
     
     lr = linear_model.Ridge(fit_intercept=True)
     
     # set up regressor
-    #lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
-    lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='max_error', refit=True)
+    lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
     
     # fit the model
     lr.fit(norm_inputs_tr, norm_outputs_tr)

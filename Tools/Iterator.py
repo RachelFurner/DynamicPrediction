@@ -252,7 +252,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               lon   = da_lon3
 
            inputs = rr.GetInputs( run_vars,
-                                  temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[[t-1,:,:,:], Kwy[[t-1,:,:,:], Kwz[[t-1,:,:,:],
+                                  temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[t-1,:,:,:], Kwy[t-1,:,:,:], Kwz[t-1,:,:,:],
                                   dens[t-1,:,:,:], eta[t-1,:,:], lat, lon, depth,
                                   z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
                                   z_subsize[region], y_subsize[region], x_subsize[region] )

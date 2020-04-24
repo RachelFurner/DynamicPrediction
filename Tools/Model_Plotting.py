@@ -268,7 +268,7 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, title
 # Plot time series at specific points #
 #######################################
 
-def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
+def plt_timeseries_ax(ax, point, length, datasets, ylim=None, time_step=None):
 
    my_legend=[]
    for name, dataset in datasets.items():
@@ -308,67 +308,80 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
       my_legend.append(name)
    ax.legend(my_legend)
    ax.set_ylabel('Temperature')
-   ax.set_xlabel('No of months')
-   ax.set_title(str(int(length/12))+' years')
+   if time_step == '24hrs':
+      ax.set_xlabel('No of days')
+      ax.set_title(str(int(length/30))+' months')
+   else:
+      ax.set_xlabel('No of months')
+      ax.set_title(str(int(length/12))+' years')
    if ylim:
       ax.set_ylim(ylim)
  
    return(ax)
 
-def plt_timeseries(point, length, datasets, ylim=None):
+def plt_timeseries(point, length, datasets, ylim=None, time_step=None):
    
    fig = plt.figure(figsize=(15 ,3))
 
    ax=plt.subplot(111)
-   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, time_step=time_step)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
 
    return(fig)
 
-def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
+def plt_2_timeseries(point, length1, length2, datasets, ylim=None, time_step=None):
    
    fig = plt.figure(figsize=(15 ,7))
 
    ax=plt.subplot(211)
-   bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
-   top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
-   #ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, time_step=time_step)
 
    ax=plt.subplot(212)
-   bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
-   top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
-   #ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, time_step=time_step)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
 
    return(fig)
 
-def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
+def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None, time_step=None):
    
    fig = plt.figure(figsize=(15 ,11))
 
    ax=plt.subplot(311)
-   bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
-   top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
-   ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length1, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, time_step=time_step)
 
    ax=plt.subplot(312)
-   bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
-   top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
-   ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length2, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, time_step=time_step)
 
    ax=plt.subplot(313)
-   bottom = min(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])-1
-   top    = max(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])+1
-   ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim)
+   if ylim == None:
+      bottom = min(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])-1
+      top    = max(datasets['MITGCM_temp (truth)'][:length3, point[0], point[1], point[2]])+1
+      ylim=[bottom, top]
+   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim, time_step=time_step)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)

@@ -29,12 +29,17 @@ import torch
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':False, 'poly_degree':2}
+
+time_step = '1mnth'
 
 DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
+MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+
+data_prefix = 'NormalisePerChannel_'
 
 data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+data_prefix+data_name
 
 #--------------------------------------------------------------
 # Call module to read in the data, or open it from saved array

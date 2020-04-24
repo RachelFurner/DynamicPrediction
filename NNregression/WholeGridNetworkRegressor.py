@@ -26,7 +26,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch
 
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:', device)
 print()
@@ -36,45 +35,51 @@ torch.cuda.empty_cache()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-log_comet = False
-
-exp_name = 'ScherStyleNetwork_'
+data_prefix ='NormalisePerChannel_'
+exp_name = 'ScherStyleCNNNetwork_'
 
 hyper_params = {
     "batch_size": 32,
-    "num_epochs": 200, 
+    "num_epochs":  2, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
-    "no_layers": 0,    # no of *hidden* layers
 }
 
 model_type = 'nn'
-
-mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
-
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'sal':True , 'eta':True , 'poly_degree':2}
+time_step = '1mnth'
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True ,'density':False, 'poly_degree':2}
+#----------------
 data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+data_prefix+data_name
 
-#---------------------
-# Set up Comet stuff:
-#---------------------
-#experiment = Experiment(project_name="learnmitgcm2deg_wholefield")
-if log_comet:
-    experiment.set_name(exp_name)
-    experiment.log_parameters(hyper_params)
-    experiment.log_others(run_vars)
+#---------------------------------
+# Create mask from MITGCM dataset
+#---------------------------------
+mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+ds   = xr.open_dataset(MITGCM_filename)
+mask = ds['Mask'].values 
 
-#--------------------------------------------------------------
-# Call module to read in the data, or open it from saved array
-#--------------------------------------------------------------
+#----------------------------------
+# Read in dataset from saved array
+#----------------------------------
 inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
 norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
-   
-#-------------------------
-# Set up regression model
-#-------------------------
-# Store data as Dataset'
+
+del norm_inputs_te
+del norm_outputs_te
+
+if np.isnan(norm_inputs_tr).any():
+   print('norm_inputs_tr contains a NaN')
+if np.isnan(norm_inputs_val).any():
+   print('norm_inputs_val contains a NaN')
+if np.isnan(norm_outputs_tr).any():
+   print('norm_outputs_tr contains a NaN')
+if np.isnan(norm_outputs_val).any():
+   print('norm_outputs_val contains a NaN')
+#-----------------------
+# Store data as Dataset
+#-----------------------
 
 class MITGCM_Dataset(data.Dataset):
     """Dataset of MITGCM outputs"""
@@ -100,19 +105,24 @@ class MITGCM_Dataset(data.Dataset):
 
 # Instantiate the dataset
 Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
-Test_Dataset  = MITGCM_Dataset(norm_inputs_te, norm_outputs_te)
+Val_Dataset  = MITGCM_Dataset(norm_inputs_val, norm_outputs_val)
 
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
-val_loader   = torch.utils.data.DataLoader(Test_Dataset,  batch_size=hyper_params["batch_size"])
+val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
 
-inputFeatures = norm_inputs_tr.shape[1]
-outputFeatures = norm_outputs_tr.shape[1]
+#--------------
+# Set up model
+#--------------
+no_inputFeatures = norm_inputs_tr.shape[1]
+no_outputFeatures = norm_outputs_tr.shape[1]
+no_tr_samples = norm_inputs_tr.shape[0]
+no_val_samples = norm_inputs_val.shape[0]
 
 # inputs are (no_samples, 169channels, 78y, 11x).
 # Not doing pooling, as dataset small to begin with, and no computational need, or scientific justification....
 h = nn.Sequential(
             # downscale
-            nn.Conv2d(in_channels=norm_inputs_tr.shape[1], out_channels=256, kernel_size=(3,3), padding=(1,1)),
+            nn.Conv2d(in_channels=no_inputFeatures, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3),padding=(1,1)),
             nn.ReLU(True),
@@ -120,7 +130,7 @@ h = nn.Sequential(
             # upscale
             nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=256, out_channels=norm_inputs_tr.shape[1], kernel_size=(3,3), padding=(1,1)),
+            nn.ConvTranspose2d(in_channels=256, out_channels=no_outputFeatures, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True)
              )
 h = h.cuda()
@@ -132,16 +142,15 @@ train_loss_epoch = []
 val_loss_epoch = []
 
 # Train the model:
-#with experiment.train():
 for epoch in range(hyper_params["num_epochs"]):
     train_loss_temp = 0.0
     val_loss_temp = 0.0
-    for inputs, outputs in train_loader:
+    for input_batch, output_batch in train_loader:
     
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
-            inputs = Variable(inputs.cuda().float())
-            outputs = Variable(outputs.cuda().float())
+            input_batch = Variable(input_batch.cuda().float())
+            output_batch = Variable(output_batch.cuda().float())
         else:
             inputs = Variable(inputs.float())
             outputs = Variable(outputs.float())
@@ -152,50 +161,47 @@ for epoch in range(hyper_params["num_epochs"]):
         optimizer.zero_grad()
     
         # get prediction from the model, given the inputs
-        predicted = h(inputs)
+        predicted = h(input_batch)
  
         # get loss for the predicted output
-        loss = hyper_params["criterion"](predicted, outputs)
+        loss = hyper_params["criterion"](predicted, output_batch)
         # get gradients w.r.t to parameters
         loss.backward()
     
         # update parameters
         optimizer.step()
         
-        train_loss_batch.append(loss.item())
+        train_loss_batch.append( loss.item()/input_batch.shape[0] )
         train_loss_temp += loss.item()
 
-    for inputs, outputs in val_loader:
+    train_loss_epoch.append( train_loss_temp/no_tr_samples )
+
+    for input_batch, output_batch in val_loader:
     
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
-            inputs = Variable(inputs.cuda().float())
-            outputs = Variable(outputs.cuda().float())
+            input_batch = Variable(input_batch.cuda().float())
+            output_batch = Variable(output_batch.cuda().float())
         else:
-            inputs = Variable(inputs.float())
-            outputs = Variable(outputs.float())
+            input_batch = Variable(input_batch.float())
+            output_batch = Variable(output_batch.float())
         
         h.train(False)
 
         # get prediction from the model, given the inputs
-        predicted = h(inputs)
+        predicted = h(input_batch)
     
         # get loss for the predicted output
-        loss = hyper_params["criterion"](predicted, outputs)
+        loss = hyper_params["criterion"](predicted, output_batch)
 
         val_loss_temp += loss.item()     
 
-    train_loss_epoch.append(train_loss_temp / inputs.shape[0] )
-    val_loss_epoch.append(val_loss_temp / inputs.shape[0] )
-    print(inputs.shape)
-    print('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
-    print('epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
-    # Log to Comet.ml
-    if log_comet:
-        experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
-        experiment.log_metric('Validation_Loss', val_loss_epoch[-1], epoch = epoch)
+    val_loss_epoch.append( val_loss_temp/no_val_samples )
 
-del inputs, outputs, predicted 
+    print('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
+    print('Epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
+
+del input_batch, output_batch, predicted 
 torch.cuda.empty_cache()
  
 weight_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/weights_'+exp_name+'fields.txt'
@@ -212,37 +218,45 @@ with open(pkl_filename, 'wb') as pckl_file:
 # Create full set of predictions and assess the model
 #-----------------------------------------------------
 
-nn_predicted_tr = np.zeros((norm_outputs_tr.shape))
-nn_predicted_te = np.zeros((norm_outputs_te.shape))
+norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
+norm_predicted_val = np.zeros((norm_outputs_val.shape))
 # Loop through to predict for dataset, as memory limits mean we can't do this all at once.
 # Maybe some clever way of doing this with the dataloader?
 chunk = int(norm_inputs_tr.shape[0]/5)
 for i in range(5):
    if torch.cuda.is_available():
-      tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]).cuda().float())
+      print('RF 1')
+      tr_inputs_temp = Variable( ( torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]) ).cuda().float() )
    else:
-      tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr).float())
-   nn_predicted_tr[i*chunk:(i+1)*chunk-1] = h(tr_inputs_temp).cpu().detach().numpy()
+      print('RF 2')
+      tr_inputs_temp = Variable( ( torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]) ).float() )
+   norm_predicted_tr[i*chunk:(i+1)*chunk-1] = (h(tr_inputs_temp)).cpu().detach().numpy()
    del tr_inputs_temp
    torch.cuda.empty_cache()
 
 if torch.cuda.is_available():
-   te_inputs_temp = Variable(torch.from_numpy(norm_inputs_te).cuda().float())
+   val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).cuda().float())
 else:
-   te_inputs_temp = Variable(torch.from_numpy(norm_inputs_te).float())
-nn_predicted_te = h(te_inputs_temp).cpu().detach().numpy()
-del te_inputs_temp 
+   val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).float())
+norm_predicted_val = h(val_inputs_temp).cpu().detach().numpy()
+del val_inputs_temp 
 torch.cuda.empty_cache()
 
 #------------------
 # Assess the model
 #------------------
+print('norm_outputs_tr.shape')
+print(norm_outputs_tr.shape)
+print('norm_predicted_tr.shape')
+print(norm_predicted_tr.shape)
+print('norm_outputs_val.shape')
+print(norm_outputs_val.shape)
+print('norm_predicted_val.shape')
+print(norm_predicted_val.shape)
 
-test_mse, val_mse = am.get_stats(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
-if log_comet:
-    with experiment.test():
-        experiment.log_metric("test_mse", test_mse)
-        experiment.log_metric("val_mse", val_mse)
+#####  NEED TO DE_NORM!!! #########
+train_mse, val_mse = am.get_stats(model_type, exp_name, 'training', norm_outputs_tr, norm_predicted_tr, name2='validation', truth2=norm_outputs_val, exp2=norm_predicted_val, name='norm')
 
-am.plot_results(model_type, data_name, exp_name, norm_outputs_tr, norm_outputs_te, nn_predicted_tr, nn_predicted_te)
+am.plot_results(model_type, exp_name, norm_outputs_tr, norm_predicted_tr, name = '_norm_tr' )
+am.plot_results(model_type, exp_name, norm_outputs_val, norm_predicted_val, name = '_norm_val' )
 

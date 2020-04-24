@@ -22,21 +22,26 @@ plt.rcParams.update({'font.size': 14})
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
-data_prefix='24hrTimeStep_'
+time_step = '24hrs'
+data_prefix=''
 model_prefix = ''
 exp_prefix = ''
 
 calc_predictions = True 
 iter_length = 1000  # in months/days
 
-#DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-#data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
-DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-data_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
+if time_step == '1mnth':
+   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+   data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+elif time_step == '24hrs':
+   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+else:
+   print('ERROR!!! No suitable time step given!!')
 
 #-----------
 data_name = cn.create_dataname(run_vars)
-data_name = data_prefix+data_name
+data_name = time_step+'_'+data_prefix+data_name
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
@@ -167,7 +172,7 @@ ax.set_ylabel('Errors')
 ax.set_xlabel('No of months')
 plt.tight_layout()
 plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'timeseries_DelT_Error', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_timeseries_Av_DelT_Error', bbox_inches = 'tight', pad_inches = 0.1)
 
 ##----------------------------------------------------------
 ## Redo stats and scatter plots with this large dataset....

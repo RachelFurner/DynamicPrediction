@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report
 import sklearn.metrics as metrics
 
-def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name='norm'):
+def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name=None):
 
    # calculate stats
    truth1=truth1.reshape(-1)
@@ -28,6 +28,8 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
       if pers2 is not None:
          pers2=pers2.reshape(-1)
          pers2_mse = metrics.mean_squared_error(truth2, pers2)
+   else:
+      exp2_mse=None
   
    # Print to file
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
@@ -51,7 +53,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
       stats_file.write('\n')
    stats_file.close()
 
-   return()   
+   return(exp1_mse, exp2_mse)   
 
   
 def plot_results(model_type, exp_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True):

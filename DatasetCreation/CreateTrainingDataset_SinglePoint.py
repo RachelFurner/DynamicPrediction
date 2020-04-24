@@ -30,13 +30,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True, 'poly_degree':2}
 
-time_step = '1mnth'
+time_step = '24hrs'
 data_prefix = ''
-
-#DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-#MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
-DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 #---------------------------
 # calculate other variables 
@@ -44,6 +39,13 @@ MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
 data_name = time_step+'_'+cn.create_dataname(run_vars)
 
 data_name = data_prefix+data_name
+
+if time_step == '1mnth':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+   MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+elif time_step == '24hrs':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
 
 #-------------------
 # Read in land mask

@@ -11,6 +11,7 @@ sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
+from Tools import Model_Plotting as rfplt
 
 import numpy as np
 import os
@@ -43,7 +44,7 @@ time_step='1mnth'
 
 hyper_params = {
     "batch_size": 64,
-    "num_epochs": 200, 
+    "num_epochs":  50, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
     "no_layers": 1,    # no of *hidden* layers
@@ -82,10 +83,10 @@ norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_v
 del norm_inputs_te
 del norm_outputs_te
 
-norm_inputs_tr  = norm_inputs_tr[:100]
-norm_inputs_val = norm_inputs_val[:100]
-norm_outputs_tr  = norm_outputs_tr[:100]
-norm_outputs_val = norm_outputs_val[:100]
+#norm_inputs_tr  = norm_inputs_tr[:100]
+#norm_inputs_val = norm_inputs_val[:100]
+#norm_outputs_tr  = norm_outputs_tr[:100]
+#norm_outputs_val = norm_outputs_val[:100]
 
 #-------------------------
 # Set up regression model
@@ -217,12 +218,12 @@ with experiment.train():
             # get loss for the predicted output
             loss = hyper_params["criterion"](predicted, batch_outputs)
     
-            val_loss_temp += loss.item()     
+            val_loss_epoch_temp += loss.item()     
     
         epoch_loss = train_loss_epoch_temp / norm_inputs_tr.shape[0]
         print('epoch {}, loss {}'.format(epoch, epoch_loss))
         train_loss_epoch.append(epoch_loss )
-        #val_loss_epoch.append(val_loss_temp / inputs.shape[0] )
+        val_loss_epoch.append(val_loss_epoch_temp / norm_inputs_tr.shape[0] )
 
         # Log to Comet.ml
         if comet_log:
@@ -245,8 +246,9 @@ norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
 norm_predicted_val = np.zeros((norm_outputs_val.shape))
 # Loop through to predict for dataset, as memory limits mean we can't do this all at once.
 # Maybe some clever way of doing this with the dataloader?
-chunk = int(norm_inputs_tr.shape[0]/5)
-for i in range(5):
+no_chunks = 20
+chunk = int(norm_inputs_tr.shape[0]/20)
+for i in range(20):
    if torch.cuda.is_available():
       norm_tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk]).cuda().float())
    else:
@@ -259,14 +261,14 @@ if torch.cuda.is_available():
    norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).cuda().float())
 else:
    norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).float())
-norm_predicted_val = model(val_inputs_temp).cpu().detach().numpy()
-del val_inputs_temp 
+norm_predicted_val = model(norm_val_inputs_temp).cpu().detach().numpy()
+del norm_val_inputs_temp 
 torch.cuda.empty_cache()
 
 #------------------------------------------
 # De-normalise the outputs and predictions
 #------------------------------------------
-mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_1mnth_'+data_name+'_MeanStd.npz'
+mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
 
 # denormalise inputs

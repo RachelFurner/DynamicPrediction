@@ -124,7 +124,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    halo_list = (range(-halo_size, halo_size+1))
 
    start = 0
-   if time_step == '24hr':
+   if time_step == '24hrs':
       data_end_index = 7200   # look at first 20yrs only for now to ensure dataset sizes aren't too huge!
    else:
       data_end_index = 6000   # look at first 500yrs only for now to ensure dataset sizes aren't too huge!
@@ -137,6 +137,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    ds   = xr.open_dataset(MITGCM_filename)
    
    da_T=ds['Ttave'].values
+   
    da_S=ds['Stave'].values
    da_U_temp=ds['uVeltave'].values
    da_V_temp=ds['vVeltave'].values
@@ -234,7 +235,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    z_subsize_3 = 30
 
 
-   for t in range(start, trainval_split, 85):  
+   for t in range(start, trainval_split, 200):  
 
         #---------#
         # Region1 #
@@ -292,7 +293,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         outputs_tr = np.concatenate( (outputs_tr, outputs_3), axis=0)
 
 
-   for t in range(trainval_split, valtest_split, 85):  
+   for t in range(trainval_split, valtest_split, 200):  
 
         #---------#
         # Region1 #
@@ -350,7 +351,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         outputs_val = np.concatenate( (outputs_val, outputs_3), axis=0)
 
 
-   for t in range(valtest_split, data_end_index, 85):  
+   for t in range(valtest_split, data_end_index, 200):  
 
         #---------#
         # Region1 #
@@ -575,8 +576,6 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
 
    start = 0
    data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
-   trainval_split = int(data_end_index*trainval_split_ratio) # point at which to switch from testing data to validation data
-   valtest_split = int(data_end_index*valtest_split_ratio) # point at which to switch from testing data to validation data
  
    #------------------
    # Read in the data
@@ -587,19 +586,21 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    print('extracting variables')
    da_T=ds['Ttave'].values
    da_S=ds['Stave'].values
-   da_U=ds['uVeltave'].values
-   U_temp = 0.5 * (da_U[:,:,:,0:-1]+da_U[:,:,:,1:])  # average to get onto same grid as T points
-   da_V=ds['vVeltave'].values
-   V_temp = 0.5 * (da_V[:,:,0:-1,:]+da_V[:,:,1:,:])  # average to get onto same grid as T points
+   da_U_temp=ds['uVeltave'].values
+   da_U = 0.5 * (da_U_temp[:,:,:,0:-1]+da_U_temp[:,:,:,1:])  # average to get onto same grid as T points
+   da_V_temp=ds['vVeltave'].values
+   da_V = 0.5 * (da_V_temp[:,:,0:-1,:]+da_V_temp[:,:,1:,:])  # average to get onto same grid as T points
+   da_Kwx=ds['Kwx'].values
+   da_Kwy=ds['Kwy'].values
+   da_Kwz=ds['Kwz'].values
+   da_mask=ds['Mask'].values  
    da_Eta=ds['ETAtave'].values
-   da_depth=ds['Z'].values
-   da_mask=ds['Mask'].values
-   
-   inputs  = np.zeros((0,5*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels=no_variables*z_dim of each variable, y_dim, x_dim)
-   outputs = np.zeros((0,5*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels=no_variables*z_dim of each variable, y_dim, x_dim)
+
+   inputs  = np.zeros((0,8*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels=no_variables*z_dim of each variable, y_dim, x_dim)
+   outputs = np.zeros((0,8*da_T.shape[1]+1,da_T.shape[2],da_T.shape[3])) # Shape: (no_samples, no_channels=no_variables*z_dim of each variable, y_dim, x_dim)
    
    # Read in inputs and outputs, subsample in time for 'quasi-independence'
-   for time in range(start, min(data_end_index, da_T.shape[0]-1), 10):  
+   for time in range(start, min(data_end_index, da_T.shape[0]-1), 5):  
        
        input_temp  = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
        output_temp = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
@@ -613,12 +614,24 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
            output_temp = np.concatenate((output_temp, da_S[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_U.shape[1]):
-           input_temp  = np.concatenate((input_temp , U_temp[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, U_temp[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_temp  = np.concatenate((input_temp , da_U[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_U[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_V.shape[1]):
-           input_temp  = np.concatenate((input_temp , V_temp[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, V_temp[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_temp  = np.concatenate((input_temp , da_V[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_V[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+
+       for level in range(da_Kwx.shape[1]):
+           input_temp  = np.concatenate((input_temp , da_Kwx[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_Kwx[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+
+       for level in range(da_Kwy.shape[1]):
+           input_temp  = np.concatenate((input_temp , da_Kwy[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_Kwy[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+
+       for level in range(da_Kwz.shape[1]):
+           input_temp  = np.concatenate((input_temp , da_Kwz[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_temp = np.concatenate((output_temp, da_Kwz[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        input_temp  = np.concatenate((input_temp , da_Eta[time  ,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
        output_temp = np.concatenate((output_temp, da_Eta[time+1,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
@@ -638,7 +651,6 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    da_V = None
    da_Eta = None
    da_lat = None
-   da_depth = None
    da_mask = None
     
    inputs=np.asarray(inputs)
@@ -688,12 +700,18 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    norm_outputs_te = np.zeros((outputs_te.shape))
 
    for channel in range(inputs_mean.shape[0]):
-       norm_inputs_tr[:, channel, :, :]   = (  inputs_tr[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
-       norm_inputs_val[:, channel, :, :]  = ( inputs_val[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
-       norm_inputs_te[:, channel, :, :]   = (  inputs_te[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
-       norm_outputs_tr[:, channel, :, :]  = ( outputs_tr[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
-       norm_outputs_val[:, channel, :, :] = (outputs_val[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
-       norm_outputs_te[:, channel, :, :]  = ( outputs_te[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
+       if not (norm_inputs_tr[:, channel, :, :] == 0.0).all():
+          norm_inputs_tr[:, channel, :, :]   = (  inputs_tr[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
+       if not (norm_inputs_val[:, channel, :, :] == 0.0).all():
+          norm_inputs_val[:, channel, :, :]  = ( inputs_val[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
+       if not (norm_inputs_te[:, channel, :, :] == 0.0).all():
+          norm_inputs_te[:, channel, :, :]   = (  inputs_te[:,channel, :, :] -  inputs_mean[channel]) /  inputs_std[channel]
+       if not (norm_outputs_tr[:, channel, :, :] == 0.0).all():
+          norm_outputs_tr[:, channel, :, :]  = ( outputs_tr[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
+       if not (norm_outputs_val[:, channel, :, :] == 0.0).all():
+          norm_outputs_val[:, channel, :, :] = (outputs_val[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
+       if not (norm_outputs_te[:, channel, :, :] == 0.0).all():
+          norm_outputs_te[:, channel, :, :]  = ( outputs_te[:,channel, :, :] - outputs_mean[channel]) / outputs_std[channel]
    
    #-----------------
    # Save the arrays

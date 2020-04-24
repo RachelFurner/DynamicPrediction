@@ -26,31 +26,36 @@ run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True ,
 model_type = 'lr'
 iterate_method = 'AB3'
 
-data_prefix='24hrTimeStep_'
+time_step = '1mnth'
+data_prefix=''
 model_prefix=''
-exp_prefix = iterate_method+'_'
+exp_prefix = ''
 
-#for_len_yrs = 10   # forecast length in years
-#for_len = int(for_len_yrs * 12)
-for_len = 360
-no_chunks = 12
+for_len = 10*12
+no_chunks = 10
+
 start = 5        # Allow for a variety of start points, from different MITGCM init states
 
-run_iterations = True 
-
-#DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-#data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked.nc'
-DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-data_filename=DIR+'cat_tave_50yr_SelectedVars_masked.nc'
+run_iterations = True  
 
 #----------------------------
+if time_step == '1mnth':
+   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+   data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+elif time_step == '24hrs':
+   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
 
 data_name = cn.create_dataname(run_vars)
-data_name = data_prefix+data_name
+data_name = time_step+'_'+data_prefix+data_name
 model_name = model_prefix+data_name
-exp_name = exp_prefix+model_name
+exp_name = exp_prefix+model_name+'_'+iterate_method
 
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+
+nc_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.nc'
+pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
+
 #-------------------------------------------------------------------
 # Read in netcdf file for shape, 'truth', and other variable inputs
 #-------------------------------------------------------------------
@@ -74,67 +79,67 @@ with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
 
-#---------------------
-# Set up netcdf files
-#---------------------
-
-nc_file = nc4.Dataset(rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.nc','w', format='NETCDF4') #'w' stands for write
-# Create Dimensions
-nc_file.createDimension('T', None)
-nc_file.createDimension('Z', ds['Z'].shape[0])
-nc_file.createDimension('Y', ds['Y'].shape[0])
-nc_file.createDimension('X', ds['X'].shape[0])
-
-# Create variables
-nc_T = nc_file.createVariable('T', 'i4', 'T')
-nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
-nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
-nc_X = nc_file.createVariable('X', 'i4', 'X')
-nc_Temp = nc_file.createVariable('Pred_Temp', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_DelT = nc_file.createVariable('Pred_DelT', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_Errors = nc_file.createVariable('Errors', 'f4', ('T', 'Z', 'Y', 'X'))
-nc_SpongeMask = nc_file.createVariable('sponge_mask', 'i4', ('Z', 'Y', 'X'))
-nc_Mask = nc_file.createVariable('Mask', 'i4', ('Z', 'Y', 'X'))
-
-# Fill some variables - rest done during iteration steps
-nc_Z[:] = ds['Z'].data
-nc_Y[:] = ds['Y'].data
-nc_X[:] = ds['X'].data
-
-#----------------------
-# Make the predictions
-#----------------------
-
-# Call iterator for chunks of data at a time, saving interim results in arrays, so if the
-# predictions become unstable and lead to Nan's etc we still have some of the trajectory saved
-print('Call iterator and make the predictions')
-
-pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
-size_chunk = int(for_len/no_chunks)
-print(size_chunk)
-init = da_T[0,:,:,:]
-
-## Set up initial out_tm1, out_tm2 etc for AB methods
-if iterate_method == 'AB1':
-   outs = {}
-elif iterate_method == 'AB2':
-   ds_outs = ds_orig.isel(T=slice(start-1,start+1))
-   da_T_outs=ds_outs['Ttave']
-   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:])}
-elif iterate_method == 'AB3':
-   ds_outs = ds_orig.isel(T=slice(start-2,start+1))
-   da_T_outs=ds_outs['Ttave']
-   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
-           'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:])}
-elif iterate_method == 'AB5':
-   ds_outs = ds_orig.isel(T=slice(start-4,start+1))
-   da_T_outs=ds_outs['Ttave']
-   outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
-           'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:]),
-           'tm3':(da_T_outs[-3,:,:,:]-da_T_outs[-4,:,:,:]),
-           'tm4':(da_T_outs[-4,:,:,:]-da_T_outs[-5,:,:,:])}
-
 if run_iterations:
+   #---------------------
+   # Set up netcdf files
+   #---------------------
+   nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
+   
+   # Create Dimensions
+   nc_file.createDimension('T', None)
+   nc_file.createDimension('Z', ds['Z'].shape[0])
+   nc_file.createDimension('Y', ds['Y'].shape[0])
+   nc_file.createDimension('X', ds['X'].shape[0])
+   
+   # Create variables
+   nc_T = nc_file.createVariable('T', 'i4', 'T')
+   nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
+   nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
+   nc_X = nc_file.createVariable('X', 'i4', 'X')
+   nc_Temp = nc_file.createVariable('Pred_Temp', 'f4', ('T', 'Z', 'Y', 'X'))
+   nc_DelT = nc_file.createVariable('Pred_DelT', 'f4', ('T', 'Z', 'Y', 'X'))
+   nc_Errors = nc_file.createVariable('Errors', 'f4', ('T', 'Z', 'Y', 'X'))
+   nc_SpongeMask = nc_file.createVariable('sponge_mask', 'i4', ('Z', 'Y', 'X'))
+   nc_Mask = nc_file.createVariable('Mask', 'i4', ('Z', 'Y', 'X'))
+   
+   # Fill some variables - rest done during iteration steps
+   nc_Z[:] = ds['Z'].data
+   nc_Y[:] = ds['Y'].data
+   nc_X[:] = ds['X'].data
+   
+   #----------------------
+   # Make the predictions
+   #----------------------
+   
+   # Call iterator for chunks of data at a time, saving interim results in arrays, so if the
+   # predictions become unstable and lead to Nan's etc we still have some of the trajectory saved
+   print('Call iterator and make the predictions')
+   
+   size_chunk = int(for_len/no_chunks)
+   print(size_chunk)
+   init = da_T[0,:,:,:]
+   
+   ## Set up initial out_tm1, out_tm2 etc for AB methods
+   if iterate_method == 'AB1':
+      outs = {}
+   elif iterate_method == 'AB2':
+      ds_outs = ds_orig.isel(T=slice(start-1,start+1))
+      da_T_outs=ds_outs['Ttave']
+      outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:])}
+   elif iterate_method == 'AB3':
+      ds_outs = ds_orig.isel(T=slice(start-2,start+1))
+      da_T_outs=ds_outs['Ttave']
+      outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
+              'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:])}
+   elif iterate_method == 'AB5':
+      ds_outs = ds_orig.isel(T=slice(start-4,start+1))
+      da_T_outs=ds_outs['Ttave']
+      outs = {'tm1':(da_T_outs[-1,:,:,:]-da_T_outs[-2,:,:,:]),
+              'tm2':(da_T_outs[-2,:,:,:]-da_T_outs[-3,:,:,:]),
+              'tm3':(da_T_outs[-3,:,:,:]-da_T_outs[-4,:,:,:]),
+              'tm4':(da_T_outs[-4,:,:,:]-da_T_outs[-5,:,:,:])}
+
+   # Actually make the predictions!   
    for chunk in range(no_chunks):
       print('')
       print(chunk)
@@ -153,7 +158,7 @@ if run_iterations:
    
       init = Pred_Temp[-1,:,:,:]
       # Save to array
-      np.savez(pred_filename, np.array(Pred_Temp), np.array(Pred_DelT))
+      np.savez( pred_filename, np.array(Pred_Temp), np.array(Pred_DelT), np.array(mask) )
       # Save to netcdf file
       length = Pred_Temp.shape[0]
       nc_T[:] = ds['T'].data[:length]
@@ -163,17 +168,19 @@ if run_iterations:
       nc_Errors[:,:,:,:] = errors 
       nc_SpongeMask[:,:,:] = sponge_mask
       nc_Mask[:,:,:] = mask
-Pred_Temp, Pred_DelT = np.load(pred_filename).values()
+
+Pred_Temp, Pred_DelT, mask = np.load(pred_filename).values()
 length = Pred_Temp.shape[0]
-errors = Pred_Temp-da_T.data[:length,:,:,:]
+da_T=da_T.data[:length,:,:,:]
+errors = Pred_Temp-da_T[:,:,:,:]
 print('Pred_Temp.shape')
 print(Pred_Temp.shape)
-mask_4d=np.broadcast_to(mask,errors.shape)
+mask_4d=np.broadcast_to( mask, errors.shape )
 
 if np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1]).any():
    print( 'Pred_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1])) ) )
-if np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1].any():
-   print( 'true_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1]) ) )
+if np.isnan(da_T[1:,:,:,:]-da_T[:-1,:,:,:])[mask_4d[1:,:,:,:]==1].any():
+   print( 'true_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(da_T[1:,:,:,:]-da_T[:-1,:,:,:])[mask_4d[1:,:,:,:]==1]) ) )
 
 #print('Calc stats and print to file')
 #am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1],
@@ -183,8 +190,8 @@ for point in [ [5,15,4] ]:
    fig = rfplt.plt_timeseries(point, 120, {model_type:Pred_Temp, 'MITGCM':da_T})
    plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
                                                                +str(start)+'_10yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
-   fig = rfplt.plt_timeseries(point, 1200, {model_type: Pred_Temp, 'MITGCM':da_T})
-   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
-                                                               +str(start)+'_100yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
+#   fig = rfplt.plt_timeseries(point, 1200, {model_type: Pred_Temp, 'MITGCM':da_T})
+#   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
+#                                                               +str(start)+'_100yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
    
 
