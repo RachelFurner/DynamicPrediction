@@ -152,23 +152,22 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_U = (da_U_temp[:,:,:,:-1]+da_U_temp[:,:,:,1:])/2.
    da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
 
-   if run_vars['density']:
-      # Here we calculate the density anomoly, using the simplified equation of state,
-      # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-      a0       = .1655
-      b0       = .76554
-      lambda1  = .05952
-      lambda2  = .00054914
-      nu       = .0024341
-      mu1      = .0001497
-      mu2      = .00001109
-      rho0     = 1026.
-      Tmp_anom = da_T-10.
-      Sal_anom = da_S-35.
-      depth    = da_depth.reshape(1,-1,1,1)
-      dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * depth) * Tmp_anom
-                   +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * depth) * Sal_anom
-                   -nu * Tmp_anom * Sal_anom) / rho0
+   # Here we calculate the density anomoly, using the simplified equation of state,
+   # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
+   a0       = .1655
+   b0       = .76554
+   lambda1  = .05952
+   lambda2  = .00054914
+   nu       = .0024341
+   mu1      = .0001497
+   mu2      = .00001109
+   rho0     = 1026.
+   Tmp_anom = da_T-10.
+   Sal_anom = da_S-35.
+   tmp_depth    = da_depth.reshape(1,-1,1,1)
+   dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
+                +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * tmp_depth) * Sal_anom
+                -nu * Tmp_anom * Sal_anom) / rho0
 
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]

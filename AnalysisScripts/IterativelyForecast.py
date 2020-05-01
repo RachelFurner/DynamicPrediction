@@ -26,13 +26,13 @@ run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True ,
 model_type = 'lr'
 iterate_method = 'AB3'
 
-time_step = '1mnth'
+time_step = '24hrs'
 data_prefix=''
 model_prefix=''
 exp_prefix = ''
 
-for_len = 10*12
-no_chunks = 10
+for_len = 30*12
+no_chunks = 12
 
 start = 5        # Allow for a variety of start points, from different MITGCM init states
 
@@ -181,17 +181,3 @@ if np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1]).any():
    print( 'Pred_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(Pred_DelT[1:,:,:,:][mask_4d[1:,:,:,:]==1])) ) )
 if np.isnan(da_T[1:,:,:,:]-da_T[:-1,:,:,:])[mask_4d[1:,:,:,:]==1].any():
    print( 'true_DelT array contains a NaN at ' + str( np.argwhere(np.isnan(da_T[1:,:,:,:]-da_T[:-1,:,:,:])[mask_4d[1:,:,:,:]==1]) ) )
-
-#print('Calc stats and print to file')
-#am.get_stats(model_type, exp_name, name1='Iter_DeltaT', truth1=(da_T.data[1:,:,:,:]-da_T.data[:-1,:,:,:])[mask_4d[1:,:,:,:]==1],
-#                                                          exp1=(Pred_DelT[1:,:,:,:])[mask_4d[1:,:,:,:]==1], name='Iter_DeltaT_denorm_'+str(start))
-
-for point in [ [5,15,4] ]:
-   fig = rfplt.plt_timeseries(point, 120, {model_type:Pred_Temp, 'MITGCM':da_T})
-   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
-                                                               +str(start)+'_10yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
-#   fig = rfplt.plt_timeseries(point, 1200, {model_type: Pred_Temp, 'MITGCM':da_T})
-#   plt.savefig(rootdir+'PLOTS/'+model_type+'_'+exp_name+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'
-#                                                               +str(start)+'_100yrForecast', bbox_inches = 'tight', pad_inches = 0.1)
-   
-

@@ -39,8 +39,8 @@ data_prefix ='NormalisePerChannel_'
 exp_name = 'ScherStyleCNNNetwork_'
 
 hyper_params = {
-    "batch_size": 32,
-    "num_epochs":  2, 
+    "batch_size":  8,
+    "num_epochs":  5, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
 }

@@ -19,7 +19,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':False, 'sal':True , 'eta':True , 'density':False, 'poly_degree':2}
 model_type = 'lr'
 
 time_step = '24hrs'
@@ -28,7 +28,7 @@ model_prefix = ''
 exp_prefix = ''
 
 calc_predictions = True 
-iter_length = 1000  # in months/days
+iter_length = 500  # in months/days
 
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
@@ -99,6 +99,7 @@ nc_Tav_Errors = nc_file.createVariable('Av_Errors_Temp', 'f4', ('Z', 'Y', 'X'))
 nc_PredictedDeltaT = nc_file.createVariable('PredictedDeltaT', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_DeltaTErrors = nc_file.createVariable('Errors_DelT', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_DelTav_Errors = nc_file.createVariable('Av_Errors_DelT', 'f4', ('Z', 'Y', 'X'))
+nc_wtd_DelT_av_Errors = nc_file.createVariable('Weighted_Av_Errors_DelT', 'f4', ('Z', 'Y', 'X'))
 
 # Fill some variables - rest done during iteration steps
 nc_T[:] = ds['T'].data[1:]
@@ -149,6 +150,10 @@ t_av_Temp_errors = np.nanmean(Temp_errors, axis=0)
 s_av_Temp_errors = np.nanmean(Temp_errors[:,1:-1,1:-3,1:-2], axis=(1,2,3))  # Remove points not being predicted (boundaries) from this
 t_av_DelT_errors = np.nanmean(DelT_errors, axis=0)
 s_av_DelT_errors = np.nanmean(DelT_errors[:,1:-1,1:-3,1:-2], axis=(1,2,3))  # Remove points not being predicted (boundaries) from this
+t_av_DelT_truth  = np.nanmean(DelT_truth , axis=0)
+
+
+weighted_av_DelT_error = np.where( t_av_DelT_truth==0., np.nan, t_av_DelT_errors/t_av_DelT_truth )
 
 # Save to netcdf
 print('save to netcdf')
@@ -158,6 +163,7 @@ nc_Tav_Errors[:,:,:] = t_av_Temp_errors
 nc_PredictedDeltaT[:,:,:,:] = predictedDelT[1:]
 nc_DeltaTErrors[:,:,:,:] = DelT_errors
 nc_DelTav_Errors[:,:,:] = t_av_DelT_errors 
+nc_wtd_DelT_av_Errors[:,:,:] = weighted_av_DelT_error
 nc_file.close()
 
 #-----------------

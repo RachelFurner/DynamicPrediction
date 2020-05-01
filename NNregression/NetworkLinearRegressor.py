@@ -46,7 +46,7 @@ mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
 MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 learningRate = 0.0001 
-epochs = 100
+epochs = 1000
 
 train_model=True 
 #--------------------------------
@@ -118,8 +118,8 @@ if train_model:
    Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
    Val_Dataset  = MITGCM_Dataset(norm_inputs_val, norm_outputs_val)
    
-   train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=64)
-   val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=64)
+   train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=128)
+   val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=128)
    
    # Call the model
    inputDim = norm_inputs_tr.shape[1] 
@@ -217,8 +217,7 @@ norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
 norm_predicted_val = np.zeros((norm_outputs_val.shape))
 # Loop through to predict for dataset, as memory limits mean we can't do this all at once.
 # Maybe some clever way of doing this with the dataloader?
-#no_chunks = 30
-no_chunks = 1
+no_chunks = 30
 chunk = int(norm_inputs_tr.shape[0]/no_chunks)
 for i in range(no_chunks):
    if torch.cuda.is_available():

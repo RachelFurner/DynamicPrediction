@@ -27,7 +27,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True, 'density':True, 'poly_degree':2}
+run_vars = {'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':False,'sal':True , 'eta':True , 'density':False, 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 #time_step = '1mnth'
