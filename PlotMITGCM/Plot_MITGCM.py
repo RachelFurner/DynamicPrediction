@@ -22,7 +22,7 @@ from netCDF4 import Dataset
 #------------------------
 
 time = 12000
-point = [20,55, 5]
+point = [ 5,55, 5]
 
 time_step = '24hrs'
 
@@ -74,39 +74,47 @@ nc_mon = Dataset(mon_file)
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
-fig, ax, im = rfplt.plot_depth_fld(da_T[time,:,:,:], 'Temperature from Model', level, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_depth_fld(da_T[time,:,:,:], 'Temperature from Model', level,
+                                   ds['X'].values, ds['Y'].values, ds['Z'].values,
+                                   title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #---------------------------------
 #Plot diff between time t and t+1
 #---------------------------------
-fig = rfplt.plot_depth_fld_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', level, title=None)
+fig = rfplt.plot_depth_fld_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', level,
+                                ds['X'].values, ds['Y'].values, ds['Z'].values,
+                                title=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', y_coord, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', y_coord,
+                                         ds['X'].values, ds['Y'].values, ds['Z'].values,
+                                         title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', x_coord, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', x_coord,
+                                         ds['X'].values, ds['Y'].values, ds['Z'].values,
+                                         title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #---------------------------------------------------------------------------
 # Plot timeseries predictions
 #---------------------------------------------------------------------------
 if time_step == '24hrs':
-   fig = rfplt.plt_timeseries(point, 360, {'MITGCM_temp (truth)':da_T}, time_step=time_step)
+   fig = rfplt.plt_timeseries(point, 360, {'MITGCM':da_T}, time_step=time_step)
    plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_1yr_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
-   fig = rfplt.plt_2_timeseries(point, 360, 18000, {'MITGCM_temp (truth)':da_T}, time_step=time_step)
+   fig = rfplt.plt_2_timeseries(point, 360, 18000, {'MITGCM':da_T}, time_step=time_step)
    plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_50yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
 else:
-   fig = rfplt.plt_timeseries(point, 120, {'MITGCM_temp (truth)':da_T}, time_step=time_step)
+   fig = rfplt.plt_timeseries(point, 120, {'MITGCM':da_T}, time_step=time_step)
    plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_10yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
-   fig = rfplt.plt_2_timeseries(point, 120, 6000, {'MITGCM_temp (truth)':da_T}, time_step=time_step)
+   fig = rfplt.plt_2_timeseries(point, 120, 6000, {'MITGCM':da_T}, time_step=time_step)
    plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_500yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------------------------

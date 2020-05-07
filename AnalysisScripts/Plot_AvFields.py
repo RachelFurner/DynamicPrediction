@@ -24,7 +24,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 5,10,5]
 
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':False, 'sal':True , 'eta':True , 'density':False, 'poly_degree':2}
 model_type = 'lr'
 
 #time_step = '1mnth'
@@ -83,28 +83,40 @@ print(AvTempError.shape)
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
-fig, ax, im = rfplt.plot_depth_fld(AvTempError[:,:,:], 'Averaged Errors', level, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_depth_fld(AvTempError[:,:,:], 'Averaged Errors', level,
+                                   MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                   title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = rfplt.plot_depth_fld(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', level, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_depth_fld(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', level,
+                                   MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                   title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAvTempErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_yconst_crss_sec(AvTempError[:,:,:], 'Averaged Errors', y_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_yconst_crss_sec(AvTempError[:,:,:], 'Averaged Errors', y_coord, 
+                                         MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                         title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = rfplt.plot_yconst_crss_sec(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', y_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_yconst_crss_sec(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', y_coord, 
+                                         MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                         title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAvTempErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_xconst_crss_sec(AvTempError[:,:,:], 'Averaged Errors', x_coord, title=None, min_value=-0.00015, max_value=0.00015, diff=True)
-#fig, ax, im = rfplt.plot_xconst_crss_sec(AvTempError[:,:,:], 'Averaged Errors', x_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_xconst_crss_sec(AvTempError[:,:,:], 'Averaged Errors', x_coord,
+                                         MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                         title=None, min_value=-0.00015, max_value=0.00015, diff=True)
+                                         #title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_AvTempErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = rfplt.plot_xconst_crss_sec(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', x_coord, title=None, min_value=None, max_value=None, diff=True)
+fig, ax, im = rfplt.plot_xconst_crss_sec(wtd_AvTempError[:,:,:], 'Weighted Averaged Errors', x_coord, 
+                                         MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
+                                         title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAvTempErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
