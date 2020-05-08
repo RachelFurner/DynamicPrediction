@@ -14,94 +14,94 @@ from sklearn.preprocessing import PolynomialFeatures
 from skimage.util import view_as_windows
 
 def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth, z_lw, z_up, y_lw, y_up, x_lw, x_up, z_subsize, y_subsize, x_subsize):
-   # Confusing nomenclature... temp stands for temporary. Temp (capitalised) stands for Temperature.
+   # Confusing nomenclature... tmp stands for temporary. Temp (capitalised) stands for Temperature.
    if run_vars['dimension'] == 2:
-      temp = view_as_windows(Temp[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-      inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
+      tmp = view_as_windows(Temp[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+      inputs = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
       if run_vars['sal']:
-         temp = view_as_windows(Sal[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(Sal[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['current']:
-         temp = view_as_windows(U[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(V[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(U[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(V[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['bolus_vel']:
-         temp = view_as_windows(Kwx[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(Kwy[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(Kwz[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(Kwx[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(Kwy[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(Kwz[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['density']:
-         temp = view_as_windows(dns[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(dns[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
    elif run_vars['dimension'] == 3:
-      temp = view_as_windows(Temp[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-      inputs = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1))
+      tmp = view_as_windows(Temp[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+      inputs = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1))
       if run_vars['sal']:
-         temp = view_as_windows(Sal[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(Sal[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['current']:
-         temp = view_as_windows(U[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(V[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(U[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(V[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['bolus_vel']:
-         temp = view_as_windows(Kwx[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(Kwy[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
-         temp = view_as_windows(Kwz[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(Kwx[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(Kwy[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
+         tmp = view_as_windows(Kwz[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['density']:
-         temp = view_as_windows(dns[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
-         temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-         inputs = np.concatenate( (inputs, temp), axis=-1) 
+         tmp = view_as_windows(dns[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+         inputs = np.concatenate( (inputs, tmp), axis=-1) 
    else:
       print('ERROR, dimension neither 2 nor 3')
    if run_vars['eta']:
-      temp = view_as_windows(Eta[y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
-      temp = np.tile(temp, (z_subsize,1,1,1,1))
-      temp = temp.reshape((temp.shape[0], temp.shape[1], temp.shape[2], -1)) 
-      inputs = np.concatenate( (inputs, temp), axis=-1) 
+      tmp = view_as_windows(Eta[y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+      tmp = np.tile(tmp, (z_subsize,1,1,1,1))
+      tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
+      inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['lat']:
-      temp = lat[y_lw:y_up]
+      tmp = lat[y_lw:y_up]
       # convert to 3d shape, plus additional dim of 1 for feature.
-      temp = np.tile(temp, (z_subsize,1))
-      temp = np.expand_dims(temp, axis=-1)
-      temp = np.tile(temp, (1,x_subsize))
-      temp = np.expand_dims(temp, axis=-1)
-      inputs = np.concatenate( (inputs, temp), axis=-1) 
+      tmp = np.tile(tmp, (z_subsize,1))
+      tmp = np.expand_dims(tmp, axis=-1)
+      tmp = np.tile(tmp, (1,x_subsize))
+      tmp = np.expand_dims(tmp, axis=-1)
+      inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['lon']:
-      temp = lon[x_lw:x_up]
+      tmp = lon[x_lw:x_up]
       # convert to 3d shape, plus additional dim of 1 for feature.
-      temp = np.tile(temp, (y_subsize,1))
-      temp = np.tile(temp, (z_subsize,1,1))
-      temp = np.expand_dims(temp, axis=-1)
-      inputs = np.concatenate( (inputs, temp), axis=-1) 
+      tmp = np.tile(tmp, (y_subsize,1))
+      tmp = np.tile(tmp, (z_subsize,1,1))
+      tmp = np.expand_dims(tmp, axis=-1)
+      inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['dep']:
-      temp = depth[z_lw:z_up]
+      tmp = depth[z_lw:z_up]
       # convert to 3d shape, plus additional dim of 1 for feature.
-      temp = np.expand_dims(temp, axis=-1)
-      temp = np.tile(temp, (1,y_subsize))
-      temp = np.expand_dims(temp, axis=-1)
-      temp = np.tile(temp, (1,x_subsize))
-      temp = np.expand_dims(temp, axis=-1)
-      inputs = np.concatenate( (inputs, temp), axis=-1) 
+      tmp = np.expand_dims(tmp, axis=-1)
+      tmp = np.tile(tmp, (1,y_subsize))
+      tmp = np.expand_dims(tmp, axis=-1)
+      tmp = np.tile(tmp, (1,x_subsize))
+      tmp = np.expand_dims(tmp, axis=-1)
+      inputs = np.concatenate( (inputs, tmp), axis=-1) 
 
    return(inputs)
 
@@ -139,8 +139,8 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_T=ds['Ttave'].values
    
    da_S=ds['Stave'].values
-   da_U_temp=ds['uVeltave'].values
-   da_V_temp=ds['vVeltave'].values
+   da_U_tmp=ds['uVeltave'].values
+   da_V_tmp=ds['vVeltave'].values
    da_Kwx=ds['Kwx'].values
    da_Kwy=ds['Kwy'].values
    da_Kwz=ds['Kwz'].values
@@ -149,8 +149,8 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_lon=ds['X'].values
    da_depth=ds['Z'].values
    # Calc U and V by averaging surrounding points, to get on same grid as other variables
-   da_U = (da_U_temp[:,:,:,:-1]+da_U_temp[:,:,:,1:])/2.
-   da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
+   da_U = (da_U_tmp[:,:,:,:-1]+da_U_tmp[:,:,:,1:])/2.
+   da_V = (da_V_tmp[:,:,:-1,:]+da_V_tmp[:,:,1:,:])/2.
 
    # Here we calculate the density anomoly, using the simplified equation of state,
    # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
@@ -536,8 +536,18 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    # Save the arrays
    #-----------------
    print('save arrays')
-   inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
-   np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te)
+   inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+   inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+   inputs_te_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
+   outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
+   outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
+   outputs_te_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTe.npy'
+   np.save(inputs_tr_file,  norm_inputs_tr)
+   np.save(inputs_val_file, norm_inputs_val)
+   np.save(inputs_te_file,  norm_inputs_te)
+   np.save(outputs_tr_file, norm_outputs_tr)
+   np.save(outputs_val_file,norm_outputs_val)
+   np.save(outputs_te_file, norm_outputs_te)
 
    print('shape for inputs and outputs: tr; val; te')
    print(norm_inputs_tr.shape, norm_outputs_tr.shape)
@@ -585,10 +595,10 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    print('extracting variables')
    da_T=ds['Ttave'].values
    da_S=ds['Stave'].values
-   da_U_temp=ds['uVeltave'].values
-   da_U = 0.5 * (da_U_temp[:,:,:,0:-1]+da_U_temp[:,:,:,1:])  # average to get onto same grid as T points
-   da_V_temp=ds['vVeltave'].values
-   da_V = 0.5 * (da_V_temp[:,:,0:-1,:]+da_V_temp[:,:,1:,:])  # average to get onto same grid as T points
+   da_U_tmp=ds['uVeltave'].values
+   da_U = 0.5 * (da_U_tmp[:,:,:,0:-1]+da_U_tmp[:,:,:,1:])  # average to get onto same grid as T points
+   da_V_tmp=ds['vVeltave'].values
+   da_V = 0.5 * (da_V_tmp[:,:,0:-1,:]+da_V_tmp[:,:,1:,:])  # average to get onto same grid as T points
    da_Kwx=ds['Kwx'].values
    da_Kwy=ds['Kwy'].values
    da_Kwz=ds['Kwz'].values
@@ -601,46 +611,46 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    # Read in inputs and outputs, subsample in time for 'quasi-independence'
    for time in range(start, min(data_end_index, da_T.shape[0]-1), 5):  
        
-       input_temp  = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
-       output_temp = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
+       input_tmp  = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
+       output_tmp = np.zeros((0, inputs.shape[2], inputs.shape[3]))  # shape: (no channels, y, x)
 
        for level in range(da_T.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_T[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_T[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_T[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_T[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_S.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_S[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_S[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_S[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_S[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_U.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_U[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_U[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_U[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_U[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_V.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_V[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_V[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_V[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_V[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_Kwx.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_Kwx[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_Kwx[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_Kwx[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_Kwx[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_Kwy.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_Kwy[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_Kwy[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_Kwy[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_Kwy[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_Kwz.shape[1]):
-           input_temp  = np.concatenate((input_temp , da_Kwz[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_Kwz[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_Kwz[time  ,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_Kwz[time+1,level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
-       input_temp  = np.concatenate((input_temp , da_Eta[time  ,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-       output_temp = np.concatenate((output_temp, da_Eta[time+1,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+       input_tmp  = np.concatenate((input_tmp , da_Eta[time  ,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+       output_tmp = np.concatenate((output_tmp, da_Eta[time+1,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
        for level in range(da_mask.shape[0]):
-           input_temp  = np.concatenate((input_temp , da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
-           output_temp = np.concatenate((output_temp, da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           input_tmp  = np.concatenate((input_tmp , da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
+           output_tmp = np.concatenate((output_tmp, da_mask[level,:,:].reshape(1,da_T.shape[2],da_T.shape[3])),axis=0)              
 
-       inputs  = np.concatenate((inputs , input_temp.reshape(1, input_temp.shape[0], input_temp.shape[1], input_temp.shape[2])),axis=0)
-       outputs = np.concatenate((outputs,output_temp.reshape(1,output_temp.shape[0],output_temp.shape[1],output_temp.shape[2])),axis=0)
+       inputs  = np.concatenate((inputs , input_tmp.reshape(1, input_tmp.shape[0], input_tmp.shape[1], input_tmp.shape[2])),axis=0)
+       outputs = np.concatenate((outputs,output_tmp.reshape(1,output_tmp.shape[0],output_tmp.shape[1],output_tmp.shape[2])),axis=0)
 
    # Release memory
    ds = None
