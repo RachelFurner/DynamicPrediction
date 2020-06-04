@@ -25,6 +25,14 @@ from torch.utils import data
 import torch.nn as nn
 from torch.autograd import Variable
 import torch
+from torchvision import transforms, utils
+
+import matplotlib
+matplotlib.use('agg')
+print('matplotlib backend is:')
+print(matplotlib.get_backend())
+print("os.environ['DISPLAY']:")
+print(os.environ['DISPLAY'])
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:', device)
@@ -35,77 +43,88 @@ torch.cuda.empty_cache()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-data_prefix ='NormalisePerChannel_'
-exp_name = 'ScherStyleCNNNetwork_'
-
 hyper_params = {
-    "batch_size":  8,
-    "num_epochs":  5, 
-    "learning_rate": 0.001,
+    "batch_size": 256,
+    "num_epochs":  100,
+    #"num_epochs":  1,
+    "learning_rate": 0.0001,
     "criterion": torch.nn.MSELoss(),
 }
 
 model_type = 'nn'
-time_step = '1mnth'
+time_step = '24hrs'
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True ,'density':False, 'poly_degree':2}
+
+model_name = 'ScherStyleCNNNetwork_'+str(hyper_params['learning_rate'])
+
+#subsample_rate = 50      # number of time steps to skip over when creating training and test data
+subsample_rate = 5      # number of time steps to skip over when creating training and test data
+train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
+val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
+
 #----------------
-data_name = cn.create_dataname(run_vars)
-data_name = time_step+'_'+data_prefix+data_name
+if time_step == '1mnth':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
+   MITGCM_filename = DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+   dataset_end_index = 500*12
+elif time_step == '24hrs':
+   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   MITGCM_filename = DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+   dataset_end_index = 50*360
 
-#---------------------------------
-# Create mask from MITGCM dataset
-#---------------------------------
-mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
-ds   = xr.open_dataset(MITGCM_filename)
-mask = ds['Mask'].values 
+ds       = xr.open_dataset(MITGCM_filename)
+tr_start = 0
+tr_end   = int(train_end_ratio * dataset_end_index)
+no_tr_samples = ( ds.isel( T=slice(tr_start, tr_end, subsample_rate) ) ).sizes['T']
+val_end   = int(val_end_ratio * dataset_end_index)
+no_val_samples = ( ds.isel( T=slice(tr_end, val_end, subsample_rate) ) ).sizes['T']
+x_dim         = ( ds.isel( T=slice(0) ) ).sizes['X']
+y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
-#----------------------------------
-# Read in dataset from saved array
-#----------------------------------
-inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
-norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
+#------------------------------------------------------------------------------------------
+# Set up Dataset and dataloader to run through one epoch of data to obtain estimate of mean
+# and s.d. for normalisation, and to get no. of features.
+mean_std_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, transform=None)
+mean_std_loader = torch.utils.data.DataLoader(mean_std_Dataset,batch_size=4096, shuffle=False, num_workers=4)
 
-del norm_inputs_te
-del norm_outputs_te
+inputs_train_mean = []
+inputs_train_std = []
+outputs_train_mean = []
+outputs_train_std = []
 
-if np.isnan(norm_inputs_tr).any():
-   print('norm_inputs_tr contains a NaN')
-if np.isnan(norm_inputs_val).any():
-   print('norm_inputs_val contains a NaN')
-if np.isnan(norm_outputs_tr).any():
-   print('norm_outputs_tr contains a NaN')
-if np.isnan(norm_outputs_val).any():
-   print('norm_outputs_val contains a NaN')
-#-----------------------
-# Store data as Dataset
-#-----------------------
+for batch_sample in mean_std_loader:
+    # shape (batch_size, channels, y, z)
+    input_batch  = batch_sample['input']
+    output_batch = batch_sample['output']
+    
+    inputs_batch_mean  = np.nanmean(input_batch.numpy(), axis = (0,2,3))
+    outputs_batch_mean = np.nanmean(output_batch.numpy(), axis = (0,2,3))
 
-class MITGCM_Dataset(data.Dataset):
-    """Dataset of MITGCM outputs"""
-       
-    def __init__(self, ds_inputs, ds_outputs):
-        """
-        Args:
-           The arrays containing the training data
-        """
-        self.ds_inputs = ds_inputs
-        self.ds_outputs = ds_outputs
+    inputs_batch_std  = np.nanstd(input_batch.numpy() , axis = (0,2,3))
+    outputs_batch_std = np.nanstd(output_batch.numpy(), axis = (0,2,3))
+    
+    inputs_train_mean.append(inputs_batch_mean)
+    inputs_train_std.append(inputs_batch_std)
 
-    def __getitem__(self, index):
+    outputs_train_mean.append(outputs_batch_mean)
+    outputs_train_std.append(outputs_batch_std)
 
-        sample_input = self.ds_inputs[index,:]
-        sample_output = self.ds_outputs[index]
+inputs_train_mean = np.array(inputs_train_mean).mean(axis=0)
+inputs_train_std = np.array(inputs_train_std).mean(axis=0)
+outputs_train_mean = np.array(outputs_train_mean).mean(axis=0)
+outputs_train_std = np.array(outputs_train_std).mean(axis=0)
+## Save mean and std to file, so can be used to un-normalise when using model to predict
+mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/Whole_Grid_MeanStd.npz'
+np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std )
 
-        return (sample_input, sample_output)
+no_input_channels = input_batch.shape[1]
+no_output_channels = output_batch.shape[1]
 
-    def __len__(self):
-        return self.ds_inputs.shape[0]
-
-
-# Instantiate the dataset
-Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
-Val_Dataset  = MITGCM_Dataset(norm_inputs_val, norm_outputs_val)
+# Instantiate dataset defined in Tools dir, this time with normalisation
+Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, 
+                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
+Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, 
+                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
 
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
@@ -113,16 +132,11 @@ val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params
 #--------------
 # Set up model
 #--------------
-no_inputFeatures = norm_inputs_tr.shape[1]
-no_outputFeatures = norm_outputs_tr.shape[1]
-no_tr_samples = norm_inputs_tr.shape[0]
-no_val_samples = norm_inputs_val.shape[0]
-
 # inputs are (no_samples, 169channels, 78y, 11x).
 # Not doing pooling, as dataset small to begin with, and no computational need, or scientific justification....
 h = nn.Sequential(
             # downscale
-            nn.Conv2d(in_channels=no_inputFeatures, out_channels=256, kernel_size=(3,3), padding=(1,1)),
+            nn.Conv2d(in_channels=no_input_channels, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3),padding=(1,1)),
             nn.ReLU(True),
@@ -130,7 +144,7 @@ h = nn.Sequential(
             # upscale
             nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=256, out_channels=no_outputFeatures, kernel_size=(3,3), padding=(1,1)),
+            nn.ConvTranspose2d(in_channels=256, out_channels=no_output_channels, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True)
              )
 h = h.cuda()
@@ -145,8 +159,9 @@ val_loss_epoch = []
 for epoch in range(hyper_params["num_epochs"]):
     train_loss_temp = 0.0
     val_loss_temp = 0.0
-    for input_batch, output_batch in train_loader:
-    
+    for batch_sample in train_loader:
+        input_batch  = batch_sample['input']
+        output_batch = batch_sample['output']
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
             input_batch = Variable(input_batch.cuda().float())
@@ -176,7 +191,9 @@ for epoch in range(hyper_params["num_epochs"]):
 
     train_loss_epoch.append( train_loss_temp/no_tr_samples )
 
-    for input_batch, output_batch in val_loader:
+    for batch_sample in val_loader:
+        input_batch  = batch_sample['input']
+        output_batch = batch_sample['output']
     
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
@@ -204,59 +221,33 @@ for epoch in range(hyper_params["num_epochs"]):
 del input_batch, output_batch, predicted 
 torch.cuda.empty_cache()
  
-weight_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/weights_'+exp_name+'fields.txt'
-weight_file = open(weight_filename, 'w')
+info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/info_'+model_name+'fields.txt'
+info_file = open(info_filename, 'w')
 np.set_printoptions(threshold=np.inf)
-weight_file.write(str(h[0].weight.data.cpu().numpy()))
+info_file.write('hyper_params:    '+str(hyper_params)+'\n')
+info_file.write('no_tr_samples:   '+str(no_tr_samples)+'\n')
+info_file.write('no_val_samples:  '+str(no_val_samples)+'\n')
+info_file.write('no_input_channels:   '+str(no_input_channels)+'\n')
+info_file.write('no_output_channels:  '+str(no_output_channels)+'\n')
+info_file.write('\n')
+info_file.write('\n')
+info_file.write('Weights of the network:\n')
+info_file.write(str(h[0].weight.data.cpu().numpy()))
 
 print('pickle model')
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/pickle_'+model_type+'_'+exp_name+'fields.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/pickle_'+model_type+'_'+model_name+'fields.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 
-#-----------------------------------------------------
-# Create full set of predictions and assess the model
-#-----------------------------------------------------
-
-norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
-norm_predicted_val = np.zeros((norm_outputs_val.shape))
-# Loop through to predict for dataset, as memory limits mean we can't do this all at once.
-# Maybe some clever way of doing this with the dataloader?
-chunk = int(norm_inputs_tr.shape[0]/5)
-for i in range(5):
-   if torch.cuda.is_available():
-      print('RF 1')
-      tr_inputs_temp = Variable( ( torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]) ).cuda().float() )
-   else:
-      print('RF 2')
-      tr_inputs_temp = Variable( ( torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk-1]) ).float() )
-   norm_predicted_tr[i*chunk:(i+1)*chunk-1] = (h(tr_inputs_temp)).cpu().detach().numpy()
-   del tr_inputs_temp
-   torch.cuda.empty_cache()
-
-if torch.cuda.is_available():
-   val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).cuda().float())
-else:
-   val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).float())
-norm_predicted_val = h(val_inputs_temp).cpu().detach().numpy()
-del val_inputs_temp 
-torch.cuda.empty_cache()
-
-#------------------
-# Assess the model
-#------------------
-print('norm_outputs_tr.shape')
-print(norm_outputs_tr.shape)
-print('norm_predicted_tr.shape')
-print(norm_predicted_tr.shape)
-print('norm_outputs_val.shape')
-print(norm_outputs_val.shape)
-print('norm_predicted_val.shape')
-print(norm_predicted_val.shape)
-
-#####  NEED TO DE_NORM!!! #########
-train_mse, val_mse = am.get_stats(model_type, exp_name, 'training', norm_outputs_tr, norm_predicted_tr, name2='validation', truth2=norm_outputs_val, exp2=norm_predicted_val, name='norm')
-
-am.plot_results(model_type, exp_name, norm_outputs_tr, norm_predicted_tr, name = '_norm_tr' )
-am.plot_results(model_type, exp_name, norm_outputs_val, norm_predicted_val, name = '_norm_val' )
+# Plot training and validation loss 
+fig = plt.figure()
+ax1 = fig.add_subplot(111)
+ax1.plot(train_loss_epoch)
+ax1.plot(val_loss_epoch)
+ax1.set_xlabel('Epochs')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
+ax1.legend(['Training Loss', 'Validation Loss'])
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 

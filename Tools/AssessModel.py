@@ -57,7 +57,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
 
   
 def plot_results(model_type, exp_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True):
-  
+ 
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
    data1=data1.reshape(-1)
@@ -95,5 +95,6 @@ def plot_results(model_type, exp_name, data1, data2, name='norm', xlabel=None, y
       ax1.plot([bottom, top], [0, 0], 'k--', lw=1)
    
    plt.savefig(outdir+'PLOTS/'+exp_name+'_scatter_'+xlabel+'Vs'+ylabel+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
  
    return()

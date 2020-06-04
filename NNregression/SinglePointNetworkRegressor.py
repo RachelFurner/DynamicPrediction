@@ -16,6 +16,7 @@ from Tools import Model_Plotting as rfplt
 import numpy as np
 import os
 import xarray as xr
+import matplotlib ; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pickle
 
@@ -27,71 +28,76 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch
 
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print('Using device:', device)
-print()
-
 torch.cuda.empty_cache()
+
+import matplotlib
+matplotlib.use('agg')
+print('matplotlib backend is:')
+print(matplotlib.get_backend())
+print("os.environ['DISPLAY']:")
+print(os.environ['DISPLAY'])
 
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-comet_log = True 
-
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
-time_step='1mnth'
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True ,
+            'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+time_step='24hrs'
 
 hyper_params = {
-    "batch_size": 64,
-    "num_epochs":  50, 
+    "batch_size": 512,
+    "num_epochs": 100, 
     "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
-    "no_layers": 1,    # no of *hidden* layers
-    "no_nodes": 10878  # match number of features for now
+    "no_layers": 1,     # no of *hidden* layers
+    "no_nodes": 10000   # Note 26106 features....
 }
 
-exp_prefix = str(hyper_params["no_layers"])+'hiddenlayer_'
+model_prefix = str(hyper_params["no_layers"])+'hiddenlayer_'
 
 model_type = 'nn'
-
-mit_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-MITGCM_filename=mit_dir+'cat_tave_2000yrs_SelectedVars_masked.nc'
 
 #--------------------------------
 # Calculate some other variables 
 #--------------------------------
 data_name = cn.create_dataname(run_vars)
 data_name = time_step+'_'+data_name
-exp_name = exp_prefix+data_name
+model_name = model_prefix+data_name+'_lr'+str(hyper_params['learning_rate'])
 
-#---------------------
-# Set up Comet stuff:
-#---------------------
-experiment = Experiment(project_name="learnmitgcm2deg_SinglePointPrediction")
-if comet_log:
-   experiment.set_name(exp_name)
-   experiment.log_parameters(hyper_params)
-   experiment.log_others(run_vars)
+pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+model_name+'.pkl'
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print('Using device:', device)
+
+##---------------------
+## Set up Comet stuff:
+##---------------------
+#experiment = Experiment(project_name="learnmitgcm2deg_SinglePointPrediction")
+#experiment.set_name(model_name)
+#experiment.log_parameters(hyper_params)
+#experiment.log_others(run_vars)
 
 #--------------------------------------------------------------
-# Read in the data from saved array
+# Read in the data from saved arrays
 #--------------------------------------------------------------
-inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
-norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
+inputs_tr_file   = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+inputs_val_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+outputs_tr_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
+outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
+norm_inputs_tr   = np.load(inputs_tr_file, mmap_mode='r')
+norm_inputs_val  = np.load(inputs_val_file, mmap_mode='r')
+norm_outputs_tr  = np.load(outputs_tr_file, mmap_mode='r')
+norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
 
-del norm_inputs_te
-del norm_outputs_te
-
-#norm_inputs_tr  = norm_inputs_tr[:100]
-#norm_inputs_val = norm_inputs_val[:100]
-#norm_outputs_tr  = norm_outputs_tr[:100]
-#norm_outputs_val = norm_outputs_val[:100]
+#norm_inputs_tr   = norm_inputs_tr[:50,:]
+#norm_inputs_val  = norm_inputs_val[:50,:] 
+#norm_outputs_tr  = norm_outputs_tr[:50] 
+#norm_outputs_val = norm_outputs_val[:50]  
 
 #-------------------------
 # Set up regression model
 #-------------------------
-class NetworkRegression(torch.nn.Module):
+class NetworkRegression(torch.nn.Sequential):
     def __init__(self, inputSize, outputSize, hyper_params):
         super(NetworkRegression, self).__init__()
         if hyper_params["no_layers"] == 1:
@@ -99,18 +105,18 @@ class NetworkRegression(torch.nn.Module):
                                          nn.Linear(hyper_params["no_nodes"], outputSize) )
         elif hyper_params["no_layers"] == 2:
             self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(), 
                                          nn.Linear(hyper_params["no_nodes"], outputSize) )
         elif hyper_params["no_layers"] == 3:
             self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
                                          nn.Linear(hyper_params["no_nodes"], outputSize) )
         elif hyper_params["no_layers"] == 4:
             self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),         
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
+                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
                                          nn.Linear(hyper_params["no_nodes"], outputSize) )
     def forward(self, x):
         out = self.linear(x)
@@ -133,8 +139,8 @@ class MITGCM_Dataset(data.Dataset):
 
     def __getitem__(self, index):
 
-        sample_input = self.ds_inputs[index,:]
-        sample_output = self.ds_outputs[index]
+        sample_input = np.array(self.ds_inputs[index,:])
+        sample_output = np.array(self.ds_outputs[index])
 
         return (sample_input, sample_output)
 
@@ -167,19 +173,20 @@ train_loss_epoch = []
 val_loss_epoch = []
 
 # Train the model:
-with experiment.train():
+#with experiment.train():
+if True:
     for epoch in range(hyper_params["num_epochs"]):
         train_loss_epoch_temp = 0.0
         val_loss_epoch_temp = 0.0
-        for inputs, outputs in train_loader:
+        for batch_inputs, batch_outputs in train_loader:
         
             # Converting inputs and labels to Variable and send to GPU if available
             if torch.cuda.is_available():
-                inputs = Variable(inputs.cuda().float())
-                outputs = Variable(outputs.cuda().float())
+                batch_inputs = Variable(batch_inputs.cuda().float())
+                batch_outputs = Variable(batch_outputs.cuda().float())
             else:
-                inputs = Variable(inputs.float())
-                outputs = Variable(outputs.float())
+                batch_inputs = Variable(batch_inputs.float())
+                batch_outputs = Variable(batch_outputs.float())
             
             model.train(True)
 
@@ -187,17 +194,17 @@ with experiment.train():
             optimizer.zero_grad()
         
             # get prediction from the model, given the inputs
-            predictions = model(inputs)
+            predictions = model(batch_inputs)
         
             # get loss for the predicted output
-            loss = hyper_params["criterion"](predictions, outputs)
+            loss = hyper_params["criterion"](predictions, batch_outputs)
             # get gradients w.r.t to parameters
             loss.backward()
         
             # update parameters
             optimizer.step()
             
-            train_loss_batch.append(loss.item())
+            train_loss_batch.append(loss.item()/batch_inputs.shape[0])
             train_loss_epoch_temp += loss.item()
 
         for batch_inputs, batch_outputs in val_loader:
@@ -218,25 +225,35 @@ with experiment.train():
             # get loss for the predicted output
             loss = hyper_params["criterion"](predicted, batch_outputs)
     
-            val_loss_epoch_temp += loss.item()     
+            val_loss_epoch_temp += loss.item()
     
         epoch_loss = train_loss_epoch_temp / norm_inputs_tr.shape[0]
         print('epoch {}, loss {}'.format(epoch, epoch_loss))
         train_loss_epoch.append(epoch_loss )
-        val_loss_epoch.append(val_loss_epoch_temp / norm_inputs_tr.shape[0] )
+        val_loss_epoch.append(val_loss_epoch_temp / norm_inputs_val.shape[0] )
 
-        # Log to Comet.ml
-        if comet_log:
-           experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
-           experiment.log_metric('Validation_Loss', val_loss_epoch[-1], epoch = epoch)
+        ## Log to Comet.ml
+        #experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
+        #experiment.log_metric('Validation_Loss', val_loss_epoch[-1], epoch = epoch)
 
-del inputs, outputs, predicted 
-torch.cuda.empty_cache()
+    del batch_inputs, batch_outputs, predicted 
+    torch.cuda.empty_cache()
  
 print('pickle model')
-pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+exp_name+'.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(model, pckl_file)
+
+# Plot training and validation loss 
+fig = plt.figure()
+ax1 = fig.add_subplot(111)
+ax1.plot(train_loss_epoch)
+ax1.plot(val_loss_epoch)
+ax1.set_xlabel('Epochs')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
+ax1.legend(['Training Loss', 'Validation Loss'])
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 
 #-----------------------------------------------------
 # Create full set of predictions and assess the model
@@ -246,24 +263,21 @@ norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
 norm_predicted_val = np.zeros((norm_outputs_val.shape))
 # Loop through to predict for dataset, as memory limits mean we can't do this all at once.
 # Maybe some clever way of doing this with the dataloader?
-no_chunks = 20
-chunk = int(norm_inputs_tr.shape[0]/20)
-for i in range(20):
+chunk_size = hyper_params["batch_size"]
+no_chunks = int(norm_inputs_tr.shape[0]/chunk_size)
+for i in range(no_chunks):
    if torch.cuda.is_available():
-      norm_tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk]).cuda().float())
+      norm_tr_inputs_temp  = Variable(torch.from_numpy(norm_inputs_tr[i*chunk_size:(i+1)*chunk_size]).cuda().float())
+      norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val[i*chunk_size:(i+1)*chunk_size]).cuda().float())
    else:
-      norm_tr_inputs_temp = Variable(torch.from_numpy(norm_inputs_tr[i*chunk:(i+1)*chunk]).float())
-   norm_predicted_tr[i*chunk:(i+1)*chunk] = model(norm_tr_inputs_temp).cpu().detach().numpy()
-   del norm_tr_inputs_temp
-   torch.cuda.empty_cache()
+      norm_tr_inputs_temp  = Variable(torch.from_numpy(norm_inputs_tr[i*chunk_size:(i+1)*chunk_size]).float())
+      norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val[i*chunk_size:(i+1)*chunk_size]).float())
 
-if torch.cuda.is_available():
-   norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).cuda().float())
-else:
-   norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val).float())
-norm_predicted_val = model(norm_val_inputs_temp).cpu().detach().numpy()
-del norm_val_inputs_temp 
-torch.cuda.empty_cache()
+   norm_predicted_tr[i*chunk_size:(i+1)*chunk_size]  = model(norm_tr_inputs_temp).cpu().detach().numpy()
+   norm_predicted_val[i*chunk_size:(i+1)*chunk_size] = model(norm_val_inputs_temp).cpu().detach().numpy()
+   del norm_tr_inputs_temp
+   del norm_val_inputs_temp
+   torch.cuda.empty_cache()
 
 #------------------------------------------
 # De-normalise the outputs and predictions
@@ -271,16 +285,9 @@ torch.cuda.empty_cache()
 mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
 
-# denormalise inputs
 def denormalise_data(norm_data,mean,std):
     denorm_data = norm_data * std + mean
     return denorm_data
-
-denorm_inputs_tr  = np.zeros(norm_inputs_tr.shape)
-denorm_inputs_val = np.zeros(norm_inputs_val.shape)
-for i in range(norm_inputs_tr.shape[1]):  
-    denorm_inputs_tr[:, i]  = denormalise_data(norm_inputs_tr[:, i] , input_mean[i], input_std[i])
-    denorm_inputs_val[:, i] = denormalise_data(norm_inputs_val[:, i], input_mean[i], input_std[i])
 
 # denormalise the predictions and true outputs   
 denorm_predicted_tr = denormalise_data(norm_predicted_tr, output_mean, output_std)
@@ -296,30 +303,33 @@ predict_persistance_tr = np.zeros(denorm_outputs_tr.shape)
 predict_persistance_val = np.zeros(denorm_outputs_val.shape)
 
 print('get stats')
-test_mse, val_mse =am.get_stats(model_type, exp_name, name1='Training', truth1=denorm_outputs_tr, exp1=denorm_predicted_tr, pers1=predict_persistance_tr, 
+train_mse, val_mse = am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr, exp1=denorm_predicted_tr, pers1=predict_persistance_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_predicted_val, pers2=predict_persistance_val, name='TrainVal')
-if comet_log:
-    with experiment.test():
-        experiment.log_metric("test_mse", test_mse)
-        experiment.log_metric("val_mse", val_mse)
 
+#with experiment.test():
+#    experiment.log_metric("train_mse", train_mse)
+#    experiment.log_metric("val_mse", val_mse)
 
 print('plot results')
-am.plot_results(model_type, exp_name, denorm_outputs_tr, denorm_predicted_tr, name='training')
-am.plot_results(model_type, exp_name, denorm_outputs_val, denorm_predicted_val, name='val')
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_predicted_tr, name='training')
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_predicted_val, name='val')
 
 #-------------------------------------------------------------------
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 
 fig = rfplt.Plot_Histogram(denorm_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 
 fig = rfplt.Plot_Histogram(denorm_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 
-
-
+fig = rfplt.Plot_Histogram(denorm_predicted_val-denorm_outputs_val, 100)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
 

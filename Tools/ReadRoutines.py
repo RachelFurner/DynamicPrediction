@@ -12,6 +12,9 @@ import numpy as np
 import xarray as xr
 from sklearn.preprocessing import PolynomialFeatures
 from skimage.util import view_as_windows
+from torch.utils import data
+from torchvision import transforms, utils
+import torch
 
 def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth, z_lw, z_up, y_lw, y_up, x_lw, x_up, z_subsize, y_subsize, x_subsize):
    # Confusing nomenclature... tmp stands for temporary. Temp (capitalised) stands for Temperature.
@@ -152,8 +155,12 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_U = (da_U_tmp[:,:,:,:-1]+da_U_tmp[:,:,:,1:])/2.
    da_V = (da_V_tmp[:,:,:-1,:]+da_V_tmp[:,:,1:,:])/2.
 
-   # Here we calculate the density anomoly, using the simplified equation of state,
-   # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
+   #mds.rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
+   #       returnmeta=False,astype=float,region=None,lev=(),
+   #       usememmap=False,mm=False,squeeze=True,verbose=False):
+
+   ## Here we calculate the density anomoly, using the simplified equation of state,
+   ## as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
    a0       = .1655
    b0       = .76554
    lambda1  = .05952
@@ -569,6 +576,260 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
 ####################################################################################
 ####################################################################################
 ####################################################################################
+
+# Create Dataset, which inherits the data.Dataset class, and then overwrite the default length and get item functions
+class MITGCM_Wholefield_Dataset(data.Dataset):
+
+   '''
+         MITGCM dataset
+        
+         Note data not normalised here - needs to be done in network training routine
+
+         Note currently code is set up so that the data is 2-d with different channels for each level of 
+         each variable. This solves issues with eta being 2-d and other inputs being 3-d. This matches 
+         what is done in Scher paper.
+         The alternative is to have 3-d fields, with each channel being separate variables. Potentially 
+         worth assessing impact of this at some stage
+   '''
+
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, dataset_end_index, transform=None):
+       """
+       Args:
+          MITGCM_filename (string): Path to the MITGCM filename containing the data.
+          start_ratio (float)     : Ratio point (between 0 and 1) at which to start sampling from MITGCM data
+          end_ratio (float)       : Ratio point (between 0 and 1) at which to stop sampling from MITGCM data
+          stride (integer)        : Rate at which to subsample in time when reading MITGCM data
+          dataset_end_index       : Point of dataset file after which to ignore (i.e. cause model is no longer
+                                    dynamically active
+       """
+ 
+       #data_end_index = 50 * 360 # we look at 50 years of data - should see if we can avoid hard coding this here...
+       # When looking at monthly data...
+       #data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
+ 
+       self.ds      = xr.open_dataset(MITGCM_filename)
+       self.start   = int(start_ratio * dataset_end_index)
+       self.end     = int(end_ratio * dataset_end_index)
+       self.stride  = stride
+       self.transform = transform
+       
+       self.ds_inputs  = self.ds.isel(T=slice(self.start, self.end, self.stride))
+       self.ds_outputs = self.ds.isel(T=slice(self.start+1, self.end+1, self.stride))
+  
+   def __len__(self):
+       return self.ds_outputs.sizes['T']
+
+   def __getitem__(self, idx):
+
+       da_T_in    = self.ds_inputs['Ttave'].values[idx,:,:,:]
+       da_S_in    = self.ds_inputs['Stave'].values[idx,:,:,:]
+       da_U_tmp   = self.ds_inputs['uVeltave'].values[idx,:,:,:]
+       da_V_tmp   = self.ds_inputs['vVeltave'].values[idx,:,:,:]
+       da_Kwx_in  = self.ds_inputs['Kwx'].values[idx,:,:,:]
+       da_Kwy_in  = self.ds_inputs['Kwy'].values[idx,:,:,:]
+       da_Kwz_in  = self.ds_inputs['Kwz'].values[idx,:,:,:]
+       da_Eta_in  = self.ds_inputs['ETAtave'].values[idx,:,:]
+
+       da_T_out   = self.ds_outputs['Ttave'].values[idx,:,:,:]
+       da_S_out   = self.ds_outputs['Stave'].values[idx,:,:,:]
+       da_U_tmp   = self.ds_outputs['uVeltave'].values[idx,:,:,:]
+       da_V_tmp   = self.ds_outputs['vVeltave'].values[idx,:,:,:]
+       da_Kwx_out = self.ds_outputs['Kwx'].values[idx,:,:,:]
+       da_Kwy_out = self.ds_outputs['Kwy'].values[idx,:,:,:]
+       da_Kwz_out = self.ds_outputs['Kwz'].values[idx,:,:,:]
+       da_Eta_out = self.ds_outputs['ETAtave'].values[idx,:,:]
+
+       da_mask = self.ds_inputs['Mask'].values[:,:,:]
+
+       if np.isnan(da_T_in).any():
+          print('da_T_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_T_in))) )
+       if np.isnan(da_S_in).any():
+          print('da_S_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_S_in))) )
+       if np.isnan(da_U_tmp).any():
+          print('da_U_tmp contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_U_tmp))) )
+       if np.isnan(da_V_tmp).any():
+          print('da_V_tmp contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_V_tmp))) )
+       if np.isnan(da_Kwx_in).any():
+          print('da_Kwx_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwx_in))) )
+       if np.isnan(da_Kwy_in).any():
+          print('da_Kwy_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwy_in))) )
+       if np.isnan(da_Kwz_in).any():
+          print('da_Kwz_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwz_in))) )
+       if np.isnan(da_Eta_in).any():
+          print('da_Eta_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwz_in))) )
+
+       if np.isnan(da_T_out).any():
+          print('da_T_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_T_out))) )
+       if np.isnan(da_S_out).any():
+          print('da_S_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_S_out))) )
+       if np.isnan(da_U_tmp).any():
+          print('da_U_tmp contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_U_tmp))) )
+       if np.isnan(da_V_tmp).any():
+          print('da_V_tmp contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_V_tmp))) )
+       if np.isnan(da_Kwx_out).any():
+          print('da_Kwx_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwx_out))) )
+       if np.isnan(da_Kwy_out).any():
+          print('da_Kwy_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwy_out))) )
+       if np.isnan(da_Kwz_out).any():
+          print('da_Kwz_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwz_out))) )
+       if np.isnan(da_Eta_out).any():
+          print('da_Eta_out contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_Kwz_out))) )
+
+       if np.isnan(da_mask).any():
+          print('da_mask contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_mask))) )
+
+       # average to get onto same grid as T points, taking the original value at land edge, to avoid averaging -999 with 'real' value
+       da_U_in    = np.where( da_U_tmp[:,:,1:] == -999., da_U_tmp[:,:,:-1], 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) )
+       da_V_in    = np.where( da_V_tmp[:,1:,:] == -999., da_V_tmp[:,:-1,:], 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:]) )
+       da_U_out   = np.where( da_U_tmp[:,:,1:] == -999., da_U_tmp[:,:,:-1], 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) )
+       da_V_out   = np.where( da_V_tmp[:,1:,:] == -999., da_V_tmp[:,:-1,:], 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:]) )
+
+       sample_input  = np.zeros(( 0, da_T_in.shape[1],  da_T_in.shape[2]  ))  # shape: (no channels, y, x)
+       sample_output = np.zeros(( 0, da_T_out.shape[1], da_T_out.shape[2]  ))  # shape: (no channels, y, x)
+
+       for level in range(da_T_in.shape[0]):
+           sample_input  = np.concatenate((sample_input ,
+                                            da_T_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_T_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_S_in.shape[0]):
+           sample_input  = np.concatenate((sample_input , 
+                                            da_S_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output,
+                                           da_S_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_U_in.shape[0]):
+           sample_input  = np.concatenate((sample_input ,
+                                            da_U_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_U_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_V_in.shape[0]):
+           sample_input  = np.concatenate((sample_input ,
+                                            da_V_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_V_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_Kwx_in.shape[0]):
+           sample_input  = np.concatenate((sample_input , 
+                                            da_Kwx_in[level, : ,:].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_Kwx_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_Kwy_in.shape[0]):
+           sample_input  = np.concatenate((sample_input , 
+                                            da_Kwy_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_Kwy_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_Kwz_in.shape[0]):
+           sample_input  = np.concatenate((sample_input ,
+                                            da_Kwz_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+           sample_output = np.concatenate((sample_output, 
+                                           da_Kwz_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       sample_input  = np.concatenate((sample_input , 
+                                        da_Eta_in[:, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+       sample_output = np.concatenate((sample_output, 
+                                       da_Eta_out[:, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+
+       for level in range(da_mask.shape[0]):
+           sample_input  = np.concatenate((sample_input , da_mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
+           sample_output = np.concatenate((sample_output, da_mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
+ 
+       sample_input = torch.from_numpy(sample_input)
+       sample_output = torch.from_numpy(sample_output)
+ 
+       sample = {'input':sample_input, 'output':sample_output}
+       
+       if self.transform:
+          sample = self.transform(sample)
+ 
+       if np.isnan(sample['input']).any():
+          print('sample_input contains a NaN')
+       if np.isnan(sample['output']).any():
+          print('sample_output contains a NaN')
+ 
+       return (sample)
+
+
+
+class RF_Normalise(object):
+    """Normalise data based on training means and std (given)
+
+    Args:
+       Training input mean
+       Training input std
+       Training output mean
+       Training output std
+    """
+    def __init__(self, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std):
+        self.inputs_train_mean = inputs_train_mean
+        self.inputs_train_std  = inputs_train_std
+        self.outputs_train_mean = outputs_train_mean
+        self.outputs_train_std  = outputs_train_std
+
+    def __call__(self, sample):
+        sample_input, sample_output = sample['input'], sample['output']
+
+        # Using transforms.Normalize returns the function, rather than the normalised array - can;t figure out how to avoid this...
+        #sample_input  = transforms.Normalize(sample_input, self.inputs_train_mean, self.inputs_train_std)
+        #sample_output = transforms.Normalize(sample_output,self.outputs_train_mean, self.outputs_train_std)
+
+        if np.isnan(self.inputs_train_mean).any():
+            print('inputs_train_mean contains a NaN')
+        if np.isnan(self.inputs_train_std).any():
+            print('inputs_train_std contains a NaN')
+        if np.isnan(self.outputs_train_mean).any():
+            print('outputs_train_mean contains a NaN')
+        if np.isnan(self.outputs_train_std).any():
+            print('outputs_train_std contains a NaN')
+
+        for channel in range(sample_input.shape[0]):
+           if not (self.inputs_train_std[channel] == 0.0):
+              sample_input[channel, :, :]  = (sample_input[channel, :, :] - self.inputs_train_mean[channel]) / self.inputs_train_std[channel]
+           if not (self.outputs_train_std[channel] == 0.0):
+              sample_output[channel, :, :] = (sample_output[channel, :, :] - self.outputs_train_mean[channel]) / self.outputs_train_std[channel]
+
+        return {'input':sample_input, 'output':sample_output}
+
+def RF_DeNormalise(samples, outputs_train_mean, outputs_train_std):
+    """de-Normalise data based on training means and std (given)
+
+    Args:
+       Array to de-norm (expected shape - no_samples, no_channels, y, x)
+       Training output mean
+       Training output std
+    """
+
+    for channel in range(sample.shape[1]):
+       if not (outputs_train_std[channel] == 0.0):
+          samples[:,channel, :, :]  = (samples[:,channel, :, :] * outputs_train_std[channel] ) + outputs_train_mean[channel]
+
+    return samples
+
+
+#---------------------------------------------------------------------------------------------------------------------
+# Original routine for reading in whole field dataset - now tried moving to dataset method, so fields read in on file, 
+# rather than this approach which reads all training data and saves in .npy array - and thus takes lots of disc space!
 def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_name):
 
    '''
@@ -740,3 +1001,4 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    outputs = None
   
    return
+

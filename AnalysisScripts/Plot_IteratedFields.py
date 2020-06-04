@@ -26,6 +26,7 @@ model_type = 'lr'
 
 time_step = '24hrs'
 data_prefix = ''
+model_prefix = 'Cntrl_' 
 exp_prefix = ''
 ItMethod = 'AB3'
 
@@ -39,8 +40,8 @@ rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
 data_name = cn.create_dataname(run_vars)
 data_name = time_step+'_'+data_prefix+data_name
-exp_name = data_name+'_'+ItMethod
-exp_name = exp_prefix+exp_name
+model_name = model_prefix+data_name
+exp_name = exp_prefix+model_name+'_'+ItMethod
 
 level = point[0]
 y_coord = point[1]
@@ -88,38 +89,44 @@ pred_delT  = np.where(land_mask==1, delT,  np.nan)
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
-fig, ax, im = rfplt.plot_depth_fld(pred_temp[time,:,:,:], 'Predicted Temperature', level, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_depth_fld(pred_temp[time,:,:,:], 'Predicted Temperature', level, ds['X'].values, ds['Y'].values,
+                                   ds['Z'].values, title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_yconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', y_coord, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_yconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', y_coord, ds['X'].values, 
+                                         ds['Y'].values, ds['Z'].values, title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_xconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', x_coord, title=None, min_value=None, max_value=None)
+fig, ax, im = rfplt.plot_xconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', x_coord, ds['X'].values, 
+                                         ds['Y'].values, ds['Z'].values, title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 if compare_w_truth:
    #-------------------------------
    # Plot spatial depth diff plots
    #-------------------------------
-   fig = rfplt.plot_depth_fld_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:], 'Predicted Temperature', level, title=None)
+   fig = rfplt.plot_depth_fld_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:], 'Predicted Temperature', 
+                                   level, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
    plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------------
    # Plot y-cross section diff plots
    #---------------------------------
-   fig = rfplt.plot_yconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', y_coord, title=None)
+   fig = rfplt.plot_yconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', 
+                                         y_coord, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
    plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------------
    # Plot x-cross section diff plots
    #---------------------------------
-   fig = rfplt.plot_xconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', x_coord, title=None)
+   fig = rfplt.plot_xconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', 
+                                         x_coord, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
    plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------
@@ -130,7 +137,7 @@ if compare_w_truth:
    persistence[:,:,:,:] = MITGCM_temp[0,:,:,:]
    
    #---------------------------------------------------------------------------
-   # Plot the predictions against MITGCM_temp and persistence
+   # Plot timeseries of the predictions against MITGCM_temp and persistence
    #---------------------------------------------------------------------------
    
    if time_step == '1mnth':

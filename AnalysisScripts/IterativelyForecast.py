@@ -28,7 +28,7 @@ iterate_method = 'AB3'
 
 time_step = '24hrs'
 data_prefix=''
-model_prefix=''
+model_prefix='NoInt_'
 exp_prefix = ''
 
 for_len = 30*12
