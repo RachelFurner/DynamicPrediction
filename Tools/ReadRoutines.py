@@ -15,6 +15,7 @@ from skimage.util import view_as_windows
 from torch.utils import data
 from torchvision import transforms, utils
 import torch
+from Tools import mds as mds
 
 def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth, z_lw, z_up, y_lw, y_up, x_lw, x_up, z_subsize, y_subsize, x_subsize):
    # Confusing nomenclature... tmp stands for temporary. Temp (capitalised) stands for Temperature.
@@ -108,7 +109,7 @@ def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, dept
 
    return(inputs)
 
-def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None):
+def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -155,26 +156,27 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_U = (da_U_tmp[:,:,:,:-1]+da_U_tmp[:,:,:,1:])/2.
    da_V = (da_V_tmp[:,:,:-1,:]+da_V_tmp[:,:,1:,:])/2.
 
-   #mds.rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
-   #       returnmeta=False,astype=float,region=None,lev=(),
-   #       usememmap=False,mm=False,squeeze=True,verbose=False):
-
+   density = np.load( density_file, mmap_mode='r' ) 
+   print(density.shape)
+   
    ## Here we calculate the density anomoly, using the simplified equation of state,
    ## as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-   a0       = .1655
-   b0       = .76554
-   lambda1  = .05952
-   lambda2  = .00054914
-   nu       = .0024341
-   mu1      = .0001497
-   mu2      = .00001109
-   rho0     = 1026.
-   Tmp_anom = da_T-10.
-   Sal_anom = da_S-35.
-   tmp_depth    = da_depth.reshape(1,-1,1,1)
-   dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
-                +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * tmp_depth) * Sal_anom
-                -nu * Tmp_anom * Sal_anom) / rho0
+   #a0       = .1655
+   #b0       = .76554
+   #lambda1  = .05952
+   #lambda2  = .00054914
+   #nu       = .0024341
+   #mu1      = .0001497
+   #mu2      = .00001109
+   #rho0     = 1026.
+   #Tmp_anom = da_T-10.
+   #Sal_anom = da_S-35.
+   #tmp_depth    = da_depth.reshape(1,-1,1,1)
+   #dns_anom_2 = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
+   #             +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * tmp_depth) * Sal_anom
+   #             -nu * Tmp_anom * Sal_anom) / rho0
+   #
+   #density = dns_anom_2
 
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
@@ -207,7 +209,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_Kwz2   = np.concatenate((da_Kwz[:,:,:,-1:], da_Kwz[:,:,:,:-1]),axis=3)
    da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
    da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
-   dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
+   density2 = np.concatenate((density[:,:,:,-1:], density[:,:,:,:-1]),axis=3)
    x_lw_2 = 1   # Note zero column is now what was at the -1 column!
    x_up_2 = 2              # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
    y_lw_2 = 1
@@ -229,7 +231,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
    da_Kwz3   = np.concatenate((da_Kwz[:,:,:,1:], da_Kwz[:,:,:,:1]),axis=3)
    da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
    da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
-   dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
+   density3 = np.concatenate((density[:,:,:,1:], density[:,:,:,:1]),axis=3)
    x_lw_3 = x_size-3     #Note the -1 column is now what was the zero column!
    x_up_3 = x_size-1             # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
    y_lw_3 = 1
@@ -248,7 +250,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_1 = GetInputs(run_vars,
                            da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:], 
-                           dns_anom[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
                            z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
@@ -269,7 +271,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_2 = GetInputs(run_vars,
                            da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           dns_anom2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
                            z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
@@ -286,7 +288,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_3 = GetInputs(run_vars,
                            da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           dns_anom3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
                            z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
@@ -306,7 +308,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_1 = GetInputs(run_vars,
                            da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:],
-                           dns_anom[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
                            z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
@@ -327,7 +329,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_2 = GetInputs(run_vars,
                            da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           dns_anom2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
                            z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
@@ -344,7 +346,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_3 = GetInputs(run_vars,
                            da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           dns_anom3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
                            z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
@@ -364,7 +366,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_1 = GetInputs(run_vars,
                            da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:],
-                           dns_anom[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
+                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
                            z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
@@ -385,7 +387,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_2 = GetInputs(run_vars,
                            da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           dns_anom2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
+                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
                            z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
@@ -402,7 +404,7 @@ def ReadMITGCM(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, data_
         #---------#
         inputs_3 = GetInputs(run_vars,
                            da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           dns_anom3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
+                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
                            z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]

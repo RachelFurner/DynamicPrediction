@@ -30,9 +30,10 @@ plt.rcParams.update({'font.size': 14})
 run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
-#time_step = '1mnth'
-data_prefix = ''
-model_prefix = 'Lasso_'
+data_prefix = 'DensSimple_'
+model_prefix = ''
+#data_prefix = ''
+#model_prefix = 'Lasso_'
 
 TrainModel = True
 
@@ -57,16 +58,14 @@ model_name = model_prefix+data_name
 # Open data from saved array
 #--------------------------------------------------------------
 print('reading data')
-#inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsOutputs.npz'
-#norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
 inputs_tr_file   = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
 inputs_val_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
 outputs_tr_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
 outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
-norm_inputs_tr   = np.load(inputs_tr_file)
-norm_inputs_val  = np.load(inputs_val_file)
-norm_outputs_tr  = np.load(outputs_tr_file)
-norm_outputs_val = np.load(outputs_val_file)
+norm_inputs_tr   = np.load(inputs_tr_file, mmap_mode='r')
+norm_inputs_val  = np.load(inputs_val_file, mmap_mode='r')
+norm_outputs_tr  = np.load(outputs_tr_file, mmap_mode='r')
+norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
 
 #norm_inputs_tr   = norm_inputs_tr[:10]
 #norm_inputs_val  = norm_inputs_val[:10]
@@ -86,12 +85,12 @@ if TrainModel:
     print('training model')
     
     alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
+    #alpha_s = [0.0001]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
     
-    #lr = linear_model.Ridge(fit_intercept=True)
-    #lr = linear_model.Ridge(fit_intercept=False)
-    lr = linear_model.Lasso(fit_intercept=True, max_iter=20000)
+    lr = linear_model.Ridge(fit_intercept=False)
+    #lr = linear_model.Lasso(fit_intercept=False, max_iter=20000)
     
     # set up regressor
     lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)

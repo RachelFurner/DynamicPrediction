@@ -32,21 +32,22 @@ run_vars = { 'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':Tru
              'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2 }
 
 time_step = '24hrs'
-data_prefix = ''
+data_prefix = 'DensLayers_'
 
 #---------------------------
 # calculate other variables 
 #---------------------------
-data_name = time_step+'_'+cn.create_dataname(run_vars)
-
-data_name = data_prefix+data_name
+data_name = cn.create_dataname(run_vars)
+data_name = time_step+'_'+data_prefix+data_name
 
 if time_step == '1mnth':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
    MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
 elif time_step == '24hrs':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
    MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
 
 #-------------------
 # Read in land mask
@@ -57,7 +58,7 @@ land_mask = ds['Mask'].values
 #---------------------------------
 # Call module to read in the data
 #---------------------------------
-denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, 0.7, 0.9, data_name, run_vars, time_step=time_step)
+denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step)
 
 #-----------------------------
 # Plot histograms of the data
