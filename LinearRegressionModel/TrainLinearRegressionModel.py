@@ -20,6 +20,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 
 import torch as torch
+import gc
 
 torch.cuda.empty_cache()
 plt.rcParams.update({'font.size': 14})
@@ -30,12 +31,12 @@ plt.rcParams.update({'font.size': 14})
 run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
-data_prefix = 'DensSimple_'
+data_prefix = 'DensLayers_'
 model_prefix = ''
 #data_prefix = ''
 #model_prefix = 'Lasso_'
 
-TrainModel = True
+TrainModel = True  
 
 if time_step == '1mnth':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
@@ -50,7 +51,7 @@ else:
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
-data_name = time_step+'_'+data_prefix+data_name
+data_name = data_prefix+data_name+'_'+time_step
 
 model_name = model_prefix+data_name
 
@@ -80,15 +81,15 @@ print(norm_outputs_val.shape)
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/pickle_'+model_name+'.pkl'
+pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
 if TrainModel:
     print('training model')
     
     alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
-    #alpha_s = [0.0001]
+    #alpha_s = [0.0001, 0.001, 0.01]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
-    
+   
     lr = linear_model.Ridge(fit_intercept=False)
     #lr = linear_model.Lasso(fit_intercept=False, max_iter=20000)
     
@@ -130,14 +131,19 @@ if TrainModel:
         pickle.dump(lr, pckl_file)
 
 with open(pkl_filename, 'rb') as file:
-   print('opening '+pkl_filename)
-   lr = pickle.load(file)
+    print('opening '+pkl_filename)
+    lr = pickle.load(file)
 
 # predict values
 print('predict values')
-norm_lr_predicted_tr = lr.predict(norm_inputs_tr)
+#norm_lr_predicted_tr = lr.predict(norm_inputs_tr)
+#norm_lr_predicted_val = lr.predict(norm_inputs_val)
+norm_lr_predicted_tr = lr.predict(norm_inputs_tr).reshape(-1,1)
+norm_lr_predicted_val = lr.predict(norm_inputs_val).reshape(-1,1)
 
-norm_lr_predicted_val = lr.predict(norm_inputs_val)
+del norm_inputs_tr
+del norm_inputs_val
+gc.collect()
 
 #------------------------------------------
 # De-normalise the outputs and predictions
@@ -145,22 +151,23 @@ norm_lr_predicted_val = lr.predict(norm_inputs_val)
 mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
 
-# denormalise inputs
+# denormalise data
 def denormalise_data(norm_data,mean,std):
     denorm_data = norm_data * std + mean
     return denorm_data
-
-denorm_inputs_tr  = np.zeros(norm_inputs_tr.shape)
-denorm_inputs_val = np.zeros(norm_inputs_val.shape)
-for i in range(norm_inputs_tr.shape[1]):  
-    denorm_inputs_tr[:, i]  = denormalise_data(norm_inputs_tr[:, i] , input_mean[i], input_std[i])
-    denorm_inputs_val[:, i] = denormalise_data(norm_inputs_val[:, i], input_mean[i], input_std[i])
 
 # denormalise the predictions and true outputs   
 denorm_lr_predicted_tr = denormalise_data(norm_lr_predicted_tr, output_mean, output_std)
 denorm_lr_predicted_val = denormalise_data(norm_lr_predicted_val, output_mean, output_std)
 denorm_outputs_tr = denormalise_data(norm_outputs_tr, output_mean, output_std)
 denorm_outputs_val = denormalise_data(norm_outputs_val, output_mean, output_std)
+
+# Free up memory
+del norm_lr_predicted_tr
+del norm_lr_predicted_val
+del norm_outputs_tr
+del norm_outputs_val
+gc.collect()
 
 #------------------
 # Assess the model
@@ -177,6 +184,12 @@ print('plot results')
 am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='training')
 am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
 
+print(denorm_lr_predicted_tr.shape)
+print(denorm_lr_predicted_val.shape)
+print(denorm_outputs_tr.shape)
+print(denorm_outputs_val.shape)
+print((denorm_lr_predicted_tr-denorm_outputs_tr).shape)
+print((denorm_lr_predicted_val-denorm_outputs_val).shape)
 #-------------------------------------------------------------------
 # plot histograms:
 #-------------------------------------------------
@@ -192,15 +205,10 @@ plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_e
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
 plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
 
-#---------------------------------------------------------
-# Plot scatter plots of errors against outputs and inputs
-#---------------------------------------------------------
+#----------------------------------------------
+# Plot scatter plots of errors against outputs
+#----------------------------------------------
 am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 
-print('')
-print(norm_inputs_tr.shape)
-print(norm_inputs_val.shape)
-print(norm_outputs_tr.shape)
-print(norm_outputs_val.shape)
 

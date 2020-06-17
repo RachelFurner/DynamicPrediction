@@ -22,6 +22,7 @@ data_prefix=''
 model_prefix = ''
 exp_prefix = 'Cntrl_'
 
+plt.rcParams.update({'font.size': 28})
 #-----------
 data_name = cn.create_dataname(run_vars)
 data_name = time_step+'_'+data_prefix+data_name
@@ -184,7 +185,7 @@ ax.tick_params(which="major", bottom=False, left=False, top=False, right=False)
 ## Create white grid.
 ax.set_xticks(np.array(xgrid_lines), minor=True)
 ax.set_yticks(np.array(ygrid_lines), minor=True)
-ax.grid(which="minor", color="w", linewidth=0.5)
+ax.grid(which="minor", color="w", linewidth=1.5)
 ax.invert_yaxis()
 
 fig.tight_layout()

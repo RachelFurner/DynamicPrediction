@@ -27,8 +27,8 @@ model_type = 'lr'
 iterate_method = 'AB3'
 
 time_step = '24hrs'
-data_prefix=''
-model_prefix='NoInt_'
+data_prefix='DensLayers_'
+model_prefix=''
 exp_prefix = ''
 
 for_len = 30*12
@@ -42,12 +42,15 @@ run_iterations = True
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
    data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
 elif time_step == '24hrs':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
    data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
+else:
+   print('ERROR!!! No suitable time step given!!')
 
-data_name = cn.create_dataname(run_vars)
-data_name = time_step+'_'+data_prefix+data_name
+data_name = data_prefix+cn.create_dataname(run_vars)+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name+'_'+iterate_method
 
@@ -62,19 +65,21 @@ pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredic
 print('reading in ds')
 ds_orig = xr.open_dataset(data_filename)
 ds = ds_orig.isel(T=slice(start,start+for_len+1))
+
 da_T=ds['Ttave']
-
-z_size = da_T.shape[1]
-y_size = da_T.shape[2]
-x_size = da_T.shape[3]
-
 print('da_T.shape')
 print(da_T.shape)
+
+#Read in density from separate array - it was outputted using MITGCM levels code, so not in ncfile
+density = np.load( density_file, mmap_mode='r' ) 
+density = density[start:start+for_len+1,:,:,:]
+print('density.shape')
+print(density.shape) 
 
 #-------------------
 # Read in the model
 #-------------------
-pkl_filename = rootdir+'MODELS/pickle_'+model_name+'.pkl'
+pkl_filename = rootdir+'MODELS/'+model_name+'_pickle.pkl'
 with open(pkl_filename, 'rb') as file:
    print('opening '+pkl_filename)
    model = pickle.load(file)
@@ -145,8 +150,8 @@ if run_iterations:
       print(chunk)
       chunk_start = size_chunk*chunk
       chunk_end = size_chunk*(chunk+1)+1
-      tmp_pred, tmp_out, sponge_mask, mask, outs = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)),
-                                   init=init, model_type=model_type, method=iterate_method, outs=outs)
+      tmp_pred, tmp_out, sponge_mask, mask, outs = it.iterator(data_name, run_vars, model, size_chunk, ds.isel(T=slice(chunk_start,chunk_end)), 
+                                   density[chunk_start:chunk_end,:,:,:], init=init, model_type=model_type, method=iterate_method, outs=outs)
       if chunk == 0:
          # initialise these arrays, and keep both initial state and prediction for this first step
          Pred_Temp = tmp_pred 

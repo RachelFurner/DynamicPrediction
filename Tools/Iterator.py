@@ -21,7 +21,7 @@ import torch
 # Define iterator
 #-----------------
 
-def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, model_type='lr', method='AB1', outs=None):
+def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, start=None, model_type='lr', method='AB1', outs=None):
 
     if start is None:
        start = 0
@@ -40,22 +40,24 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     # Calc U and V by averaging surrounding points, to get on same grid as other variables
     da_U = (da_U_temp[:,:,:,:-1]+da_U_temp[:,:,:,1:])/2.
     da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
-    # Here we calculate the density anomoly, using the simplified equation of state,
-    # as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-    a0      = .1655
-    b0      = .76554
-    lambda1 = .05952
-    lambda2 = .00054914
-    nu      = .0024341
-    mu1     = .0001497
-    mu2     = .00001109
-    rho0    = 1026.
-    Tmp_anom = da_T-10.
-    Sal_anom = da_S-35.
-    depth    = da_depth.reshape(1,-1,1,1)
-    dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * depth) * Tmp_anom
-                 +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * depth) * Sal_anom
-                 -nu * Tmp_anom * Sal_anom) / rho0
+
+    density = density[start:start+num_steps+1,:,:,:]
+    ## Here we calculate the density anomoly, using the simplified equation of state,
+    ## as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
+    #a0      = .1655
+    #b0      = .76554
+    #lambda1 = .05952
+    #lambda2 = .00054914
+    #nu      = .0024341
+    #mu1     = .0001497
+    #mu2     = .00001109
+    #rho0    = 1026.
+    #Tmp_anom = da_T-10.
+    #Sal_anom = da_S-35.
+    #depth    = da_depth.reshape(1,-1,1,1)
+    #dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * depth) * Tmp_anom
+    #             +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * depth) * Sal_anom
+    #             -nu * Tmp_anom * Sal_anom) / rho0
 
     x_size = da_T.shape[3]
     y_size = da_T.shape[2]
@@ -141,7 +143,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     da_Kwz2   = np.concatenate((da_Kwz[:,:,:,-1:], da_Kwz[:,:,:,:-1]),axis=3)
     da_Eta2   = np.concatenate((da_Eta[:,:,-1:], da_Eta[:,:,:-1]),axis=2)
     da_lon2   = np.concatenate((da_lon[-1:], da_lon[:-1]),axis=0)
-    dns_anom2 = np.concatenate((dns_anom[:,:,:,-1:], dns_anom[:,:,:,:-1]),axis=3)
+    density2 = np.concatenate((density[:,:,:,-1:], density[:,:,:,:-1]),axis=3)
     # Move West most data to column on East side, to allow viewaswindows to deal with throughflow for region3
     da_T3     = np.concatenate((da_T[:,:,:,1:], da_T[:,:,:,:1]),axis=3)
     da_S3     = np.concatenate((da_S[:,:,:,1:], da_S[:,:,:,:1]),axis=3)
@@ -152,7 +154,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
     da_Kwz3   = np.concatenate((da_Kwz[:,:,:,1:], da_Kwz[:,:,:,:1]),axis=3)
     da_Eta3   = np.concatenate((da_Eta[:,:,1:], da_Eta[:,:,:1]),axis=2)
     da_lon3   = np.concatenate((da_lon[1:], da_lon[:1]),axis=0)
-    dns_anom3 = np.concatenate((dns_anom[:,:,:,1:], dns_anom[:,:,:,:1]),axis=3)
+    density3 = np.concatenate((density[:,:,:,1:], density[:,:,:,:1]),axis=3)
     # Add new set of indices to account for moved boundaries
     x_lw_nudged = [1, 1, x_size-3]
     x_up_nudged = [x_size-2, 2, x_size-1] 
@@ -224,7 +226,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               Kwx   = da_Kwx
               Kwy   = da_Kwy
               Kwz   = da_Kwz
-              dens  = dns_anom
+              dens  = density
               eta   = da_Eta
               lon   = da_lon
            if region == 1:
@@ -235,7 +237,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               Kwx   = da_Kwx2
               Kwy   = da_Kwy2
               Kwz   = da_Kwz2
-              dens  = dns_anom2
+              dens  = density2
               eta   = da_Eta2
               lon   = da_lon2
            if region == 2:
@@ -246,7 +248,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, init=None, start=None, m
               Kwx   = da_Kwx3
               Kwy   = da_Kwy3
               Kwz   = da_Kwz3
-              dens  = dns_anom3
+              dens  = density3
               eta   = da_Eta3
               lon   = da_lon3
 

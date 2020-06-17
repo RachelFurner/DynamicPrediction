@@ -172,11 +172,9 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    #Tmp_anom = da_T-10.
    #Sal_anom = da_S-35.
    #tmp_depth    = da_depth.reshape(1,-1,1,1)
-   #dns_anom_2 = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
+   #density  = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
    #             +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * tmp_depth) * Sal_anom
    #             -nu * Tmp_anom * Sal_anom) / rho0
-   #
-   #density = dns_anom_2
 
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
@@ -501,20 +499,6 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    inputs_te = inputs_te[ordering_te]
    outputs_te = outputs_te[ordering_te]
 
-   # Write out some info
-   info_file.write( 'max output : '+ str(max ( np.max(outputs_tr), np.max(outputs_val), np.max(outputs_te) ) ) +'\n' )
-   info_file.write( 'min output : '+ str(min ( np.min(outputs_tr), np.min(outputs_val), np.min(outputs_te) ) ) +'\n' )
-
-   info_file.write('  inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
-   info_file.write(' outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
-   info_file.write('\n')
-   info_file.write(' inputs_val.shape : ' + str( inputs_val.shape) +'\n')
-   info_file.write('outputs_val.shape : ' + str(outputs_val.shape) +'\n')
-   info_file.write('\n')
-   info_file.write('  inputs_te.shape : ' + str( inputs_te.shape) +'\n')
-   info_file.write(' outputs_te.shape : ' + str(outputs_te.shape) +'\n')
-   info_file.write('\n')
-   
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
@@ -544,6 +528,20 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    #-----------------
    # Save the arrays
    #-----------------
+   # Write out some info
+   info_file.write( 'max output : '+ str(max ( np.max(outputs_tr), np.max(outputs_val), np.max(outputs_te) ) ) +'\n' )
+   info_file.write( 'min output : '+ str(min ( np.min(outputs_tr), np.min(outputs_val), np.min(outputs_te) ) ) +'\n' )
+
+   info_file.write('  inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
+   info_file.write(' outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
+   info_file.write('\n')
+   info_file.write(' inputs_val.shape : ' + str( inputs_val.shape) +'\n')
+   info_file.write('outputs_val.shape : ' + str(outputs_val.shape) +'\n')
+   info_file.write('\n')
+   info_file.write('  inputs_te.shape : ' + str( inputs_te.shape) +'\n')
+   info_file.write(' outputs_te.shape : ' + str(outputs_te.shape) +'\n')
+   info_file.write('\n')
+   
    print('save arrays')
    inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
    inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
@@ -572,7 +570,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    norm_outputs_te  = None
    del norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
 
-   return inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te 
+   return inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te
 
 ####################################################################################
 ####################################################################################

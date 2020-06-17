@@ -38,7 +38,7 @@ data_prefix = 'DensLayers_'
 # calculate other variables 
 #---------------------------
 data_name = cn.create_dataname(run_vars)
-data_name = time_step+'_'+data_prefix+data_name
+data_name = data_prefix+data_name+'_'+time_step
 
 if time_step == '1mnth':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
