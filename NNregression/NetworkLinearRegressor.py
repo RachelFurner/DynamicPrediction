@@ -47,9 +47,9 @@ time_step = '24hrs'
 
 learningRate = 0.001 
 epochs = 100
-batch_size = 512
+batch_size = 4096
 
-model_prefix = 'NNasLinearRegressor_'
+model_prefix = 'NNasLinearRegressor_lr'+str(learningRate)+'_batchsize_'+str(batch_size)
 
 model_type = 'nn'
 
@@ -61,8 +61,8 @@ train_model = True
 # Calculate some other variables 
 #--------------------------------
 data_name = cn.create_dataname(run_vars)
-data_name = time_step+'_'+data_name
-model_name = model_prefix+data_name+'_lr'+str(learningRate)
+data_name = data_name+'_'+time_step
+model_name = model_prefix+data_name
 
 pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+model_name+'.pkl'
 #--------------------------------------------------------------
@@ -127,8 +127,8 @@ if train_model:
    Train_Dataset = MITGCM_Dataset(norm_inputs_tr, norm_outputs_tr)
    Val_Dataset  = MITGCM_Dataset(norm_inputs_val, norm_outputs_val)
    
-   train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=batch_size)
-   val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=batch_size)
+   train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=batch_size, shuffle=True)
+   val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=batch_size, shuffle=True)
    
    # Call the model
    inputDim = norm_inputs_tr.shape[1] 
@@ -224,23 +224,23 @@ if train_model:
    ax1.set_xlabel('Epochs')
    ax1.set_ylabel('Loss')
    ax1.set_yscale('log')
-   ax1.annotate('Final Epoch Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.75, 0.94), xycoords='figure fraction')
-   ax1.annotate('Final Val Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.772, 0.91), xycoords='figure fraction')
+   ax1.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.749, 0.94), xycoords='figure fraction')
+   ax1.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.749, 0.91), xycoords='figure fraction')
    plt.legend(['Training Loss', 'Validation Loss'])
    ax2 = fig.add_subplot(312)
    ax2.plot(train_loss_epoch, color='blue')
    ax2.set_xlabel('Epochs')
    ax2.set_ylabel('Loss')
    ax2.set_yscale('log')
-   ax2.annotate('Final Epoch Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.75, 0.615), xycoords='figure fraction')
+   ax2.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.749, 0.615), xycoords='figure fraction')
    ax3 = fig.add_subplot(313)
    ax3.plot(val_loss_epoch, color='orange')
    ax3.set_xlabel('Epochs')
    ax3.set_ylabel('Loss')
    ax3.set_yscale('log')
-   ax3.annotate('Final Val Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.772, 0.29), xycoords='figure fraction')
+   ax3.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.749, 0.29), xycoords='figure fraction')
    plt.subplots_adjust(hspace = 0.35, left=0.05, right=0.95, bottom=0.07, top=0.95)
-   plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_TrainValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_TrainValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
    
    print('pickle model')
    with open(pkl_filename, 'wb') as pckl_file:
@@ -312,13 +312,13 @@ am.plot_results(model_type, model_name, denorm_outputs_val, denorm_predicted_val
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_predicted_val-denorm_outputs_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)

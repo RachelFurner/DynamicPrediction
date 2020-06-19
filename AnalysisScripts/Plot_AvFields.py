@@ -88,17 +88,17 @@ print(Av_Error.shape)
 fig, ax, im = rfplt.plot_depth_fld(Av_Error[:,:,:], 'Averaged Errors', level,
                                    MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                    title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_Errors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_depth_fld(Av_AbsError[:,:,:], 'Averaged Absolute Errors', level,
                                    MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                    title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_AbsErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_depth_fld(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', level,
                                    MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                    title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAv_Errors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_WtdAv_Errors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
@@ -106,17 +106,17 @@ plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAv_Errors_z'+str(level), bbox_inches 
 fig, ax, im = rfplt.plot_yconst_crss_sec(Av_Error[:,:,:], 'Averaged Errors', y_coord, 
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_Errors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_yconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', y_coord, 
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_AbsErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_yconst_crss_sec(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', y_coord, 
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAv_Errors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_WtdAv_Errors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
@@ -125,16 +125,16 @@ fig, ax, im = rfplt.plot_xconst_crss_sec(Av_Error[:,:,:], 'Averaged Errors', x_c
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=-0.00015, max_value=0.00015, diff=True)
                                          #title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_Errors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=-0.00015, max_value=0.00015, diff=True)
                                          #title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_Av_AbsErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', x_coord, 
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          title=None, min_value=None, max_value=None, diff=True)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_WtdAv_Errors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_WtdAv_Errors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 

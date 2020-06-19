@@ -32,7 +32,7 @@ run_vars = { 'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':Tru
              'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2 }
 
 time_step = '24hrs'
-data_prefix = 'DensLayers_'
+data_prefix = ''
 
 #---------------------------
 # calculate other variables 
@@ -64,11 +64,11 @@ denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm
 # Plot histograms of the data
 #-----------------------------
 fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_outputs_val, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_outputs_te, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
 

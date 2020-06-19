@@ -248,6 +248,6 @@ ax1.set_xlabel('Epochs')
 ax1.set_ylabel('Loss')
 ax1.set_yscale('log')
 ax1.legend(['Training Loss', 'Validation Loss'])
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 

@@ -252,7 +252,7 @@ ax1.set_xlabel('Epochs')
 ax1.set_ylabel('Loss')
 ax1.set_yscale('log')
 ax1.legend(['Training Loss', 'Validation Loss'])
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 #-----------------------------------------------------
@@ -318,15 +318,15 @@ am.plot_results(model_type, model_name, denorm_outputs_val, denorm_predicted_val
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig = rfplt.Plot_Histogram(denorm_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig = rfplt.Plot_Histogram(denorm_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig = rfplt.Plot_Histogram(denorm_predicted_val-denorm_outputs_val, 100)

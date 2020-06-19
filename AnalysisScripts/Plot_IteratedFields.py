@@ -91,21 +91,21 @@ pred_delT  = np.where(land_mask==1, delT,  np.nan)
 #--------------------------
 fig, ax, im = rfplt.plot_depth_fld(pred_temp[time,:,:,:], 'Predicted Temperature', level, ds['X'].values, ds['Y'].values,
                                    ds['Z'].values, title=None, min_value=None, max_value=None)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_predictions_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot y-cross sections
 #-----------------------
 fig, ax, im = rfplt.plot_yconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', y_coord, ds['X'].values, 
                                          ds['Y'].values, ds['Z'].values, title=None, min_value=None, max_value=None)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_predictions_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
 # Plot x-cross sections
 #-----------------------
 fig, ax, im = rfplt.plot_xconst_crss_sec(pred_temp[time,:,:,:], 'Predicted Temperature', x_coord, ds['X'].values, 
                                          ds['Y'].values, ds['Z'].values, title=None, min_value=None, max_value=None)
-plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_predictions_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_predictions_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 
 if compare_w_truth:
    #-------------------------------
@@ -113,21 +113,21 @@ if compare_w_truth:
    #-------------------------------
    fig = rfplt.plot_depth_fld_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:], 'Predicted Temperature', 
                                    level, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
-   plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_Diff_z'+str(level)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------------
    # Plot y-cross section diff plots
    #---------------------------------
    fig = rfplt.plot_yconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', 
                                          y_coord, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
-   plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_Diff_y'+str(y_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------------
    # Plot x-cross section diff plots
    #---------------------------------
    fig = rfplt.plot_xconst_crss_sec_diff(MITGCM_temp[time,:,:,:], 'GCM Temperature', pred_temp[time,:,:,:],'Predicted Temperature', 
                                          x_coord, ds['X'].values, ds['Y'].values, ds['Z'].values, title=None)
-   plt.savefig(rootdir+'PLOTS/'+exp_name+'_IteratedData_Diff_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_IteratedData_Diff_x'+str(x_coord)+'_'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
    
    #---------------------------
    # Set persistence forecasts
@@ -149,5 +149,5 @@ if compare_w_truth:
    fig = rfplt.plt_timeseries(point, length, {'MITGCM_temp (truth)':MITGCM_temp, model_type: pred_temp},
                               ylim=(19.4 ,19.8 ), time_step=time_step)
                               #ylim=(None), time_step=time_step)
-   plt.savefig(rootdir+'PLOTS/'+exp_name+'_'+title_time+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_'+title_time+'_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
    

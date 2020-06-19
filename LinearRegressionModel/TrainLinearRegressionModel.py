@@ -32,9 +32,7 @@ run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = 'DensLayers_'
-model_prefix = ''
-#data_prefix = ''
-#model_prefix = 'Lasso_'
+model_prefix = 'Lasso_'
 
 TrainModel = True  
 
@@ -90,8 +88,8 @@ if TrainModel:
     parameters = [{'alpha': alpha_s}]
     n_folds=3
    
-    lr = linear_model.Ridge(fit_intercept=False)
-    #lr = linear_model.Lasso(fit_intercept=False, max_iter=20000)
+    #lr = linear_model.Ridge(fit_intercept=False)
+    lr = linear_model.Lasso(fit_intercept=False, max_iter=20000)
     
     # set up regressor
     lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
@@ -194,16 +192,16 @@ print((denorm_lr_predicted_val-denorm_outputs_val).shape)
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
 
 #----------------------------------------------
 # Plot scatter plots of errors against outputs

@@ -187,4 +187,4 @@ ax2.set_xlabel('No of months')
 
 plt.tight_layout()
 plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+exp_name+'_timeseries_Av_Error', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error', bbox_inches = 'tight', pad_inches = 0.1)

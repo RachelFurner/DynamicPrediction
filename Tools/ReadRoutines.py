@@ -120,7 +120,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
      t as inputs.
    '''
 
-   info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/info_'+data_name+'.txt'
+   info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_info.txt'
    info_file=open(info_filename,"w")
 
    StepSize = 1 # how many output steps (months!) to predict over
