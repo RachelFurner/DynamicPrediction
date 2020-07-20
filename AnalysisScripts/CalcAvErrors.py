@@ -111,7 +111,7 @@ nc_X[:] = ds['X'].data
 # 'truth' as inputs, rather than iteratively predicting through time
 #--------------------------------------------------------------------------------------
 print('get predictions')
-pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
+#pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
 
@@ -132,8 +132,8 @@ if calc_predictions:
         predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
 
     #Save as arrays
-    np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
-predictedTemp, predictedDelT = np.load(pred_filename).values()    
+    #np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
+#predictedTemp, predictedDelT = np.load(pred_filename).values()    
 
 #------------------
 # Calculate errors

@@ -57,7 +57,7 @@ exp_name = exp_prefix+model_name+'_'+iterate_method
 rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
 nc_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.nc'
-pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
+#pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
 
 #-------------------------------------------------------------------
 # Read in netcdf file for shape, 'truth', and other variable inputs
@@ -163,7 +163,7 @@ if run_iterations:
    
       init = Pred_Temp[-1,:,:,:]
       # Save to array
-      np.savez( pred_filename, np.array(Pred_Temp), np.array(Pred_DelT), np.array(mask) )
+      #np.savez( pred_filename, np.array(Pred_Temp), np.array(Pred_DelT), np.array(mask) )
       # Save to netcdf file
       length = Pred_Temp.shape[0]
       nc_T[:] = ds['T'].data[:length]
@@ -174,7 +174,7 @@ if run_iterations:
       nc_SpongeMask[:,:,:] = sponge_mask
       nc_Mask[:,:,:] = mask
 
-Pred_Temp, Pred_DelT, mask = np.load(pred_filename).values()
+#Pred_Temp, Pred_DelT, mask = np.load(pred_filename).values()
 length = Pred_Temp.shape[0]
 da_T=da_T.data[:length,:,:,:]
 errors = Pred_Temp-da_T[:,:,:,:]

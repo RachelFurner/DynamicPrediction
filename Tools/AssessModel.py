@@ -56,7 +56,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
    return(exp1_mse, exp2_mse)   
 
   
-def plot_results(model_type, exp_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True):
+def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True):
  
    outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
 
@@ -94,7 +94,7 @@ def plot_results(model_type, exp_name, data1, data2, name='norm', xlabel=None, y
    else:  # Assume we expect points to fit on 0 line, i.e. plotting errors against something
       ax1.plot([bottom, top], [0, 0], 'k--', lw=1)
    
-   plt.savefig(outdir+'PLOTS/'+exp_name+'_scatter_'+xlabel+'Vs'+ylabel+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel+'Vs'+ylabel+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
    return()

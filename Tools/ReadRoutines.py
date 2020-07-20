@@ -16,74 +16,101 @@ from torch.utils import data
 from torchvision import transforms, utils
 import torch
 from Tools import mds as mds
+from Tools import Model_Plotting as rfplt
+import os
+import matplotlib.pyplot as plt
 
-def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth, z_lw, z_up, y_lw, y_up, x_lw, x_up, z_subsize, y_subsize, x_subsize):
-   # Confusing nomenclature... tmp stands for temporary. Temp (capitalised) stands for Temperature.
+def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth):
+
+   """ GetInputs
+    
+     This function is given sub regions of the MITGCM data, and returns an array (no_samples, no_features) of inputs for the
+     points in ths sub-arrays (except the halo points needed for inputs).
+     It is used to create inputs for training, and also to create inputs when iterating. 
+
+     Parameters:
+        run_vars (dictionary) : Dictionary describing which ocean variables are to be included in the model
+        Temp, Sal, U, V, Kwx, Kwy, Kwz, dns and Eta (arrays) : Arrays of the relevant ocean variables, cut out for the specific time point
+                                                     and for the spatial region being forecasted/the training locations plus
+                                                     additional halo rows in the x, y (and if 3d) z directions, to allow for i
+                                                     inputs from the side of the forecast domain.
+        lat, lon, depth (arrays) : Arrays of the lat, lon and depth of the points being forecast (no additional halo region here)
+
+     Returns:
+        inputs (array) : array, shape (no_samples, no_features), containing training samples for region (not including halo) passed to the function
+     """
+ 
+   x_subsize = Temp.shape[2]-2
+   y_subsize = Temp.shape[1]-2
+
+   # Note confusing nomenclature... tmp stands for temporary. Temp (capitalised) stands for Temperature.
    if run_vars['dimension'] == 2:
-      tmp = view_as_windows(Temp[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+      z_subsize = Temp.shape[0]
+      tmp = view_as_windows(Temp, (1,3,3), 1)
       inputs = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
       if run_vars['sal']:
-         tmp = view_as_windows(Sal[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(Sal, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['current']:
-         tmp = view_as_windows(U[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(U, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(V[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(V, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['bolus_vel']:
-         tmp = view_as_windows(Kwx[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(Kwx, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(Kwy[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(Kwy, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(Kwz[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(Kwz, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['density']:
-         tmp = view_as_windows(dns[z_lw:z_up,y_lw-1:y_up+1,x_lw-1:x_up+1], (1,3,3), 1)
+         tmp = view_as_windows(dns, (1,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
    elif run_vars['dimension'] == 3:
-      tmp = view_as_windows(Temp[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+      z_subsize = Temp.shape[0]-2
+      tmp = view_as_windows(Temp, (3,3,3), 1)
       inputs = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1))
       if run_vars['sal']:
-         tmp = view_as_windows(Sal[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(Sal, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['current']:
-         tmp = view_as_windows(U[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(U, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(V[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(V, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['bolus_vel']:
-         tmp = view_as_windows(Kwx[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(Kwx, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(Kwy[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(Kwy, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
-         tmp = view_as_windows(Kwz[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(Kwz, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
       if run_vars['density']:
-         tmp = view_as_windows(dns[z_lw-1:z_up+1,y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3,3), 1)
+         tmp = view_as_windows(dns, (3,3,3), 1)
          tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
          inputs = np.concatenate( (inputs, tmp), axis=-1) 
    else:
       print('ERROR, dimension neither 2 nor 3')
    if run_vars['eta']:
-      tmp = view_as_windows(Eta[y_lw-1:y_up+1,x_lw-1:x_up+1], (3,3), 1)
+      tmp = view_as_windows(Eta, (3,3), 1)
       tmp = np.tile(tmp, (z_subsize,1,1,1,1))
       tmp = tmp.reshape((tmp.shape[0], tmp.shape[1], tmp.shape[2], -1)) 
       inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['lat']:
-      tmp = lat[y_lw:y_up]
+      tmp = lat
       # convert to 3d shape, plus additional dim of 1 for feature.
       tmp = np.tile(tmp, (z_subsize,1))
       tmp = np.expand_dims(tmp, axis=-1)
@@ -91,14 +118,14 @@ def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, dept
       tmp = np.expand_dims(tmp, axis=-1)
       inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['lon']:
-      tmp = lon[x_lw:x_up]
+      tmp = lon
       # convert to 3d shape, plus additional dim of 1 for feature.
       tmp = np.tile(tmp, (y_subsize,1))
       tmp = np.tile(tmp, (z_subsize,1,1))
       tmp = np.expand_dims(tmp, axis=-1)
       inputs = np.concatenate( (inputs, tmp), axis=-1) 
    if run_vars['dep']:
-      tmp = depth[z_lw:z_up]
+      tmp = depth
       # convert to 3d shape, plus additional dim of 1 for feature.
       tmp = np.expand_dims(tmp, axis=-1)
       tmp = np.tile(tmp, (1,y_subsize))
@@ -106,10 +133,18 @@ def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, dept
       tmp = np.tile(tmp, (1,x_subsize))
       tmp = np.expand_dims(tmp, axis=-1)
       inputs = np.concatenate( (inputs, tmp), axis=-1) 
+        
+   inputs  =  inputs.reshape(( z_subsize * y_subsize * x_subsize, inputs.shape[-1] ))
 
+   # Add polynomial terms to inputs array
+   if run_vars['poly_degree'] > 1: 
+       # Note bias included at linear regressor stage, so not needed in input data
+       polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False) 
+       inputs  = polynomial_features.fit_transform(inputs)
+       
    return(inputs)
 
-def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None):
+def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None, save_arrays=False, plot_histograms=False):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -186,15 +221,14 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    # Region 1: main part of domain, ignoring one point above/below land/domain edge at north and south borders, and
    # ignoring one point down entire West boundary, and two points down entire East boundary (i.e. acting as though 
    # land split carries on all the way to the bottom of the domain)
+   # Set lower and upper boundaries of the FORECAST region - the window is extended in getInputs to include the surrounding input region (i.e.
+   # row x=0, which is used as inputs for x=1, but not forecast for as it is next to land, so x_lw is 1, the first point thats forecastable).
    x_lw_1 = 1
    x_up_1 = x_size-2       # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
    y_lw_1 = 1
    y_up_1 = y_size-3       # one higher than the point we want to forecast for, i.e. first point we're not forecasting
    z_lw_1 = 1
    z_up_1 = z_size-1       # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
-   x_subsize_1 = x_size-3
-   y_subsize_1 = y_size-4
-   z_subsize_1 = z_size-2
 
    ## Region 2: West side, Southern edge, above the depth where the land split carries on. One cell strip where throughflow enters.
    # Move East most data to column on West side, to allow viewaswindows to deal with throughflow
@@ -214,9 +248,6 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    y_up_2 = 15             # one higher than the point we want to forecast for, i.e. first point we're not forecasting
    z_lw_2 = 1
    z_up_2 = 31             # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
-   x_subsize_2 = 1
-   y_subsize_2 = 14
-   z_subsize_2 = 30
 
    ## Region 3: East side, Southern edge, above the depth where the land split carries on. Two column strip where throughflow enters.
    # Move West most data to column on East side, to allow viewaswindows to deal with throughflow
@@ -236,26 +267,39 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    y_up_3 = 15             # one higher than the point we want to forecast for, i.e. first point we're not forecasting
    z_lw_3 = 1
    z_up_3 = 31             # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
-   x_subsize_3 = 2
-   y_subsize_3 = 14
-   z_subsize_3 = 30
 
 
    for t in range(start, trainval_split, 200):  
-
         #---------#
         # Region1 #
         #---------#
-        inputs_1 = GetInputs(run_vars,
-                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:], 
-                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
-                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
+        if run_vars['dimension'] == 2:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_V[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 density[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
+        elif run_vars['dimension'] == 3:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_V[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
-        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
+        outputs_1 = outputs_1.reshape((-1, 1))
 
         if t == start:
            inputs_tr  = inputs_1 
@@ -267,16 +311,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region2 #
         #---------#
-        inputs_2 = GetInputs(run_vars,
-                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
-                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
+        if run_vars['dimension'] == 2:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+        elif run_vars['dimension'] == 3:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
-        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+        outputs_2 = outputs_2.reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_2 ), axis=0)
         outputs_tr = np.concatenate( (outputs_tr, outputs_2), axis=0)
@@ -284,16 +345,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region3 #
         #---------#
-        inputs_3 = GetInputs(run_vars,
-                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
-                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+        if run_vars['dimension'] == 2:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+        elif run_vars['dimension'] == 3:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
-        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+        outputs_3 = outputs_3.reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_3 ), axis=0)
         outputs_tr = np.concatenate( (outputs_tr, outputs_3), axis=0)
@@ -304,16 +382,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region1 #
         #---------#
-        inputs_1 = GetInputs(run_vars,
-                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:],
-                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
-                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
+        if run_vars['dimension'] == 2:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_V[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 density[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
+        elif run_vars['dimension'] == 3:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_V[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
-        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
+        outputs_1 = outputs_1.reshape((-1, 1))
 
         if t == trainval_split:
            inputs_val  = inputs_1 
@@ -325,16 +420,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region2 #
         #---------#
-        inputs_2 = GetInputs(run_vars,
-                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
-                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
+        if run_vars['dimension'] == 2:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+        elif run_vars['dimension'] == 3:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
-        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+        outputs_2 = outputs_2.reshape((-1, 1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_2 ), axis=0)
         outputs_val = np.concatenate( (outputs_val, outputs_2), axis=0)
@@ -342,16 +454,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region3 #
         #---------#
-        inputs_3 = GetInputs(run_vars,
-                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
-                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+        if run_vars['dimension'] == 2:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+        elif run_vars['dimension'] == 3:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
-        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+        outputs_3 = outputs_3.reshape((-1,1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_3 ), axis=0)
         outputs_val = np.concatenate( (outputs_val, outputs_3), axis=0)
@@ -362,16 +491,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region1 #
         #---------#
-        inputs_1 = GetInputs(run_vars,
-                           da_T[t,:,:,:], da_S[t,:,:,:], da_U[t,:,:,:], da_V[t,:,:,:], da_Kwx[t,:,:,:], da_Kwy[t,:,:,:], da_Kwz[t,:,:,:],
-                           density[t,:,:,:], da_Eta[t,:,:], da_lat, da_lon, da_depth,
-                           z_lw_1, z_up_1, y_lw_1, y_up_1, x_lw_1, x_up_1, z_subsize_1, y_subsize_1, x_subsize_1)
+        if run_vars['dimension'] == 2:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_V[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 density[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
+        elif run_vars['dimension'] == 3:
+           inputs_1 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_U[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_V[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwx[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwy[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Kwz[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
         outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_1  =  inputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, inputs_1.shape[-1] ))
-        outputs_1 = outputs_1.reshape(( z_subsize_1 * y_subsize_1 * x_subsize_1, 1))
+        outputs_1 = outputs_1.reshape((-1, 1))
 
         if t == valtest_split:
            inputs_te  = inputs_1 
@@ -383,16 +529,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region2 #
         #---------#
-        inputs_2 = GetInputs(run_vars,
-                           da_T2[t,:,:,:], da_S2[t,:,:,:], da_U2[t,:,:,:], da_V2[t,:,:,:], da_Kwx2[t,:,:,:], da_Kwy2[t,:,:,:], da_Kwz2[t,:,:,:],
-                           density2[t,:,:,:], da_Eta2[t,:,:], da_lat, da_lon2, da_depth,
-                           z_lw_2, z_up_2, y_lw_2, y_up_2, x_lw_2, x_up_2, z_subsize_2, y_subsize_2, x_subsize_2)
-
+        if run_vars['dimension'] == 2:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+        elif run_vars['dimension'] == 3:
+           inputs_2 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+        
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_2  =  inputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, inputs_2.shape[-1] ))
-        outputs_2 = outputs_2.reshape(( z_subsize_2 * y_subsize_2 * x_subsize_2, 1))
+        outputs_2 = outputs_2.reshape((-1, 1))
 
         inputs_te  = np.concatenate( (inputs_te , inputs_2 ), axis=0)
         outputs_te = np.concatenate( (outputs_te, outputs_2), axis=0)
@@ -400,16 +563,33 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         # Region3 #
         #---------#
-        inputs_3 = GetInputs(run_vars,
-                           da_T3[t,:,:,:], da_S3[t,:,:,:], da_U3[t,:,:,:], da_V3[t,:,:,:], da_Kwx3[t,:,:,:], da_Kwy3[t,:,:,:], da_Kwz3[t,:,:,:],
-                           density3[t,:,:,:], da_Eta3[t,:,:], da_lat, da_lon3, da_depth,
-                           z_lw_3, z_up_3, y_lw_3, y_up_3, x_lw_3, x_up_3, z_subsize_3, y_subsize_3, x_subsize_3)
+        if run_vars['dimension'] == 2:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+        elif run_vars['dimension'] == 3:
+           inputs_3 = GetInputs( run_vars, 
+                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-
-        # reshape from grid (z,y,x,features) to list (no_points, features)
-        inputs_3  =  inputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, inputs_3.shape[-1] ))
-        outputs_3 = outputs_3.reshape(( z_subsize_3 * y_subsize_3 * x_subsize_3, 1))
+        outputs_3 = outputs_3.reshape((-1, 1))
 
         inputs_te  = np.concatenate( (inputs_te , inputs_3 ), axis=0)
         outputs_te = np.concatenate( (outputs_te, outputs_3), axis=0)
@@ -477,15 +657,6 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    del da_lat
    del da_depth
 
-   # Add polynomial terms to inputs array
-   print('Add polynomial terms to inputs')
-   if run_vars['poly_degree'] > 1: 
-       # Note bias included at linear regressor stage, so not needed in input data
-       polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False) 
-       inputs_tr  = polynomial_features.fit_transform(inputs_tr)
-       inputs_val = polynomial_features.fit_transform(inputs_val)
-       inputs_te  = polynomial_features.fit_transform(inputs_te)
-       
    # Randomise the sample order
    np.random.seed(5)
    ordering_tr  = np.random.permutation(inputs_tr.shape[0])
@@ -499,6 +670,19 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    inputs_te = inputs_te[ordering_te]
    outputs_te = outputs_te[ordering_te]
 
+   if plot_histograms:
+      #-----------------------------
+      # Plot histograms of the data
+      #-----------------------------
+      fig = rfplt.Plot_Histogram(outputs_tr, 100)
+      plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      
+      fig = rfplt.Plot_Histogram(outputs_val, 100)
+      plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      
+      fig = rfplt.Plot_Histogram(outputs_te, 100)
+      plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
@@ -541,43 +725,38 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    info_file.write('  inputs_te.shape : ' + str( inputs_te.shape) +'\n')
    info_file.write(' outputs_te.shape : ' + str(outputs_te.shape) +'\n')
    info_file.write('\n')
+   info_file.close
    
-   print('save arrays')
-   inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-   inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-   inputs_te_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
-   outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
-   outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
-   outputs_te_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTe.npy'
-   np.save(inputs_tr_file,  norm_inputs_tr)
-   np.save(inputs_val_file, norm_inputs_val)
-   np.save(inputs_te_file,  norm_inputs_te)
-   np.save(outputs_tr_file, norm_outputs_tr)
-   np.save(outputs_val_file,norm_outputs_val)
-   np.save(outputs_te_file, norm_outputs_te)
+   if save_arrays: 
+      print('save arrays')
+      inputs_tr_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+      inputs_val_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+      inputs_te_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
+      outputs_tr_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+      outputs_val_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+      outputs_te_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
+      np.save(inputs_tr_filename,  norm_inputs_tr)
+      np.save(inputs_val_filename, norm_inputs_val)
+      np.save(inputs_te_filename,  norm_inputs_te)
+      os.system("gzip %s" % (inputs_te_filename))
+      np.save(outputs_tr_filename, norm_outputs_tr)
+      np.save(outputs_val_filename,norm_outputs_val)
+      np.save(outputs_te_filename, norm_outputs_te)
+      os.system("gzip %s" % (outputs_te_filename))
 
    print('shape for inputs and outputs: tr; val; te')
    print(norm_inputs_tr.shape, norm_outputs_tr.shape)
    print(norm_inputs_val.shape, norm_outputs_val.shape)
    print(norm_inputs_te.shape, norm_outputs_te.shape)
    
-   # release memory
-   norm_inputs_tr  = None
-   norm_inputs_val = None
-   norm_inputs_te  = None
-   norm_outputs_tr  = None
-   norm_outputs_val = None
-   norm_outputs_te  = None
-   del norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
-
-   return inputs_tr, inputs_val, inputs_te, outputs_tr, outputs_val, outputs_te
+   return norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
 
 ####################################################################################
 ####################################################################################
 ####################################################################################
 ####################################################################################
 
-# Create Dataset, which inherits the data.Dataset class, and then overwrite the default length and get item functions
+# Create Dataset, which inherits the data.Dataset class
 class MITGCM_Wholefield_Dataset(data.Dataset):
 
    '''
@@ -602,10 +781,6 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
           dataset_end_index       : Point of dataset file after which to ignore (i.e. cause model is no longer
                                     dynamically active
        """
- 
-       #data_end_index = 50 * 360 # we look at 50 years of data - should see if we can avoid hard coding this here...
-       # When looking at monthly data...
-       #data_end_index = 2000 * 12   # look at first 2000 years only - while model is still dynamically active. Ignore rest for now.
  
        self.ds      = xr.open_dataset(MITGCM_filename)
        self.start   = int(start_ratio * dataset_end_index)
@@ -695,11 +870,20 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
           print('da_mask contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_mask))) )
 
-       # average to get onto same grid as T points, taking the original value at land edge, to avoid averaging -999 with 'real' value
-       da_U_in    = np.where( da_U_tmp[:,:,1:] == -999., da_U_tmp[:,:,:-1], 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) )
-       da_V_in    = np.where( da_V_tmp[:,1:,:] == -999., da_V_tmp[:,:-1,:], 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:]) )
-       da_U_out   = np.where( da_U_tmp[:,:,1:] == -999., da_U_tmp[:,:,:-1], 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) )
-       da_V_out   = np.where( da_V_tmp[:,1:,:] == -999., da_V_tmp[:,:-1,:], 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:]) )
+       # average to get onto same grid as T points
+       da_U_in    = 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) 
+       da_V_in    = 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:])
+       da_U_out   = 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:])
+       da_V_out   = 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:])
+       # take the ocean value when next to land to avoid averaging -999 with 'ocean' value
+       da_U_in    = np.where( da_U_tmp[:,:,1:]  == -999., da_U_tmp[:,:,:-1], da_U_in )
+       da_U_in    = np.where( da_U_tmp[:,:,:-1] == -999., da_U_tmp[:,:,1:],  da_U_in )
+       da_V_in    = np.where( da_V_tmp[:,1:,:]  == -999., da_V_tmp[:,:-1,:], da_V_in )
+       da_V_in    = np.where( da_V_tmp[:,:-1,:] == -999., da_V_tmp[:,1:,:],  da_V_in )
+       da_U_out   = np.where( da_U_tmp[:,:,1:]  == -999., da_U_tmp[:,:,:-1], da_U_out )
+       da_U_out   = np.where( da_U_tmp[:,:,:-1] == -999., da_U_tmp[:,:,1:],  da_U_out )
+       da_V_out   = np.where( da_V_tmp[:,1:,:]  == -999., da_V_tmp[:,:-1,:], da_V_out )
+       da_V_out   = np.where( da_V_tmp[:,:-1,:] == -999., da_V_tmp[:,1:,:],  da_V_out )
 
        sample_input  = np.zeros(( 0, da_T_in.shape[1],  da_T_in.shape[2]  ))  # shape: (no channels, y, x)
        sample_output = np.zeros(( 0, da_T_out.shape[1], da_T_out.shape[2]  ))  # shape: (no channels, y, x)
@@ -769,7 +953,6 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
           print('sample_output contains a NaN')
  
        return (sample)
-
 
 
 class RF_Normalise(object):
@@ -957,7 +1140,7 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
    # as npz file
    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_MeanStd.npz'
-   np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
+   np.savez_compressed( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
    # Open arrays from file
    inputs_mean, inputs_std, outputs_mean, outputs_std = np.load(mean_std_file).values()
   

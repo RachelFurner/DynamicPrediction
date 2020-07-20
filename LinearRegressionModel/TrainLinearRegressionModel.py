@@ -9,6 +9,7 @@ sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
 from Tools import CreateDataName as cn
 from Tools import AssessModel as am
 from Tools import Model_Plotting as rfplt
+from Tools import ReadRoutines as rr
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,26 +23,30 @@ from sklearn.metrics import classification_report
 import torch as torch
 import gc
 
+import os
+
 torch.cuda.empty_cache()
 plt.rcParams.update({'font.size': 14})
 
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':False, 'bolus_vel':False, 'sal':False, 'eta':False, 'density':False, 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
-data_prefix = 'DensLayers_'
-model_prefix = 'Lasso_'
+data_prefix = ''
+model_prefix = ''
 
 TrainModel = True  
 
 if time_step == '1mnth':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
    MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
 elif time_step == '24hrs':
    DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
    MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+   density_file = DIR+'DensityData.npy'
 else:
    print('ERROR - No proper time step given')
 
@@ -53,18 +58,60 @@ data_name = data_prefix+data_name+'_'+time_step
 
 model_name = model_prefix+data_name
 
+plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
+if not os.path.isdir(plot_dir):
+   os.system("mkdir %s" % (plot_dir))
+
 #--------------------------------------------------------------
-# Open data from saved array
+# Read in data or load from saved array
 #--------------------------------------------------------------
 print('reading data')
-inputs_tr_file   = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-inputs_val_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-outputs_tr_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
-outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
-norm_inputs_tr   = np.load(inputs_tr_file, mmap_mode='r')
-norm_inputs_val  = np.load(inputs_val_file, mmap_mode='r')
-norm_outputs_tr  = np.load(outputs_tr_file, mmap_mode='r')
-norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+zip_inputs_tr_file = inputs_tr_file+'.gz'
+inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+zip_inputs_val_file = inputs_val_file+'.gz'
+outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+zip_outputs_tr_file = outputs_tr_file+'.gz'
+outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+zip_outputs_val_file = outputs_val_file+'.gz'
+
+# If datasets already exist (zipped or unzipped) load these, otherwise create them but don't save - disc space too short!!
+if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file))   and
+         (os.path.isfile(inputs_val_file)  or os.path.isfile(zip_inputs_val_file))  and
+         (os.path.isfile(outputs_tr_file)  or os.path.isfile(zip_outputs_tr_file))  and
+         (os.path.isfile(outputs_val_file) or os.path.isfile(zip_outputs_val_file)) ):
+   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, save_arrays=False, plot_histograms=False)
+   del norm_inputs_te
+   del norm_outputs_te
+else:
+   
+   if os.path.isfile(inputs_tr_file):
+      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
+   elif os.path.isfile(zip_inputs_tr_file):
+      os.system("gunzip %s" % (zip_inputs_tr_file))
+      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
+      os.system("gzip %s" % (inputs_tr_file))
+
+   if os.path.isfile(inputs_val_file):
+      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
+   elif os.path.isfile(zip_inputs_val_file):
+      os.system("gunzip %s" % (zip_inputs_val_file))
+      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
+      os.system("gzip %s" % (inputs_val_file))
+
+   if os.path.isfile(outputs_tr_file):
+      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
+   elif os.path.isfile(zip_outputs_tr_file):
+      os.system("gunzip %s" % (zip_outputs_tr_file))
+      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
+      os.system("gzip %s" % (outputs_tr_file))
+   
+   if os.path.isfile(outputs_val_file):
+      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+   elif os.path.isfile(zip_outputs_val_file):
+      os.system("gunzip %s" % (zip_outputs_val_file))
+      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+      os.system("gzip %s" % (outputs_val_file))
 
 #norm_inputs_tr   = norm_inputs_tr[:10]
 #norm_inputs_val  = norm_inputs_val[:10]
@@ -84,14 +131,13 @@ if TrainModel:
     print('training model')
     
     alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
-    #alpha_s = [0.0001, 0.001, 0.01]
+    alpha_s = [0.0001]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
    
-    #lr = linear_model.Ridge(fit_intercept=False)
-    lr = linear_model.Lasso(fit_intercept=False, max_iter=20000)
+    lr = linear_model.Ridge(fit_intercept=False)
+    #lr = linear_model.Lasso(fit_intercept=False, max_iter=2000000)
     
-    # set up regressor
     lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
     
     # fit the model
@@ -134,8 +180,6 @@ with open(pkl_filename, 'rb') as file:
 
 # predict values
 print('predict values')
-#norm_lr_predicted_tr = lr.predict(norm_inputs_tr)
-#norm_lr_predicted_val = lr.predict(norm_inputs_val)
 norm_lr_predicted_tr = lr.predict(norm_inputs_tr).reshape(-1,1)
 norm_lr_predicted_val = lr.predict(norm_inputs_val).reshape(-1,1)
 
@@ -147,7 +191,13 @@ gc.collect()
 # De-normalise the outputs and predictions
 #------------------------------------------
 mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
-input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+zip_mean_std_file = mean_std_file+'.gz' 
+if os.path.isfile(mean_std_file):
+   input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+elif os.path.isfile(zip_mean_std_file):
+   os.system("gunzip %s" % (zip_mean_std_file))
+   input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+   os.system("gunzip %s" % (mean_std_file))
 
 # denormalise data
 def denormalise_data(norm_data,mean,std):
@@ -182,26 +232,20 @@ print('plot results')
 am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='training')
 am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
 
-print(denorm_lr_predicted_tr.shape)
-print(denorm_lr_predicted_val.shape)
-print(denorm_outputs_tr.shape)
-print(denorm_outputs_val.shape)
-print((denorm_lr_predicted_tr-denorm_outputs_tr).shape)
-print((denorm_lr_predicted_val-denorm_outputs_val).shape)
 #-------------------------------------------------------------------
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
 
 #----------------------------------------------
 # Plot scatter plots of errors against outputs

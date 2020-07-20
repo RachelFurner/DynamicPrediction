@@ -49,26 +49,7 @@ elif time_step == '24hrs':
    MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
    density_file = DIR+'DensityData.npy'
 
-#-------------------
-# Read in land mask
-#-------------------
-ds = xr.open_dataset(MITGCM_filename)
-land_mask = ds['Mask'].values
-
 #---------------------------------
 # Call module to read in the data
 #---------------------------------
-denorm_inputs_tr, denorm_inputs_val, denorm_inputs_te, denorm_outputs_tr, denorm_outputs_val, denorm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step)
-
-#-----------------------------
-# Plot histograms of the data
-#-----------------------------
-fig = rfplt.Plot_Histogram(denorm_outputs_tr, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.Plot_Histogram(denorm_outputs_val, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
-
-fig = rfplt.Plot_Histogram(denorm_outputs_te, 100)  
-plt.savefig('/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
-
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, save_arrays=True, plot_histograms=True)

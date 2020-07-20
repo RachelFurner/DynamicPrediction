@@ -46,7 +46,7 @@ run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True
 time_step = '24hrs'
 
 learningRate = 0.001 
-epochs = 100
+epochs = 10
 batch_size = 4096
 
 model_prefix = 'NNasLinearRegressor_lr'+str(learningRate)+'_batchsize_'+str(batch_size)
@@ -68,22 +68,59 @@ pkl_filename = '../../'+model_type+'_Outputs/MODELS/pickle_'+model_name+'.pkl'
 #--------------------------------------------------------------
 # Read in the data from saved arrays
 #--------------------------------------------------------------
-inputs_tr_file   = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-inputs_val_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-outputs_tr_file  = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsTr.npy'
-outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_OutputsVal.npy'
-norm_inputs_tr   = np.load(inputs_tr_file, mmap_mode='r')
-norm_inputs_val  = np.load(inputs_val_file, mmap_mode='r')
-norm_outputs_tr  = np.load(outputs_tr_file, mmap_mode='r')
-norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+print('reading data')
+inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+zip_inputs_tr_file = inputs_tr_file+'.gz'
+inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+zip_inputs_val_file = inputs_val_file+'.gz'
+outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+zip_outputs_tr_file = outputs_tr_file+'.gz'
+outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+zip_outputs_val_file = outputs_val_file+'.gz'
 
-#norm_inputs_tr   = norm_inputs_tr[:10,:]
-#norm_inputs_val  = norm_inputs_val[:10,:]
-#norm_outputs_tr  = norm_outputs_tr[:10,:]
-#norm_outputs_val = norm_outputs_val[:10,:]
+# if datasets already exist (zipped or unzipped) load these, otherwise create them but don't save - disc space too short!!
+if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file))   and
+         (os.path.isfile(inputs_val_file)  or os.path.isfile(zip_inputs_val_file))  and
+         (os.path.isfile(outputs_tr_file)  or os.path.isfile(zip_outputs_tr_file))  and
+         (os.path.isfile(outputs_val_file) or os.path.isfile(zip_outputs_val_file)) ):
+   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, save_arrays=False, plot_histograms=False)
+   del norm_inputs_te
+   del norm_outputs_te
+else:
+   
+   if os.path.isfile(inputs_tr_file):
+      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
+   elif os.path.isfile(zip_inputs_tr_file):
+      os.system("gunzip %s" % (zip_inputs_tr_file))
+      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
+
+   if os.path.isfile(inputs_val_file):
+      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
+   elif os.path.isfile(zip_inputs_val_file):
+      os.system("gunzip %s" % (zip_inputs_val_file))
+      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
+
+   if os.path.isfile(outputs_tr_file):
+      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
+   elif os.path.isfile(zip_outputs_tr_file):
+      os.system("gunzip %s" % (zip_outputs_tr_file))
+      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
+   
+   if os.path.isfile(outputs_val_file):
+      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+   elif os.path.isfile(zip_outputs_val_file):
+      os.system("gunzip %s" % (zip_outputs_val_file))
+      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+
+#norm_inputs_tr   = norm_inputs_tr[:10]
+#norm_inputs_val  = norm_inputs_val[:10]
+#norm_outputs_tr  = norm_outputs_tr[:10]
+#norm_outputs_val = norm_outputs_val[:10]
 
 print(norm_inputs_tr.shape)
+print(norm_inputs_val.shape)
 print(norm_outputs_tr.shape)
+print(norm_outputs_val.shape)
 
 #-----------------------------------------------------------------
 # Set up regression model in PyTorch (so we can use GPUs!)
