@@ -17,10 +17,9 @@ import os
 #----------------------------
 plot_log = True
 
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':False, 'bolus_vel':False, 'sal':False, 'eta':False, 'density':False, 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
-#time_step = '1mnth'
 time_step = '24hrs'
 data_prefix=''
 model_prefix = ''
@@ -200,7 +199,7 @@ if run_vars['eta']:
    no_variable_groups = no_variable_groups + 1
 if run_vars['lat'] or run_vars['lon'] or run_vars['dep']:
    no_location_vars = 0
-   tick_labels.append('Location info')   
+   tick_labels.append('Location_info')   
    temp_no_variables = 0
    if run_vars['lat']:
       temp_no_variables = temp_no_variables + 1
@@ -356,8 +355,10 @@ elif run_vars['poly_degree'] is 2:
    ax = fig.add_subplot(111, aspect='equal')
    vmax = np.nanmax(coeffs)
    print('vmax: '+str(vmax))
-   im = ax.pcolormesh(coeffs, edgecolors='none', snap=False, vmax=vmax)
-   #im = ax.pcolormesh(coeffs, edgecolors='none', snap=False, norm=colors.LogNorm(vmin=1,vmax=vmax))
+   if plot_log:
+      im = ax.pcolormesh(coeffs, edgecolors='none', snap=False, norm=colors.LogNorm(vmin=1,vmax=vmax))
+   else:
+      im = ax.pcolormesh(coeffs, edgecolors='none', snap=False, vmax=vmax)
    
    # Create colorbar
    cbar = ax.figure.colorbar(im, ax=ax)#, extend='min')
@@ -396,7 +397,11 @@ elif run_vars['poly_degree'] is 2:
          j_group_end   = int(ygrid_lines[j+1])
          fig = plt.figure(figsize=(10, 8))
          ax = fig.add_subplot(111, aspect='equal')
-         im = ax.pcolormesh(coeffs[j_group_start:j_group_end, i_group_start:i_group_end], edgecolors='none', snap=False, vmin=0, vmax=vmax)
+         if plot_log:
+            im = ax.pcolormesh( coeffs[j_group_start:j_group_end, i_group_start:i_group_end], edgecolors='none', snap=False,
+                                norm=colors.LogNorm(vmin=1,vmax=vmax) )
+         else:
+            im = ax.pcolormesh(coeffs[j_group_start:j_group_end, i_group_start:i_group_end], edgecolors='none', snap=False, vmin=0, vmax=vmax)
          
          # Create colorbar
          cbar = ax.figure.colorbar(im, ax=ax)

@@ -218,6 +218,12 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
 
            lat   = da_lat
            depth = da_depth
+           zlw = z_lw[region]
+           zup = z_up[region]
+           ylw = y_lw[region]
+           yup = y_up[region]
+           xlw = x_lw_nudged[region]
+           xup = x_up_nudged[region]
            if region == 0:
               temp  = predictions
               sal   = da_S
@@ -252,21 +258,46 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
               eta   = da_Eta3
               lon   = da_lon3
 
-           inputs = rr.GetInputs( run_vars,
-                                  temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[t-1,:,:,:], Kwy[t-1,:,:,:], Kwz[t-1,:,:,:],
-                                  dens[t-1,:,:,:], eta[t-1,:,:], lat, lon, depth,
-                                  z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
-                                  z_subsize[region], y_subsize[region], x_subsize[region] )
+           if run_vars['dimension'] == 2:
+              inputs = rr.GetInputs( run_vars,
+                                     temp[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1],
+                                     sal[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     U[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     V[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwx[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwy[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwz[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     dens[t-1,zlw:zup,ylw-1:yup+1,xlw-1:xup+1], 
+                                     eta[t-1,ylw-1:yup+1,xlw-1:xup+1],
+                                     lat[ylw:yup], lon[xlw:xup], depth[zlw:zup] )
+           elif run_vars['dimension'] == 3:
+              inputs = rr.GetInputs( run_vars,
+                                     temp[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1],
+                                     sal[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     U[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     V[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwx[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwy[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     Kwz[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     dens[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
+                                     eta[t-1,ylw-1:yup+1,xlw-1:xup+1],
+                                     lat[ylw:yup], lon[xlw:xup], depth[zlw:zup] )
+
+           #inputs = rr.GetInputs( run_vars,
+           #                       temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[t-1,:,:,:], Kwy[t-1,:,:,:], Kwz[t-1,:,:,:],
+           #                       dens[t-1,:,:,:], eta[t-1,:,:], lat, lon, depth,
+           #                       z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
+           #                       z_subsize[region], y_subsize[region], x_subsize[region] )
            # Note no need to move the strip back to left or right, as this is just a shape region, not connected to a particular location, its
            # placed in the right place of the domain when it is stored in out!
  
            # reshape from grid (z,y,x,features) to list (no_points, features)
-           inputs = inputs.reshape(( z_subsize[region] * y_subsize[region] * x_subsize[region], inputs.shape[-1] ))
+           #inputs = inputs.reshape(( z_subsize[region] * y_subsize[region] * x_subsize[region], inputs.shape[-1] ))
 
-           if run_vars['poly_degree'] > 1: 
-              # Add polynomial combinations of the features
-              polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
-              inputs = polynomial_features.fit_transform(inputs)
+           #if run_vars['poly_degree'] > 1: 
+           #   # Add polynomial combinations of the features
+           #   polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
+           #   inputs = polynomial_features.fit_transform(inputs)
 
            # normalise inputs
            inputs = np.divide( np.subtract(inputs, input_mean), input_std)

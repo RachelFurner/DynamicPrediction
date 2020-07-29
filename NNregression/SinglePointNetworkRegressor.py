@@ -41,16 +41,15 @@ hyper_params = {
     "batch_size": 4092,
     "num_epochs": 100, 
     "learning_rate": 0.001,
-    #"criterion": torch.nn.MSELoss(),
-    "criterion": 'MSELoss*abs_sq',
-    "no_layers": 0,     # no of *hidden* layers
-    "no_nodes": 10000   # Note 26106 features....
+    "criterion": 'MSE',
+    "no_layers": 1,     # no of *hidden* layers
+    "no_nodes": 100     # Note 26106 features....
 }
 early_stop_patience = 100
 plot_freq = 1    # Plot scatter plot every n epochs
 
 data_prefix = ''
-model_prefix = 'CostMSExAbsSq_'+str(hyper_params["no_layers"])+'hiddenlayer_lr'+str(hyper_params["learning_rate"])+'_batchsize'+str(hyper_params["batch_size"])+'_'
+model_prefix = str(hyper_params["criterion"])+'_'+str(hyper_params["no_layers"])+'layers_'+str(hyper_params["no_nodes"])+'nodes_lr'+str(hyper_params["learning_rate"])+'_batch'+str(hyper_params["batch_size"])+'_'
 
 model_type = 'nn'
 
@@ -59,10 +58,13 @@ seed_value = 12321
 mitgcm_dir = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
 MITGCM_filename = mitgcm_dir + 'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
 density_file = mitgcm_dir + 'DensityData.npy'
+
 #-------------------------------------------------------------
 # Calculate/set some other variables - these shouldn't change 
 #-------------------------------------------------------------
 data_name = cn.create_dataname(run_vars)
+if data_name is '3dLatLonDepUVBolSalEtaDnsPolyDeg2':
+   data_name='AllVars'
 data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 
@@ -74,7 +76,7 @@ if not os.path.isdir(plot_dir):
 output_file = open(output_filename, 'w', buffering=1)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-output_file.write('Using device: '+device)
+output_file.write('Using device: '+device+'\n')
 torch.cuda.empty_cache()
 
 torch.manual_seed(seed_value)
@@ -82,10 +84,10 @@ torch.cuda.manual_seed_all(seed_value)
 np.random.seed(seed_value)
 os.environ['PYTHONHASHSEED']=str(seed_value)
 
-output_file.write('matplotlib backend is:')
-output_file.write(matplotlib.get_backend())
-output_file.write("os.environ['DISPLAY']:")
-output_file.write(os.environ['DISPLAY'])
+output_file.write('matplotlib backend is:\n')
+output_file.write(matplotlib.get_backend()+'\n')
+output_file.write("os.environ['DISPLAY']:\n")
+output_file.write(os.environ['DISPLAY']+'\n')
 
 #---------------------
 # Set up Comet stuff:
@@ -96,11 +98,11 @@ output_file.write(os.environ['DISPLAY'])
 #experiment.log_others(run_vars)
 
 toc = time.time()
-output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - tic))
+output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - tic)+'\n')
 #-------------------------------------------------------------------
 # Create training and val arrays, or read in from existing datasets
 #-------------------------------------------------------------------
-output_file.write('reading data')
+output_file.write('reading data\n')
 inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
 zip_inputs_tr_file = inputs_tr_file+'.gz'
 inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
@@ -116,7 +118,7 @@ if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file)
          (os.path.isfile(outputs_tr_file)  or os.path.isfile(zip_outputs_tr_file))  and
          (os.path.isfile(outputs_val_file) or os.path.isfile(zip_outputs_val_file)) ):
 
-   output_file.write('creating dataset on the fly')
+   output_file.write('creating dataset on the fly \n')
    norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = \
                       rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, 
                                     save_arrays=True , plot_histograms=True )
@@ -125,7 +127,7 @@ if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file)
 
 else:
 
-   output_file.write('reading in dataset')
+   output_file.write('reading in dataset \n')
    if os.path.isfile(inputs_tr_file):
       norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
    elif os.path.isfile(zip_inputs_tr_file):
@@ -150,18 +152,18 @@ else:
       os.system("gunzip %s" % (zip_outputs_val_file))
       norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
 
-output_file.write(str(norm_inputs_tr.shape))
-output_file.write(str(norm_inputs_val.shape))
-output_file.write(str(norm_outputs_tr.shape))
-output_file.write(str(norm_outputs_val.shape))
+output_file.write(str(norm_inputs_tr.shape)+'\n')
+output_file.write(str(norm_inputs_val.shape)+'\n')
+output_file.write(str(norm_outputs_tr.shape)+'\n')
+output_file.write(str(norm_outputs_val.shape)+'\n')
 
 toc = time.time()
-output_file.write('Finished reading in training and validation data at {:0.4f} seconds'.format(toc - tic))
+output_file.write('Finished reading in training and validation data at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #------------------------
 # Store data as Dataset'
 #------------------------
-output_file.write('set up Dataset')
+output_file.write('set up Dataset\n')
 
 class MITGCM_Dataset(data.Dataset):
     """Dataset of MITGCM outputs"""
@@ -192,11 +194,11 @@ train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_param
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=False)
 
 toc = time.time()
-output_file.write('Finished Setting up datasets and dataloaders at {:0.4f} seconds'.format(toc - tic))
+output_file.write('Finished Setting up datasets and dataloaders at {:0.4f} seconds'.format(toc - tic)+'\n')
 #-------------------------
 # Set up regression model
 #-------------------------
-output_file.write('set up model')
+output_file.write('set up model \n')
 class NetworkRegression(torch.nn.Sequential):
     def __init__(self, inputSize, outputSize, hyper_params):
         super(NetworkRegression, self).__init__()
@@ -233,11 +235,11 @@ model.to(device)
 optimizer = torch.optim.Adam( model.parameters(), lr=hyper_params["learning_rate"] )
 
 toc = time.time()
-output_file.write('Finished Setting up model at {:0.4f} seconds'.format(toc - tic))
+output_file.write('Finished Setting up model at {:0.4f} seconds'.format(toc - tic)+'\n')
 #-----------------
 # Train the Model
 #-----------------
-output_file.write('Train the model')
+output_file.write('Train the model \n')
 train_loss_batch = []
 train_loss_epoch = []
 train_mse_epoch = []
@@ -283,8 +285,8 @@ if True:
             predictions = model(batch_inputs)
         
             # get loss for the predicted output and calc MSE
-            #loss = hyper_params["criterion"](predictions, batch_outputs)
-            loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs)**2 ) / batch_outputs.shape[0]
+            #loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs) ) / batch_outputs.shape[0]
+            loss = sum( ( (predictions - batch_outputs)**2 ) ) / batch_outputs.shape[0]
             mse  = torch.nn.MSELoss()(predictions, batch_outputs)
 
             # get gradients w.r.t to parameters
@@ -305,21 +307,21 @@ if True:
                 top    = max(max(predictions), max(batch_outputs), top)    
 
         tr_loss_single_epoch = train_loss_epoch_temp / norm_inputs_tr.shape[0]
-        output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch ))
+        output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
         train_loss_epoch.append( tr_loss_single_epoch )
         train_mse_epoch.append( train_mse_epoch_temp / norm_inputs_tr.shape[0] )
 
         if epoch%plot_freq == 0:
             ax1.set_xlabel('Truth')
             ax1.set_ylabel('Predictions')
-            ax1.set_title('Training')
+            ax1.set_title('Training errors, epoch '+str(epoch))
             ax1.set_xlim(bottom, top)
             ax1.set_ylim(bottom, top)
-            ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
+            ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
             ax1.annotate('Epoch MSE: '+str(np.round(train_mse_epoch_temp / norm_inputs_tr.shape[0],5)),
                           (0.15, 0.9), xycoords='figure fraction')
             ax1.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
-            plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch)+'training.png', bbox_inches = 'tight', pad_inches = 0.1)
+            plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png', bbox_inches = 'tight', pad_inches = 0.1)
             plt.close()
 
         # Validation
@@ -349,8 +351,8 @@ if True:
             predictions = model(batch_inputs)
             
             # get loss for the predicted output
-            #loss = hyper_params["criterion"](predictions, batch_outputs)
-            loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs)**2 ) / batch_outputs.shape[0]
+            #loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs) ) / batch_outputs.shape[0]
+            loss = sum( ( (predictions - batch_outputs)**2 ) ) / batch_outputs.shape[0]
             mse  = torch.nn.MSELoss()(predictions, batch_outputs)
             
             val_loss_epoch_temp += loss.item()*batch_outputs.shape[0]
@@ -364,25 +366,25 @@ if True:
                 top    = max(max(predictions), max(batch_outputs), top)    
 
         val_loss_single_epoch = val_loss_epoch_temp / norm_inputs_val.shape[0]
-        output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch))
+        output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
         val_loss_epoch.append(val_loss_single_epoch)
         val_mse_epoch.append( val_mse_epoch_temp / norm_inputs_val.shape[0] )
 
         if epoch%plot_freq == 0:
             ax1.set_xlabel('Truth')
             ax1.set_ylabel('Predictions')
-            ax1.set_title('Validation')
+            ax1.set_title('Validation errors, epoch '+str(epoch))
             ax1.set_xlim(bottom, top)
             ax1.set_ylim(bottom, top)
-            ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
+            ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
             ax1.annotate('Epoch MSE: '+str(np.round(val_mse_epoch_temp / norm_inputs_val.shape[0],5)),
                           (0.15, 0.9), xycoords='figure fraction')
             ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
-            plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch)+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
+            plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
             plt.close()
 
         toc = time.time()
-        output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic))
+        output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
 
         # Log to Comet.ml
         #experiment.log_metric('Training_Loss', train_loss_epoch[-1], epoch = epoch)
@@ -395,20 +397,20 @@ if True:
         elif val_loss_single_epoch < min_val_loss:
              epochs_no_improve = 0
              min_val_loss = val_loss_single_epoch
-             output_file.write('min_val_loss ;'+str(min_val_loss))
+             output_file.write('min_val_loss ;'+str(min_val_loss)+'\n')
         else:
             epochs_no_improve += 1
-            output_file.write('epochs_no_improve ;'+str(epochs_no_improve))
+            output_file.write('epochs_no_improve ;'+str(epochs_no_improve)+'\n')
         # Check early stopping condition
         if epochs_no_improve == early_stop_patience:
-            output_file.write('Early stopping!' )
+            output_file.write('Early stopping! \n')
             break
 
     del batch_inputs, batch_outputs, predictions 
     torch.cuda.empty_cache()
 
     toc = time.time()
-    output_file.write('Finished training model at {:0.4f} seconds'.format(toc - tic))
+    output_file.write('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
 
     # Plot training and validation loss 
     fig = plt.figure(figsize=(12,8))
@@ -418,107 +420,55 @@ if True:
     ax1.set_xlabel('Epochs')
     ax1.set_ylabel('Loss')
     ax1.set_yscale('log')
-    ax1.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.749, 0.94), xycoords='figure fraction')
-    ax1.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.749, 0.91), xycoords='figure fraction')
+    ax1.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],4)), (0.749, 0.94), xycoords='figure fraction')
+    ax1.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],4)), (0.749, 0.91), xycoords='figure fraction')
     plt.legend(['Training Loss', 'Validation Loss'])
     ax2 = fig.add_subplot(312)
     ax2.plot(train_loss_epoch, color='blue')
     ax2.set_xlabel('Epochs')
     ax2.set_ylabel('Loss')
     ax2.set_yscale('log')
-    ax2.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],6)), (0.749, 0.615), xycoords='figure fraction')
+    ax2.annotate('Final Training Loss: '+str(np.round(train_loss_epoch[-1],4)), (0.749, 0.615), xycoords='figure fraction')
     ax3 = fig.add_subplot(313)
     ax3.plot(val_loss_epoch, color='orange')
     ax3.set_xlabel('Epochs')
     ax3.set_ylabel('Loss')
     ax3.set_yscale('log')
-    ax3.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],6)), (0.749, 0.29), xycoords='figure fraction')
+    ax3.annotate('Final Validation Loss: '+str(np.round(val_loss_epoch[-1],4)), (0.749, 0.29), xycoords='figure fraction')
     plt.subplots_adjust(hspace = 0.35, left=0.05, right=0.95, bottom=0.07, top=0.95)
     plt.savefig(plot_dir+'/'+model_name+'_TrainValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+
+    # Plot training and validation MSE 
+    fig = plt.figure(figsize=(12,8))
+    ax1 = fig.add_subplot(311)
+    ax1.plot(train_mse_epoch, color='blue')
+    ax1.plot(val_mse_epoch, color='orange')
+    ax1.set_xlabel('Epochs')
+    ax1.set_ylabel('MSE')
+    ax1.set_yscale('log')
+    ax1.annotate('Final Training MSE: '+str(np.round(train_mse_epoch[-1],4)), (0.749, 0.94), xycoords='figure fraction')
+    ax1.annotate('Final Validation MSE: '+str(np.round(val_mse_epoch[-1],4)), (0.749, 0.91), xycoords='figure fraction')
+    plt.legend(['Training MSE', 'Validation MSE'])
+    ax2 = fig.add_subplot(312)
+    ax2.plot(train_mse_epoch, color='blue')
+    ax2.set_xlabel('Epochs')
+    ax2.set_ylabel('MSE')
+    ax2.set_yscale('log')
+    ax2.annotate('Final Training MSE: '+str(np.round(train_mse_epoch[-1],4)), (0.749, 0.615), xycoords='figure fraction')
+    ax3 = fig.add_subplot(313)
+    ax3.plot(val_mse_epoch, color='orange')
+    ax3.set_xlabel('Epochs')
+    ax3.set_ylabel('MSE')
+    ax3.set_yscale('log')
+    ax3.annotate('Final Validation MSE: '+str(np.round(val_mse_epoch[-1],4)), (0.749, 0.29), xycoords='figure fraction')
+    plt.subplots_adjust(hspace = 0.35, left=0.05, right=0.95, bottom=0.07, top=0.95)
+    plt.savefig(plot_dir+'/'+model_name+'_TrainValMSEPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
      
-    output_file.write('pickle model')
+    output_file.write('pickle model \n')
     with open(pkl_filename, 'wb') as pckl_file:
         pickle.dump(model, pckl_file)
     
-##-----------------------------------------------------
-## Create full set of predictions and assess the model
-##-----------------------------------------------------
-#
-#norm_predicted_tr = np.zeros((norm_outputs_tr.shape))
-#norm_predicted_val = np.zeros((norm_outputs_val.shape))
-## Loop through to predict for dataset, as memory limits mean we can't do this all at once.
-## Maybe some clever way of doing this with the dataloader?
-#chunk_size = hyper_params["batch_size"]
-#no_chunks  = int(norm_inputs_tr.shape[0]/chunk_size)
-#for i in range(no_chunks):
-#   if torch.cuda.is_available():
-#      norm_tr_inputs_temp  = Variable(torch.from_numpy(norm_inputs_tr[i*chunk_size:(i+1)*chunk_size]).cuda().float())
-#      norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val[i*chunk_size:(i+1)*chunk_size]).cuda().float())
-#   else:
-#      norm_tr_inputs_temp  = Variable(torch.from_numpy(norm_inputs_tr[i*chunk_size:(i+1)*chunk_size]).float())
-#      norm_val_inputs_temp = Variable(torch.from_numpy(norm_inputs_val[i*chunk_size:(i+1)*chunk_size]).float())
-#
-#   norm_predicted_tr[i*chunk_size:(i+1)*chunk_size]  = model(norm_tr_inputs_temp).cpu().detach().numpy()
-#   norm_predicted_val[i*chunk_size:(i+1)*chunk_size] = model(norm_val_inputs_temp).cpu().detach().numpy()
-#   del norm_tr_inputs_temp
-#   del norm_val_inputs_temp
-#   torch.cuda.empty_cache()
-#
-##------------------------------------------
-## De-normalise the outputs and predictions
-##------------------------------------------
-#mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
-#input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
-#
-#def denormalise_data(norm_data,mean,std):
-#    denorm_data = norm_data * std + mean
-#    return denorm_data
-#
-## denormalise the predictions and true outputs   
-#denorm_predicted_tr = denormalise_data(norm_predicted_tr, output_mean, output_std)
-#denorm_predicted_val = denormalise_data(norm_predicted_val, output_mean, output_std)
-#denorm_outputs_tr = denormalise_data(norm_outputs_tr, output_mean, output_std)
-#denorm_outputs_val = denormalise_data(norm_outputs_val, output_mean, output_std)
-#
-##------------------
-## Assess the model
-##------------------
-## Calculate 'persistance' score - persistence prediction is just zero everywhere as we're predicting the trend
-#predict_persistance_tr = np.zeros(denorm_outputs_tr.shape)
-#predict_persistance_val = np.zeros(denorm_outputs_val.shape)
-#
-#output_file.write('get stats')
-#train_mse, val_mse = am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr, exp1=denorm_predicted_tr, pers1=predict_persistance_tr,
-#                                name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_predicted_val, pers2=predict_persistance_val, name='TrainVal')
-#
-##with experiment.test():
-##    experiment.log_metric("train_mse", train_mse)
-##    experiment.log_metric("val_mse", val_mse)
-#
-#output_file.write('plot results')
-#am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_predicted_tr, name='training')
-#am.plot_results(model_type, model_name, denorm_outputs_val, denorm_predicted_val, name='val')
-#
-##-------------------------------------------------------------------
-## plot histograms:
-##-------------------------------------------------
-#fig = rfplt.Plot_Histogram(denorm_predicted_tr, 100) 
-#plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
-#plt.close()
-#
-#fig = rfplt.Plot_Histogram(denorm_predicted_val, 100)
-#plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
-#plt.close()
-#
-#fig = rfplt.Plot_Histogram(denorm_predicted_tr-denorm_outputs_tr, 100)
-#plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
-#plt.close()
-#
-#fig = rfplt.Plot_Histogram(denorm_predicted_val-denorm_outputs_val, 100)
-#plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
-#plt.close()
-#
 toc = time.time()
-output_file.write('Finished script at {:0.4f} seconds'.format(toc - tic))
+output_file.write('Finished script at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 output_file.close()

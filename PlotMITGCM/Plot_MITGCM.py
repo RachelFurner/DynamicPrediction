@@ -53,10 +53,12 @@ x_coord = point[2]
 print('reading in ds')
 ds = xr.open_dataset(data_filename)
 da_T_unmasked = ds['Ttave'][:,:,:,:]
+da_W_unmasked = ds['wVeltave'][:,:,:,:]
 da_Mask = ds['Mask']
 
 # Apply the Mask
 da_T = np.where(da_Mask==1, da_T_unmasked, np.nan)
+da_W = np.where(da_Mask==1, da_W_unmasked, np.nan)
 
 z_size = da_T.shape[1]
 y_size = da_T.shape[2]
@@ -90,7 +92,7 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_z'+str(level), b
 #-----------------------
 # Plot y-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', y_coord,
+fig, ax, im = rfplt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature', y_coord,
                                          ds['X'].values, ds['Y'].values, ds['Z'].values,
                                          title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
@@ -98,10 +100,15 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord), bbox_inche
 #-----------------------
 # Plot x-cross sections
 #-----------------------
-fig, ax, im = rfplt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature Predictions', x_coord,
+fig, ax, im = rfplt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature', x_coord,
                                          ds['X'].values, ds['Y'].values, ds['Z'].values,
                                          title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = rfplt.plot_xconst_crss_sec(da_W[time,:,:,:], 'Vertical Velocity', x_coord,
+                                         ds['X'].values, ds['Y'].values, ds['Z'].values,
+                                         title=None, min_value=-0.00003, max_value=0.00003, cmap='bwr')
+plt.savefig(rootdir+'PLOTS/'+time_step+'_Wvel_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #---------------------------------------------------------------------------
 # Plot timeseries predictions

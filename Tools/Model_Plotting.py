@@ -232,7 +232,7 @@ def plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, 
     
     return(ax, im)
 
-def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False):
+def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
@@ -243,7 +243,8 @@ def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_lab
           max_value =   max( abs(np.nanmin(field[:,:,x])), abs(np.nanmax(field[:,:,x])) )
        cmap = 'bwr'
     else:
-       cmap = 'viridis'
+       if not cmap:
+          cmap = 'viridis'
     ax, im = plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
     #ax.set_title(str(field_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')

@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-#----------------------------
-print('Import neccessary packages')
-#----------------------------
 from comet_ml import Experiment
 
 import sys
@@ -29,24 +26,15 @@ from torchvision import transforms, utils
 
 import matplotlib
 matplotlib.use('agg')
-print('matplotlib backend is:')
-print(matplotlib.get_backend())
-print("os.environ['DISPLAY']:")
-print(os.environ['DISPLAY'])
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print('Using device:', device)
-print()
 
 torch.cuda.empty_cache()
-
+tic = time.time()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
 hyper_params = {
     "batch_size": 32,
     "num_epochs":  100,
-    #"num_epochs":  1,
     "learning_rate": 0.0001,
     "criterion": torch.nn.MSELoss(),
 }
@@ -64,6 +52,9 @@ DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
 MITGCM_filename = DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
+plot_freq = 1    # Plot scatter plot every n epochs
+seed_value = 12321
+
 #-------------------------------------------
 ds       = xr.open_dataset(MITGCM_filename)
 tr_start = 0
@@ -75,6 +66,21 @@ y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
 plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
+
+output_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
+output_file = open(output_filename, 'w', buffering=1)
+
+output_file.write('matplotlib backend is: \n')
+output_file.write(matplotlib.get_backend()+'\n')
+output_file.write("os.environ['DISPLAY']: \n")
+output_file.write(os.environ['DISPLAY']+'\n')
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+output_file.write('Using device:'+device+'\n')
+
+toc = time.time()
+output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - tic)+'\n')
+
 #------------------------------------------------------------------------------------------
 # Set up Dataset and dataloader to run through one epoch of data to obtain estimate of mean
 # and s.d. for normalisation, and to get no. of features.
@@ -117,6 +123,9 @@ np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean
 no_input_channels = input_batch.shape[1]
 no_output_channels = output_batch.shape[1]
 
+output_file.write('no_input_channels ;'+str(no_input_channels)+'\n')
+output_file.write('no_output_channels ;'+str(no_output_channels)+'\n')
+
 #-------------------------------------------------------------------------------------
 # Create training and valdiation Datsets and dataloaders this time with normalisation
 #-------------------------------------------------------------------------------------
@@ -127,6 +136,9 @@ Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, 
 
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
+
+toc = time.time()
+output_file.write('Finished reading in training and validation data at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #--------------
 # Set up model
@@ -150,6 +162,9 @@ h = h.cuda()
 
 optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
 
+toc = time.time()
+output_file.write('Finished Setting up model at {:0.4f} seconds'.format(toc - tic)+'\n')
+
 #------------------
 # Train the model:
 #------------------
@@ -159,8 +174,17 @@ train_loss_epoch = []
 val_loss_epoch = []
 
 for epoch in range(hyper_params["num_epochs"]):
+
+    # Training
+
     train_loss_temp = 0.0
-    val_loss_temp = 0.0
+
+    if epoch%plot_freq == 0:
+        fig = plt.figure(figsize=(9,9))
+        ax1 = fig.add_subplot(111)
+        bottom = 0.
+        top = 0.
+
     for batch_sample in train_loader:
         input_batch  = batch_sample['input']
         output_batch = batch_sample['output']
@@ -189,9 +213,39 @@ for epoch in range(hyper_params["num_epochs"]):
         optimizer.step()
         
         train_loss_batch.append( loss.item() )
-        train_loss_temp += loss.item()*input_batch.shape[0] 
+        train_loss_epoch_temp += loss.item()*input_batch.shape[0] 
 
-    train_loss_epoch.append( train_loss_temp/len(Train_Dataset) )
+        if epoch%plot_freq == 0:
+            output_batch = output_batch.cpu().detach().numpy()
+            predicted = predicted.cpu().detach().numpy()
+            ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(min(predicted), min(output_batch), bottom)
+            top    = max(max(predicted), max(output_batch), top)  
+
+    tr_loss_single_epoch = train_loss_epoch_temp / norm_inputs_tr.shape[0]
+    output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
+    train_loss_epoch.append( tr_loss_single_epoch )
+
+    if epoch%plot_freq == 0:
+        ax1.set_xlabel('Truth')
+        ax1.set_ylabel('Predictions')
+        ax1.set_title('Training errors, epoch '+str(epoch))
+        ax1.set_xlim(bottom, top)
+        ax1.set_ylim(bottom, top)
+        ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+        ax1.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+        plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png', bbox_inches = 'tight', pad_inches = 0.1)
+        plt.close()
+
+    # Validation
+
+    val_loss_temp = 0.0
+    
+    if epoch%plot_freq == 0:
+        fig = plt.figure(figsize=(9,9))
+        ax1 = fig.add_subplot(111)
+        bottom = 0.
+        top = 0.
 
     for batch_sample in val_loader:
         input_batch  = batch_sample['input']
@@ -213,16 +267,55 @@ for epoch in range(hyper_params["num_epochs"]):
         # get loss for the predicted output
         loss = hyper_params["criterion"](predicted, output_batch)
 
-        val_loss_temp += loss.item()*input_batch.shape[0]
+        val_loss_epoch_temp += loss.item()*input_batch.shape[0]
 
-    val_loss_epoch.append( val_loss_temp/len(Val_Dataset) )
+        if epoch%plot_freq == 0:
+            output_batch = outputs_batch.cpu().detach().numpy()
+            predicted = predicted.cpu().detach().numpy()
+            ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(min(predicted), min(output_batch), bottom)
+            top    = max(max(predicted), max(output_batch), top)    
 
-    print('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
-    print('Epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
+    val_loss_single_epoch = val_loss_epoch_temp / norm_inputs_val.shape[0]
+    output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
+    val_loss_epoch.append(val_loss_single_epoch)
+
+    if epoch%plot_freq == 0:
+        ax1.set_xlabel('Truth')
+        ax1.set_ylabel('Predictions')
+        ax1.set_title('Validation errors, epoch '+str(epoch))
+        ax1.set_xlim(bottom, top)
+        ax1.set_ylim(bottom, top)
+        ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+        ax1.annotate('Epoch MSE: '+str(np.round(val_mse_epoch_temp / norm_inputs_val.shape[0],5)),
+                      (0.15, 0.9), xycoords='figure fraction')
+        ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
+        plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
+        plt.close()
+
+    output_file.write('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
+    output_file.write('Epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
+    toc = time.time()
+    output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
 
 del input_batch, output_batch, predicted 
 torch.cuda.empty_cache()
+
+toc = time.time()
+output_file.write('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
  
+# Plot training and validation loss 
+fig = plt.figure()
+ax1 = fig.add_subplot(111)
+ax1.plot(train_loss_epoch)
+ax1.plot(val_loss_epoch)
+ax1.set_xlabel('Epochs')
+ax1.set_ylabel('Loss')
+ax1.set_yscale('log')
+ax1.legend(['Training Loss', 'Validation Loss'])
+plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.close()
+
 info_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/'+model_name+'_info.txt'
 info_file = open(info_filename, 'w')
 np.set_printoptions(threshold=np.inf)
@@ -236,20 +329,12 @@ info_file.write('\n')
 info_file.write('Weights of the network:\n')
 info_file.write(str(h[0].weight.data.cpu().numpy()))
 
-print('pickle model')
+output_file.write('pickle model \n')
 pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 
-# Plot training and validation loss 
-fig = plt.figure()
-ax1 = fig.add_subplot(111)
-ax1.plot(train_loss_epoch)
-ax1.plot(val_loss_epoch)
-ax1.set_xlabel('Epochs')
-ax1.set_ylabel('Loss')
-ax1.set_yscale('log')
-ax1.legend(['Training Loss', 'Validation Loss'])
-plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
-plt.close()
+toc = time.time()
+output_file.write('Finished script at {:0.4f} seconds'.format(toc - tic)+'\n')
 
+output_file.close()

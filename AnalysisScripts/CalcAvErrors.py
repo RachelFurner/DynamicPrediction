@@ -23,12 +23,12 @@ run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 
 model_type = 'lr'
 
 time_step = '24hrs'
-data_prefix='DensLayers_'
+data_prefix=''
 model_prefix = ''
 exp_prefix = ''
 
 calc_predictions = True 
-iter_length = 500  # in months/days
+iter_length = 100  # in months/days
 
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
@@ -69,8 +69,8 @@ mask = ds['Mask'].values
 pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
 print(pkl_filename)
 with open(pkl_filename, 'rb') as file:
-   print('opening '+pkl_filename)
-   model = pickle.load(file)
+    print('opening '+pkl_filename)
+    model = pickle.load(file)
 
 #---------------------
 # Set up netcdf array
