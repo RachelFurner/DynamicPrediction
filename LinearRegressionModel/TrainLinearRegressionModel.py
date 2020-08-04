@@ -31,7 +31,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars = {'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = ''
@@ -63,55 +63,11 @@ if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
 
 #--------------------------------------------------------------
-# Read in data or load from saved array
+# Read in data
 #--------------------------------------------------------------
-print('reading data')
-inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-zip_inputs_tr_file = inputs_tr_file+'.gz'
-inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-zip_inputs_val_file = inputs_val_file+'.gz'
-outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
-zip_outputs_tr_file = outputs_tr_file+'.gz'
-outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
-zip_outputs_val_file = outputs_val_file+'.gz'
-
-# If datasets already exist (zipped or unzipped) load these, otherwise create them but don't save - disc space too short!!
-if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file))   and
-         (os.path.isfile(inputs_val_file)  or os.path.isfile(zip_inputs_val_file))  and
-         (os.path.isfile(outputs_tr_file)  or os.path.isfile(zip_outputs_tr_file))  and
-         (os.path.isfile(outputs_val_file) or os.path.isfile(zip_outputs_val_file)) ):
-   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, save_arrays=False, plot_histograms=False)
-   del norm_inputs_te
-   del norm_outputs_te
-else:
-   
-   if os.path.isfile(inputs_tr_file):
-      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
-   elif os.path.isfile(zip_inputs_tr_file):
-      os.system("gunzip %s" % (zip_inputs_tr_file))
-      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
-      os.system("gzip %s" % (inputs_tr_file))
-
-   if os.path.isfile(inputs_val_file):
-      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
-   elif os.path.isfile(zip_inputs_val_file):
-      os.system("gunzip %s" % (zip_inputs_val_file))
-      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
-      os.system("gzip %s" % (inputs_val_file))
-
-   if os.path.isfile(outputs_tr_file):
-      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
-   elif os.path.isfile(zip_outputs_tr_file):
-      os.system("gunzip %s" % (zip_outputs_tr_file))
-      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
-      os.system("gzip %s" % (outputs_tr_file))
-   
-   if os.path.isfile(outputs_val_file):
-      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
-   elif os.path.isfile(zip_outputs_val_file):
-      os.system("gunzip %s" % (zip_outputs_val_file))
-      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
-      os.system("gzip %s" % (outputs_val_file))
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, plot_histograms=False)
+del norm_inputs_te
+del norm_outputs_te
 
 #norm_inputs_tr   = norm_inputs_tr[:10]
 #norm_inputs_val  = norm_inputs_val[:10]
@@ -131,12 +87,10 @@ if TrainModel:
     print('training model')
     
     alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
-    alpha_s = [0.0001]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
    
     lr = linear_model.Ridge(fit_intercept=False)
-    #lr = linear_model.Lasso(fit_intercept=False, max_iter=2000000)
     
     lr = GridSearchCV(lr, param_grid=parameters, cv=n_folds, scoring='neg_mean_squared_error', refit=True)
     
@@ -193,11 +147,18 @@ gc.collect()
 mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 zip_mean_std_file = mean_std_file+'.gz' 
 if os.path.isfile(mean_std_file):
-   input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+   #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+   mean_std_data = np.load(mean_std_file)
 elif os.path.isfile(zip_mean_std_file):
    os.system("gunzip %s" % (zip_mean_std_file))
-   input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+   #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+   mean_std_data = np.load(mean_std_file)
    os.system("gunzip %s" % (mean_std_file))
+input_mean  = mean_std_data['arr_0']
+input_std   = mean_std_data['arr_1']
+output_mean = mean_std_data['arr_2']
+output_std  = mean_std_data['arr_3']
+
 
 # denormalise data
 def denormalise_data(norm_data,mean,std):

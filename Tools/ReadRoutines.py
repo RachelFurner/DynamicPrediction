@@ -4,7 +4,7 @@
 # Code developed by Rachel Furner to contain modules used in developing stats/nn based versions of GCMs.
 # Routines contained here include:
 # ReadMITGCM - Routine to read in MITGCM data into input and output arrays of single data points (plus halos), split into test and train
-#                        portions of code, and normalise. The arrays are saved, and also passed back on return. 
+#                        portions of code, and normalise. The arrays are passed back on return but not saved - no disc space!
 # ReadMITGCMfield - Routine to read in MITGCM data into input and output arrays of whole fields, split into test and train
 #                        portions of code, and normalise. The arrays are saved, and also passed back on return. 
 
@@ -144,7 +144,7 @@ def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, dept
        
    return(inputs)
 
-def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None, save_arrays=False, plot_histograms=False):
+def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, time_step=None, plot_histograms=False):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into test and train
@@ -193,23 +193,6 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
    density = np.load( density_file, mmap_mode='r' ) 
    print(density.shape)
-   
-   ## Here we calculate the density anomoly, using the simplified equation of state,
-   ## as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-   #a0       = .1655
-   #b0       = .76554
-   #lambda1  = .05952
-   #lambda2  = .00054914
-   #nu       = .0024341
-   #mu1      = .0001497
-   #mu2      = .00001109
-   #rho0     = 1026.
-   #Tmp_anom = da_T-10.
-   #Sal_anom = da_S-35.
-   #tmp_depth    = da_depth.reshape(1,-1,1,1)
-   #density  = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * tmp_depth) * Tmp_anom
-   #             +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * tmp_depth) * Sal_anom
-   #             -nu * Tmp_anom * Sal_anom) / rho0
 
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
@@ -313,28 +296,28 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         if run_vars['dimension'] == 2:
            inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+                                 da_T2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_V2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 density2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
         elif run_vars['dimension'] == 3:
            inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+                                 da_T2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_U2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwx2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwy2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Kwz2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
         outputs_2 = outputs_2.reshape((-1, 1))
@@ -346,29 +329,29 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region3 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+           inputs_3 = GetInputs( run_vars,
+                                 da_T3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_U3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwx3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwy3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwz3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
         elif run_vars['dimension'] == 3:
-           inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+           inputs_3 = GetInputs( run_vars,
+                                 da_T3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_U3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwx3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwy3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwz3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
         outputs_3 = outputs_3.reshape((-1, 1))
@@ -383,27 +366,27 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region1 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_1 = GetInputs( run_vars, 
+           inputs_1 = GetInputs( run_vars,
                                  da_T[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
-                                 da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_V[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_Kwx[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_Kwy[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_Kwz[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 density[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_V[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_Kwx[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_Kwy[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_Kwz[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 density[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
         elif run_vars['dimension'] == 3:
-           inputs_1 = GetInputs( run_vars, 
+           inputs_1 = GetInputs( run_vars,
                                  da_T[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
-                                 da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_U[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
-                                 da_V[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_Kwx[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
-                                 da_Kwy[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 da_V[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_Kwx[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
+                                 da_Kwy[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_Kwz[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
-                                 density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
+                                 density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
@@ -421,29 +404,29 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region2 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+           inputs_2 = GetInputs( run_vars,
+                                 da_T2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_U2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwx2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwy2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwz2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
         elif run_vars['dimension'] == 3:
-           inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+           inputs_2 = GetInputs( run_vars,
+                                 da_T2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_U2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwx2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwy2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwz2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
         outputs_2 = outputs_2.reshape((-1, 1))
@@ -456,28 +439,28 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         #---------#
         if run_vars['dimension'] == 2:
            inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+                                 da_T3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_V3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 density3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
         elif run_vars['dimension'] == 3:
            inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+                                 da_T3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_U3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwx3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwy3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Kwz3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
         outputs_3 = outputs_3.reshape((-1,1))
@@ -492,7 +475,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region1 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_1 = GetInputs( run_vars, 
+           inputs_1 = GetInputs( run_vars,
                                  da_T[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_S[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
                                  da_U[t,z_lw_1:z_up_1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
@@ -504,7 +487,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
         elif run_vars['dimension'] == 3:
-           inputs_1 = GetInputs( run_vars, 
+           inputs_1 = GetInputs( run_vars,
                                  da_T[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_S[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
                                  da_U[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
@@ -530,29 +513,29 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region2 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_V[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 density[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+           inputs_2 = GetInputs( run_vars,
+                                 da_T2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_U2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwx2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwy2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwz2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density2[t,z_lw_2:z_up_2,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
         elif run_vars['dimension'] == 3:
-           inputs_2 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_S[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_U[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_V[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwx[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwy[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Kwz[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 density[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1], 
-                                 da_Eta[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
-                                 da_lat[y_lw_2:y_up_2], da_lon[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
+           inputs_2 = GetInputs( run_vars,
+                                 da_T2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_S2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_U2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_V2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwx2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwy2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Kwz2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 density2[t,z_lw_2-1:z_up_2+1,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
+                                 da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
         
         outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
         outputs_2 = outputs_2.reshape((-1, 1))
@@ -564,29 +547,29 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         # Region3 #
         #---------#
         if run_vars['dimension'] == 2:
-           inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_V[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 density[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+           inputs_3 = GetInputs( run_vars,
+                                 da_T3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_U3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwx3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwy3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwz3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density3[t,z_lw_3:z_up_3,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
         elif run_vars['dimension'] == 3:
-           inputs_3 = GetInputs( run_vars, 
-                                 da_T[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_S[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_U[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_V[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwx[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwy[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Kwz[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 density[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1], 
-                                 da_Eta[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
-                                 da_lat[y_lw_3:y_up_3], da_lon[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
+           inputs_3 = GetInputs( run_vars,
+                                 da_T3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_S3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_U3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_V3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwx3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwy3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Kwz3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 density3[t,z_lw_3-1:z_up_3+1,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
+                                 da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
         outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
         outputs_3 = outputs_3.reshape((-1, 1))
@@ -693,16 +676,16 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
        norm_val   = (val   - train_mean) / train_std
        norm_test  = (test  - train_mean) / train_std
        return norm_train, norm_val, norm_test, train_mean, train_std
-   
+
    inputs_mean = np.zeros(inputs_tr.shape[1])
    inputs_std  = np.zeros(inputs_tr.shape[1])
    norm_inputs_tr  = np.zeros(inputs_tr.shape)
    norm_inputs_val = np.zeros(inputs_val.shape)
    norm_inputs_te  = np.zeros(inputs_te.shape)
    # Loop over each input feature, normalising individually
-   for i in range(inputs_tr.shape[1]):  
+   for i in range(inputs_tr.shape[1]):
        norm_inputs_tr[:, i], norm_inputs_val[:,i], norm_inputs_te[:, i], inputs_mean[i], inputs_std[i] = normalise_data(inputs_tr[:, i], inputs_val[:,i], inputs_te[:,i])
-   
+
    norm_outputs_tr, norm_outputs_val, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_val[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
@@ -727,23 +710,6 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    info_file.write('\n')
    info_file.close
    
-   if save_arrays: 
-      print('save arrays')
-      inputs_tr_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-      inputs_val_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-      inputs_te_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
-      outputs_tr_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
-      outputs_val_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
-      outputs_te_filename = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
-      np.save(inputs_tr_filename,  norm_inputs_tr)
-      np.save(inputs_val_filename, norm_inputs_val)
-      np.save(inputs_te_filename,  norm_inputs_te)
-      os.system("gzip %s" % (inputs_te_filename))
-      np.save(outputs_tr_filename, norm_outputs_tr)
-      np.save(outputs_val_filename,norm_outputs_val)
-      np.save(outputs_te_filename, norm_outputs_te)
-      os.system("gzip %s" % (outputs_te_filename))
-
    print('shape for inputs and outputs: tr; val; te')
    print(norm_inputs_tr.shape, norm_outputs_tr.shape)
    print(norm_inputs_val.shape, norm_outputs_val.shape)
@@ -1141,8 +1107,6 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    # as npz file
    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_MeanStd.npz'
    np.savez_compressed( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
-   # Open arrays from file
-   inputs_mean, inputs_std, outputs_mean, outputs_std = np.load(mean_std_file).values()
   
    # Normalise inputs and outputs 
    norm_inputs_tr = np.zeros((inputs_tr.shape))
@@ -1171,8 +1135,6 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    #-----------------
    inputsoutputs_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te)
-   # Open arrays from file
-   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_inputs_val, norm_outputs_te = np.load(inputsoutputs_file).values()
  
    print('shape for inputs and outputs: full; tr; val; te')
    print(inputs.shape, outputs.shape)
