@@ -8,11 +8,12 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am
 from Tools import Model_Plotting as rfplt
+from Tools import Network_Classes as nc
 
 import numpy as np
 import os
@@ -24,7 +25,6 @@ from sklearn.preprocessing import PolynomialFeatures
 import sklearn.metrics as metrics
 
 from torch.utils import data
-import torch.nn as nn
 from torch.autograd import Variable
 import torch
 
@@ -41,7 +41,7 @@ hyper_params = {
     "batch_size": 4092,
     "num_epochs": 100, 
     "learning_rate": 0.001,
-    "criterion": 'MSE',
+    "criterion": 'MeanAbsEr',
     "no_layers": 1,     # no of *hidden* layers
     "no_nodes": 100     # Note 26106 features....
 }
@@ -68,7 +68,7 @@ if data_name is '3dLatLonDepUVBolSalEtaDnsPolyDeg2':
 data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 
-pkl_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
+pysave_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
 output_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
 plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
@@ -99,58 +99,40 @@ output_file.write(os.environ['DISPLAY']+'\n')
 
 toc = time.time()
 output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - tic)+'\n')
-#-------------------------------------------------------------------
-# Create training and val arrays, or read in from existing datasets
-#-------------------------------------------------------------------
+#---------------------------------
+# Read in training and val arrays
+#---------------------------------
+# Note memory restrictions with GPU means creating dataset on the fly is not possible!
+
 output_file.write('reading data\n')
-inputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+inputs_tr_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
 zip_inputs_tr_file = inputs_tr_file+'.gz'
-inputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+inputs_val_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
 zip_inputs_val_file = inputs_val_file+'.gz'
-outputs_tr_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+outputs_tr_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
 zip_outputs_tr_file = outputs_tr_file+'.gz'
-outputs_val_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+outputs_val_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
 zip_outputs_val_file = outputs_val_file+'.gz'
 
-# if datasets already exist (zipped or unzipped) load these, otherwise create them but don't save - disc space too short!!
-if not ( (os.path.isfile(inputs_tr_file)   or os.path.isfile(zip_inputs_tr_file))   and
-         (os.path.isfile(inputs_val_file)  or os.path.isfile(zip_inputs_val_file))  and
-         (os.path.isfile(outputs_tr_file)  or os.path.isfile(zip_outputs_tr_file))  and
-         (os.path.isfile(outputs_val_file) or os.path.isfile(zip_outputs_val_file)) ):
+if os.path.isfile(zip_inputs_tr_file):
+   os.system("gunzip %s" % (zip_inputs_tr_file))
+norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
+#os.system("gzip %s" % (inputs_tr_file))
 
-   output_file.write('creating dataset on the fly \n')
-   norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = \
-                      rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, 
-                                    save_arrays=True , plot_histograms=True )
-   del norm_inputs_te
-   del norm_outputs_te
+if os.path.isfile(zip_inputs_val_file):
+   os.system("gunzip %s" % (zip_inputs_val_file))
+norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
+#os.system("gzip %s" % (inputs_val_file))
 
-else:
+if os.path.isfile(zip_outputs_tr_file):
+   os.system("gunzip %s" % (zip_outputs_tr_file))
+norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
+#os.system("gzip %s" % (outputs_tr_file))
 
-   output_file.write('reading in dataset \n')
-   if os.path.isfile(inputs_tr_file):
-      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
-   elif os.path.isfile(zip_inputs_tr_file):
-      os.system("gunzip %s" % (zip_inputs_tr_file))
-      norm_inputs_tr = np.load(inputs_tr_file, mmap_mode='r')
-
-   if os.path.isfile(inputs_val_file):
-      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
-   elif os.path.isfile(zip_inputs_val_file):
-      os.system("gunzip %s" % (zip_inputs_val_file))
-      norm_inputs_val = np.load(inputs_val_file, mmap_mode='r')
-
-   if os.path.isfile(outputs_tr_file):
-      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
-   elif os.path.isfile(zip_outputs_tr_file):
-      os.system("gunzip %s" % (zip_outputs_tr_file))
-      norm_outputs_tr = np.load(outputs_tr_file, mmap_mode='r')
-
-   if os.path.isfile(outputs_val_file):
-      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
-   elif os.path.isfile(zip_outputs_val_file):
-      os.system("gunzip %s" % (zip_outputs_val_file))
-      norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+if os.path.isfile(zip_outputs_val_file):
+   os.system("gunzip %s" % (zip_outputs_val_file))
+norm_outputs_val = np.load(outputs_val_file, mmap_mode='r')
+#os.system("gzip %s" % (outputs_val_file))
 
 output_file.write(str(norm_inputs_tr.shape)+'\n')
 output_file.write(str(norm_inputs_val.shape)+'\n')
@@ -199,37 +181,13 @@ output_file.write('Finished Setting up datasets and dataloaders at {:0.4f} secon
 # Set up regression model
 #-------------------------
 output_file.write('set up model \n')
-class NetworkRegression(torch.nn.Sequential):
-    def __init__(self, inputSize, outputSize, hyper_params):
-        super(NetworkRegression, self).__init__()
-        if hyper_params["no_layers"] == 0:
-            self.linear = torch.nn.Linear(inputSize, outputSize)
-        if hyper_params["no_layers"] == 1:
-            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
-        elif hyper_params["no_layers"] == 2:
-            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(), 
-                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
-        elif hyper_params["no_layers"] == 3:
-            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
-        elif hyper_params["no_layers"] == 4:
-            self.linear = nn.Sequential( nn.Linear(inputSize, hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], hyper_params["no_nodes"]), nn.Tanh(),
-                                         nn.Linear(hyper_params["no_nodes"], outputSize) )
-    def forward(self, x):
-        out = self.linear(x)
-        return out
 
 inputDim = norm_inputs_tr.shape[1]
 outputDim = norm_outputs_tr.shape[1]
+output_file.write('inputDim ; '+str(inputDim)+'\n')
+output_file.write('outputDim ; '+str(outputDim)+'\n')
 
-model = NetworkRegression(inputDim, outputDim, hyper_params)
+model = nc.NetworkRegression(inputDim, outputDim, hyper_params['no_layers'], hyper_params['no_nodes'])
 model.to(device)
 
 optimizer = torch.optim.Adam( model.parameters(), lr=hyper_params["learning_rate"] )
@@ -286,7 +244,7 @@ if True:
         
             # get loss for the predicted output and calc MSE
             #loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs) ) / batch_outputs.shape[0]
-            loss = sum( ( (predictions - batch_outputs)**2 ) ) / batch_outputs.shape[0]
+            loss = sum( torch.abs(predictions - batch_outputs) ) / batch_outputs.shape[0]
             mse  = torch.nn.MSELoss()(predictions, batch_outputs)
 
             # get gradients w.r.t to parameters
@@ -352,7 +310,7 @@ if True:
             
             # get loss for the predicted output
             #loss = sum( ( (predictions - batch_outputs)**2 ) * torch.abs(batch_outputs) ) / batch_outputs.shape[0]
-            loss = sum( ( (predictions - batch_outputs)**2 ) ) / batch_outputs.shape[0]
+            loss = sum( torch.abs(predictions - batch_outputs) ) / batch_outputs.shape[0]
             mse  = torch.nn.MSELoss()(predictions, batch_outputs)
             
             val_loss_epoch_temp += loss.item()*batch_outputs.shape[0]
@@ -464,9 +422,8 @@ if True:
     plt.subplots_adjust(hspace = 0.35, left=0.05, right=0.95, bottom=0.07, top=0.95)
     plt.savefig(plot_dir+'/'+model_name+'_TrainValMSEPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
      
-    output_file.write('pickle model \n')
-    with open(pkl_filename, 'wb') as pckl_file:
-        pickle.dump(model, pckl_file)
+    output_file.write('save model \n')
+    torch.save(model.state_dict(), pysave_filename)
     
 toc = time.time()
 output_file.write('Finished script at {:0.4f} seconds'.format(toc - tic)+'\n')

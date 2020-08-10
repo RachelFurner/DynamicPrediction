@@ -2,7 +2,7 @@
 # using machine learning/stats based models
 
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 
@@ -42,22 +42,6 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
     da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
 
     density = density[start:start+num_steps+1,:,:,:]
-    ## Here we calculate the density anomoly, using the simplified equation of state,
-    ## as per Vallis 2006, and described at https://www.nemo-ocean.eu/doc/node31.html
-    #a0      = .1655
-    #b0      = .76554
-    #lambda1 = .05952
-    #lambda2 = .00054914
-    #nu      = .0024341
-    #mu1     = .0001497
-    #mu2     = .00001109
-    #rho0    = 1026.
-    #Tmp_anom = da_T-10.
-    #Sal_anom = da_S-35.
-    #depth    = da_depth.reshape(1,-1,1,1)
-    #dns_anom = ( -a0 * ( 1 + 0.5 * lambda1 * Tmp_anom + mu1 * depth) * Tmp_anom
-    #             +b0 * ( 1 - 0.5 * lambda2 * Sal_anom - mu2 * depth) * Sal_anom
-    #             -nu * Tmp_anom * Sal_anom) / rho0
 
     x_size = da_T.shape[3]
     y_size = da_T.shape[2]
@@ -75,12 +59,15 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
     else:
         predictions[0,:,:,:] = init
    
- 
     #Read in mean and std to normalise inputs
-    mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
-    print(mean_std_file)
-    input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
-    
+    mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+    #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
+    mean_std_data = np.load(mean_std_file)
+    input_mean  = mean_std_data['arr_0']
+    input_std   = mean_std_data['arr_1']
+    output_mean = mean_std_data['arr_2']
+    output_std  = mean_std_data['arr_3']
+ 
     out_t   = np.zeros((z_size, y_size, x_size))
     if method=='AB1': # Euler forward
        print('using AB1')
@@ -282,22 +269,6 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
                                      dens[t-1,zlw-1:zup+1,ylw-1:yup+1,xlw-1:xup+1], 
                                      eta[t-1,ylw-1:yup+1,xlw-1:xup+1],
                                      lat[ylw:yup], lon[xlw:xup], depth[zlw:zup] )
-
-           #inputs = rr.GetInputs( run_vars,
-           #                       temp[t-1,:,:,:], sal[t-1,:,:,:], U[t-1,:,:,:], V[t-1,:,:,:], Kwx[t-1,:,:,:], Kwy[t-1,:,:,:], Kwz[t-1,:,:,:],
-           #                       dens[t-1,:,:,:], eta[t-1,:,:], lat, lon, depth,
-           #                       z_lw[region], z_up[region], y_lw[region], y_up[region], x_lw_nudged[region], x_up_nudged[region],
-           #                       z_subsize[region], y_subsize[region], x_subsize[region] )
-           # Note no need to move the strip back to left or right, as this is just a shape region, not connected to a particular location, its
-           # placed in the right place of the domain when it is stored in out!
- 
-           # reshape from grid (z,y,x,features) to list (no_points, features)
-           #inputs = inputs.reshape(( z_subsize[region] * y_subsize[region] * x_subsize[region], inputs.shape[-1] ))
-
-           #if run_vars['poly_degree'] > 1: 
-           #   # Add polynomial combinations of the features
-           #   polynomial_features = PolynomialFeatures(degree=run_vars['poly_degree'], interaction_only=True, include_bias=False)
-           #   inputs = polynomial_features.fit_transform(inputs)
 
            # normalise inputs
            inputs = np.divide( np.subtract(inputs, input_mean), input_std)

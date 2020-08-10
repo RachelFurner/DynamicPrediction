@@ -125,7 +125,6 @@ def plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, 
 
     im = ax.pcolormesh(field[:,y,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
-    #ax.set_xlabel('longitude')
     ax.set_xlabel('x')
     ax.set_ylabel('depth')
    
@@ -247,8 +246,8 @@ def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_lab
           cmap = 'viridis'
     ax, im = plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
-    #ax.set_title(str(field_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
-    ax.set_title(str(field_name)+' at x='+str(int(lon_labels[x])))
+    ax.set_title(str(field_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
+    #ax.set_title(str(field_name)+' at x='+str(int(lon_labels[x])))
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9)

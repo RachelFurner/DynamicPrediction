@@ -32,7 +32,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
       exp2_mse=None
   
    # Print to file
-   outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+   outdir = '../../'+model_type+'_Outputs/'
 
    stats_filename = outdir+'STATS/'+exp_name+'_'+name+'.txt'
    stats_file=open(stats_filename,"w")
@@ -58,7 +58,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
   
 def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True):
  
-   outdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+   outdir = '../../'+model_type+'_Outputs/'
 
    data1=data1.reshape(-1)
    data2=data2.reshape(-1)

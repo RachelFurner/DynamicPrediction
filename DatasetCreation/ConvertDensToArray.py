@@ -2,7 +2,7 @@
 # (note the mds routine is slow, so don't want to use this in my ReadRoutines each time I 
 # change the dataset)
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import mds as mds
 import netCDF4 as nc4
 import numpy as np

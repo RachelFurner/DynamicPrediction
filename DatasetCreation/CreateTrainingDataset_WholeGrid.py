@@ -7,7 +7,7 @@ print('Import neccessary packages')
 from comet_ml import Experiment
 
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../../code_git/')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am

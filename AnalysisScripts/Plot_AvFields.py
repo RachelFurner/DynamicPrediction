@@ -3,7 +3,7 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
@@ -24,23 +24,16 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 5,10,5]
 
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
-#time_step = '1mnth'
 time_step = '24hrs'
-data_prefix='DensLayers_'
+data_prefix=''
 model_prefix = ''
 exp_prefix = ''
 
-if time_step == '1mnth':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-   MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
-elif time_step == '24hrs':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-   MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
-else:
-   print('ERROR!!! No suitable time step chosen!!')
+DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
 
 #-----------
 data_name = cn.create_dataname(run_vars)
@@ -48,7 +41,7 @@ data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+rootdir = '../../'+model_type+'_Outputs/'
 
 level = point[0]
 y_coord = point[1]
@@ -92,7 +85,7 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_z'+str(level), 
 
 fig, ax, im = rfplt.plot_depth_fld(Av_AbsError[:,:,:], 'Averaged Absolute Errors', level,
                                    MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                   title=None, min_value=None, max_value=None, diff=True)
+                                   title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_depth_fld(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', level,
@@ -110,7 +103,7 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_y'+str(y_coord)
 
 fig, ax, im = rfplt.plot_yconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', y_coord, 
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                         title=None, min_value=None, max_value=None, diff=True)
+                                         title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_yconst_crss_sec(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', y_coord, 
@@ -123,14 +116,12 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_WtdAv_Errors_y'+str(y_coo
 #-----------------------
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_Error[:,:,:], 'Averaged Errors', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                         title=None, min_value=-0.00015, max_value=0.00015, diff=True)
-                                         #title=None, min_value=None, max_value=None, diff=True)
+                                         title=None, min_value=None, max_value=None, diff=True)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_Errors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                         title=None, min_value=-0.00015, max_value=0.00015, diff=True)
-                                         #title=None, min_value=None, max_value=None, diff=True)
+                                         title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_Av_AbsErrors_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', x_coord, 

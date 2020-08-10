@@ -3,7 +3,7 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Iterator as it
 from Tools import Model_Plotting as rfplt
@@ -22,42 +22,35 @@ import netCDF4 as nc4
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 iterate_method = 'AB3'
 
 time_step = '24hrs'
-data_prefix='DensLayers_'
+data_prefix=''
 model_prefix=''
 exp_prefix = ''
 
-for_len = 30*12
-no_chunks = 12
+for_len = 30*5
+no_chunks = 5
 
 start = 5        # Allow for a variety of start points, from different MITGCM init states
 
 run_iterations = True  
 
 #----------------------------
-if time_step == '1mnth':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-   data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
-   density_file = DIR+'DensityData.npy'
-elif time_step == '24hrs':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-   data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
-   density_file = DIR+'DensityData.npy'
-else:
-   print('ERROR!!! No suitable time step given!!')
+DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+density_file = DIR+'DensityData.npy'
 
 data_name = data_prefix+cn.create_dataname(run_vars)+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name+'_'+iterate_method
 
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+rootdir = '../../'+model_type+'_Outputs/'
 
 nc_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.nc'
-#pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
+pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'
 
 #-------------------------------------------------------------------
 # Read in netcdf file for shape, 'truth', and other variable inputs
@@ -163,7 +156,7 @@ if run_iterations:
    
       init = Pred_Temp[-1,:,:,:]
       # Save to array
-      #np.savez( pred_filename, np.array(Pred_Temp), np.array(Pred_DelT), np.array(mask) )
+      np.savez( pred_filename, np.array(Pred_Temp), np.array(Pred_DelT), np.array(mask) )
       # Save to netcdf file
       length = Pred_Temp.shape[0]
       nc_T[:] = ds['T'].data[:length]
@@ -175,6 +168,10 @@ if run_iterations:
       nc_Mask[:,:,:] = mask
 
 #Pred_Temp, Pred_DelT, mask = np.load(pred_filename).values()
+pred_data = np.load(pred_filename)
+Pred_Temp = pred_data['arr_0']
+Pred_DelT = pred_data['arr_1']
+mask      = pred_data['arr_2']
 length = Pred_Temp.shape[0]
 da_T=da_T.data[:length,:,:,:]
 errors = Pred_Temp-da_T[:,:,:,:]

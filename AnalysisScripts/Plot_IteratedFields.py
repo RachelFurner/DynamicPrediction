@@ -3,7 +3,7 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
@@ -21,11 +21,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
 time_step = '24hrs'
-data_prefix = 'DensLayers_'
+data_prefix = ''
 model_prefix = '' 
 exp_prefix = ''
 ItMethod = 'AB3'
@@ -36,7 +36,7 @@ point = [ 5,10, 5]
 compare_w_truth = True 
 
 #----------------------
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+rootdir = '../'+model_type+'_Outputs/'
 
 data_name = cn.create_dataname(run_vars)
 data_name = data_prefix+data_name+'_'+time_step 
@@ -77,7 +77,11 @@ print(da_T.shape)
 pred_dir = rootdir+'ITERATED_PREDICTION_ARRAYS/'
 
 pred_filename = pred_dir+exp_name+'_IterativePredictions_5.npz'
-field, delT, mask = np.load(pred_filename).values()
+#field, delT, mask = np.load(pred_filename).values()
+pred_data = np.load(pred_filename)
+field = pred_data['arr_0']
+delT  = pred_data['arr_1']
+mask  = pred_data['arr_2']
 
 #-----------
 # mask data

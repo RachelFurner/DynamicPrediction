@@ -5,14 +5,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Iterator as it
 from Tools import Model_Plotting as rfplt
 from Tools import AssessModel as am
+from Tools import Network_Classes as nc
 import xarray as xr
 import pickle
 import netCDF4 as nc4
+import torch
 
 plt.rcParams.update({'font.size': 14})
 
@@ -20,15 +22,26 @@ plt.rcParams.update({'font.size': 14})
 # Set variables for this run
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
-model_type = 'lr'
+
+model_type = 'nn'
 
 time_step = '24hrs'
 data_prefix=''
-model_prefix = ''
 exp_prefix = ''
 
+#Specific variables needed for if running with networks
+if model_type == 'nn':
+   inputDim = 26106
+   outputDim = 1
+   no_layers = 1
+   no_nodes = 100
+   model_prefix = 'MSE_'+str(no_layers)+'layers_'+str(no_nodes)+'nodes_lr0.001_batch4092_'
+else:
+   model_prefix = ''
+
 calc_predictions = True 
-iter_length = 100  # in months/days
+no_points = 100  # in months/days
+skip_rate = 5    # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
@@ -51,8 +64,15 @@ exp_name = exp_prefix+model_name
 #-----------------------------------------------------------------------
 print('reading in ds')
 ds = xr.open_dataset(data_filename)
-
-Temp_truth = ds['Ttave'][:iter_length+1,:,:,:].data
+Temp_truth = ds['Ttave'].data
+Length_Truth = Temp_truth.shape[0]
+print(Length_Truth)
+if (no_points*skip_rate) > (Length_Truth*.7):
+    print('Be aware some data is coming from both Training and Val portions of run')
+    print('Training set ends at time = '+str(Length_Truth*.7) )
+    print('We are using data up to time = '+str(no_points*skip_rate) )
+else:
+    print('All data from Training portion of run')
 print('Temp_truth.shape')
 print(Temp_truth.shape)
 
@@ -66,18 +86,26 @@ mask = ds['Mask'].values
 #-------------------
 # Read in the model
 #-------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
-print(pkl_filename)
-with open(pkl_filename, 'rb') as file:
-    print('opening '+pkl_filename)
-    model = pickle.load(file)
-
+if model_type == 'lr':
+    pkl_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
+    print(pkl_filename)
+    with open(pkl_filename, 'rb') as file:
+        print('opening '+pkl_filename)
+        model = pickle.load(file)
+elif model_type == 'nn':
+    model = nc.NetworkRegression(inputDim, outputDim, no_layers, no_nodes) 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+    model_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
+    model.load_state_dict(torch.load(model_filename))
+    model.eval()
+   
 #---------------------
 # Set up netcdf array
 #---------------------
 print('set up netcdf file')
 
-nc_file = nc4.Dataset('/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -99,10 +127,10 @@ nc_av_AbsErrors = nc_file.createVariable('Av_AbsErrors', 'f4', ('Z', 'Y', 'X'))
 nc_wtd_av_AbsErrors = nc_file.createVariable('Weighted_Av_AbsErrors', 'f4', ('Z', 'Y', 'X'))
 
 # Fill some variables - rest done during iteration steps
-nc_T[:] = ds['T'].data[1:]
 nc_Z[:] = ds['Z'].data
 nc_Y[:] = ds['Y'].data
 nc_X[:] = ds['X'].data
+nc_T[:] = ds['T'].data[1:no_points*skip_rate+1:skip_rate]
 
 #--------------------------------------------------------------------------------------
 # Call iterator multiple times to get many predictions for entire grid for one time 
@@ -111,41 +139,45 @@ nc_X[:] = ds['X'].data
 # 'truth' as inputs, rather than iteratively predicting through time
 #--------------------------------------------------------------------------------------
 print('get predictions')
-#pred_filename = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
+pred_filename = '../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
 
     # Array to hold predicted values of Temperature
-    predictedTemp = np.zeros((Temp_truth.shape))
+    predictedTemp = np.zeros((no_points,Temp_truth.shape[1],Temp_truth.shape[2],Temp_truth.shape[3]))
     predictedTemp[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
 
     # Array to hold de-normalised outputs from model, i.e. DeltaTemp (before applying any AB-timestepping methods)
-    predictedDelT = np.zeros((Temp_truth.shape))
+    predictedDelT = np.zeros((no_points,Temp_truth.shape[1],Temp_truth.shape[2],Temp_truth.shape[3]))
     predictedDelT[:,:,:,:] = np.nan  # ensure any 'unforecastable' points display as NaNs 
 
-    for t in range(1,iter_length+1): # ignore first value, as we can't calculate this - we'd need ds at t-1, leave as NaN so index's match with Temp_truth.
+    for t in range(no_points): 
         print(t)
+        predT_temp, predDelT_temp, dummy, dummy, dummy = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t*skip_rate,t*skip_rate+2)),
+                                                                          density[t*skip_rate:t*skip_rate+2,:,:,:], method='AB1', model_type=model_type )
+        #predT_temp, predDelT_temp, dummy, dummy, dummy = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t*skip_rate,t*skip_rate+1)),
+        #                                                                  density[t*skip_rate:t*skip_rate+1,:,:,:], method='AB1' )
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
-        predT_temp, predDelT_temp, sponge_mask, mask, outs = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t-1,t+1)),
-                                                                          density[t-1:t+1,:,:,:], method='AB1' )
         predictedTemp[t,:,:,:] = predT_temp[1,:,:,:]
         predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
 
     #Save as arrays
-    #np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
+    np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
 #predictedTemp, predictedDelT = np.load(pred_filename).values()    
+predicted_data = np.load(pred_filename)
+predictedTemp = predicted_data['arr_0']
+predictedDelT = predicted_data['arr_1']
 
 #------------------
 # Calculate errors
 #------------------
 print('calc errors')
-DelT_truth = Temp_truth[1:,:,:,:]-Temp_truth[:-1,:,:,:]
+DelT_truth = ( Temp_truth[1:no_points*skip_rate+1:skip_rate,:,:,:] - 
+               Temp_truth[0:no_points*skip_rate:skip_rate,:,:,:] )
 Errors = (predictedDelT[1:,:,:,:] - DelT_truth[:,:,:,:])
 AbsErrors = np.abs(predictedDelT[1:,:,:,:] - DelT_truth[:,:,:,:])
 
 # Average temporally and spatially 
-##t_av_Temp_errors = np.nanmean(Temp_errors, axis=0)
-##s_av_Temp_errors = np.nanmean(Temp_errors[:,1:-1,1:-3,1:-2], axis=(1,2,3))  # Remove points not being predicted (boundaries) from this
 Time_Av_DelT_Truth  = np.nanmean(DelT_truth , axis=0)
 
 Time_Av_Errors = np.nanmean(Errors, axis=0)

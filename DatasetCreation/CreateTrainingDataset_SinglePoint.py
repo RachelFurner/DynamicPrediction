@@ -5,7 +5,7 @@
 # Import neccessary packages
 #----------------------------
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import ReadRoutines as rr
 from Tools import AssessModel as am

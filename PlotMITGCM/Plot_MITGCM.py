@@ -3,7 +3,7 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
@@ -22,7 +22,7 @@ from netCDF4 import Dataset
 #------------------------
 
 time = 12000
-point = [ 5,55, 5]
+point = [ 5,55,11]
 
 time_step = '24hrs'
 
@@ -41,7 +41,7 @@ else:
    print('WARNING - IMPROPER TIME STEP GIVEN!!')
    print('####################################')
 
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/MITGCM_Analysis/'
+rootdir = '../../MITGCM_Analysis/'
 
 level = point[0]
 y_coord = point[1]

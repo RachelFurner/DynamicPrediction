@@ -3,7 +3,7 @@
 
 print('import packages')
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import Model_Plotting as rfplt
 
@@ -29,9 +29,9 @@ time_step = '24hrs'
 
 #------------------------------
 
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
-nn_dir = '/data/hpcdata/users/racfur/DynamicPrediction/nn_Outputs/'
-lr_dir = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/'
+rootdir = '../../'+model_type+'_Outputs/'
+nn_dir = '../../nn_Outputs/'
+lr_dir = '../../lr_Outputs/'
 
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
@@ -62,39 +62,42 @@ print(da_T.shape)
 lr_pred_dir = lr_dir+'ITERATED_PREDICTION_ARRAYS/'
 nn_pred_dir = nn_dir+'ITERATED_PREDICTION_ARRAYS/'
 
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_full, delT_tmp, mask_tmp = np.load(pred_filename).values()
 
-pred_filename = lr_pred_dir+time_step+'_2dLatLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_2d, delT_tmp, mask_tmp = np.load(pred_filename).values()
+## NEED TO UPDATE LOAD COMMANDS TO USE THIS....! 
 
-pred_filename = lr_pred_dir+time_step+'_3dLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noLat, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noLon, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noDep, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noCur, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noBol, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noSal, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalDnsPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noEta, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaPolyDeg2_AB3_IterativePredictions_5.npz'
-pred_noDen, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
-pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaDnsPolyDeg1_AB3_IterativePredictions_5.npz'
-pred_noPoly, delT_tmp, mask_tmp = np.load(pred_filename).values()
-
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_full, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_2dLatLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_2d, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLonDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noLat, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatDepUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noLon, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonUVBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noDep, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepBolSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noCur, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVSalEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noBol, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolEtaDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noSal, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalDnsPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noEta, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaPolyDeg2_AB3_IterativePredictions_5.npz'
+#pred_noDen, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
+#pred_filename = lr_pred_dir+time_step+'_3dLatLonDepUVBolSalEtaDnsPolyDeg1_AB3_IterativePredictions_5.npz'
+#pred_noPoly, delT_tmp, mask_tmp = np.load(pred_filename).values()
+#
 #---------------------------
 # Set persistence forecasts
 #---------------------------

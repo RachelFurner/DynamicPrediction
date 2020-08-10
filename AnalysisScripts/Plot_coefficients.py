@@ -4,7 +4,7 @@
 # and then plotted with imshow
 
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 import numpy as np
 import matplotlib
@@ -32,7 +32,7 @@ data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
-rootdir = '/data/hpcdata/users/racfur/DynamicPrediction/'+model_type+'_Outputs/'
+rootdir = '../../'+model_type+'_Outputs/'
 
 plotdir = rootdir+'PLOTS/'+model_name+'/COEFFS'
 if not os.path.isdir(plotdir):
@@ -222,7 +222,10 @@ if run_vars['lat'] or run_vars['lon'] or run_vars['dep']:
 #--------------------------------
 
 coef_filename = rootdir+'MODELS/'+exp_name+'_coefs.npz'
-intercept, raw_coeffs = np.load(coef_filename).values()
+#intercept, raw_coeffs = np.load(coef_filename).values()
+coeff_data = np.load(coef_filename)
+intercept  = coeff_data['arr_0']
+raw_coeffs = coeff_data['arr_1']
 print('raw_coeffs.shape')
 print(raw_coeffs.shape)
 raw_coeffs=raw_coeffs.reshape(1,-1)

@@ -5,7 +5,7 @@
 # Import neccessary packages
 #----------------------------
 import sys
-sys.path.append('/data/hpcdata/users/racfur/DynamicPrediction/code_git/')
+sys.path.append('../')
 from Tools import CreateDataName as cn
 from Tools import AssessModel as am
 from Tools import Model_Plotting as rfplt
@@ -31,7 +31,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':2, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True ,'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = ''
@@ -82,13 +82,13 @@ print(norm_outputs_val.shape)
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
-pkl_filename = '/data/hpcdata/users/racfur/DynamicPrediction/lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
+pkl_filename = '../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
 if TrainModel:
     print('training model')
     
-    alpha_s = [0.0001, 0.001, 0.01, 0.1, 1.0]
+    alpha_s = [0.01, 0.03, 0.1, 1.0]
     parameters = [{'alpha': alpha_s}]
-    n_folds=3
+    n_folds=2
    
     lr = linear_model.Ridge(fit_intercept=False)
     
@@ -144,7 +144,7 @@ gc.collect()
 #------------------------------------------
 # De-normalise the outputs and predictions
 #------------------------------------------
-mean_std_file = '/data/hpcdata/users/racfur/DynamicPrediction/INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 zip_mean_std_file = mean_std_file+'.gz' 
 if os.path.isfile(mean_std_file):
    #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
