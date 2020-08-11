@@ -105,13 +105,13 @@ output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - t
 # Note memory restrictions with GPU means creating dataset on the fly is not possible!
 
 output_file.write('reading data\n')
-inputs_tr_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+inputs_tr_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
 zip_inputs_tr_file = inputs_tr_file+'.gz'
-inputs_val_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+inputs_val_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
 zip_inputs_val_file = inputs_val_file+'.gz'
-outputs_tr_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+outputs_tr_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
 zip_outputs_tr_file = outputs_tr_file+'.gz'
-outputs_val_file = '../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+outputs_val_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
 zip_outputs_val_file = outputs_val_file+'.gz'
 
 if os.path.isfile(zip_inputs_tr_file):
