@@ -31,11 +31,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':1}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':False, 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = ''
-model_prefix = ''
+model_prefix = 'alpha.001_'
 
 TrainModel = True  
 
@@ -65,6 +65,7 @@ if not os.path.isdir(plot_dir):
 #--------------------------------------------------------------
 # Read in data
 #--------------------------------------------------------------
+print('reading in data')
 norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, plot_histograms=False)
 del norm_inputs_te
 del norm_outputs_te
@@ -78,15 +79,17 @@ print(norm_inputs_tr.shape)
 print(norm_inputs_val.shape)
 print(norm_outputs_tr.shape)
 print(norm_outputs_val.shape)
+
 #-------------------------------------------------------------
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
+print('setting up model')
 pkl_filename = '../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
 if TrainModel:
     print('training model')
     
-    alpha_s = [0.01, 0.03, 0.1, 1.0]
+    alpha_s = [0.001]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
    
@@ -190,28 +193,28 @@ am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal')
 
 print('plot results')
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='training')
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='')
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='')
 
 #-------------------------------------------------------------------
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
-plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #----------------------------------------------
 # Plot scatter plots of errors against outputs
 #----------------------------------------------
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 
 

@@ -42,7 +42,7 @@ hyper_params = {
     "num_epochs": 100, 
     "learning_rate": 0.001,
     "criterion": 'MeanAbsEr',
-    "no_layers": 1,     # no of *hidden* layers
+    "no_layers": 0,     # no of *hidden* layers
     "no_nodes": 100     # Note 26106 features....
 }
 early_stop_patience = 100

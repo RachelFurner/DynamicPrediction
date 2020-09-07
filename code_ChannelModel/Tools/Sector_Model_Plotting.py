@@ -31,23 +31,20 @@ def plot_depth_ax(ax, field, level, lon_labels, lat_labels, depth_labels, min_va
        max_value = np.nanmax(field[level,:,:])   # Highest value
 
     im = ax.pcolormesh(field[level,:,:], vmin=min_value, vmax=max_value, cmap=cmap)
-    #ax.set_xlabel('longitude')
-    ax.set_xlabel('x')
-    ax.set_ylabel('latitude')
+    ax.set_xlabel('longitude'+u'\xb0'+'E')
+    ax.set_ylabel('latitude'+u'\xb0'+'N')
    
     # Give axis ticks in lat/lon/depth
-    #x_arange = np.arange(0, lon_labels.shape[0], step=5)
     lon_arange = [0, 4.5, 9.5]
     ax.set_xticks(lon_arange)
     ax.set_xticklabels(np.round(lon_labels[np.array(lon_arange).astype(int)], decimals=-1).astype(int)) 
-    #y_arange = np.arange(0, lat_labels.shape[0], step=7)
     lat_arange = [0, 8.36, 15.5, 21.67, 27.25, 32.46, 37.5, 42.54, 47.75, 53.32, 59.5, 66.64, 75.5]
     ax.set_yticks(lat_arange)
     ax.set_yticklabels(np.round(lat_labels[np.array(lat_arange).astype(int)], decimals=-1).astype(int)) 
  
     return(ax, im)
 
-def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False): 
+def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None): 
     
     # Create a figure
     fig = plt.figure(figsize=(4,8))
@@ -56,9 +53,11 @@ def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_label
        if min_value==None:
           min_value = - max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
           max_value =   max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
-       cmap = 'bwr'
+       if cmap==None:
+          cmap = 'bwr'
     else:
-       cmap = 'viridis'
+       if cmap==None:
+          cmap = 'viridis'
     ax, im = plot_depth_ax(ax, field, level, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m')
@@ -125,22 +124,23 @@ def plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, 
 
     im = ax.pcolormesh(field[:,y,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
-    ax.set_xlabel('x')
-    ax.set_ylabel('depth')
+    ax.set_xlabel('longitude '+u'\xb0'+'E')
+    ax.set_ylabel('depth (m)')
    
     # Give axis ticks in lat/lon/depth
     lon_arange = [0, 2, 4.5, 7, 9.5]
     ax.set_xticks(lon_arange)
-    #ax.set_xticklabels(np.round(lon_labels[np.array(lon_arange).astype(int)], decimals=0 ).astype(int)) 
-    ax.set_xticklabels([1, 5, 10, 15, 20])
-    depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 38.5, depth_labels.shape[0]-1]
+    ax.set_xticklabels(np.round(lon_labels[np.array(lon_arange).astype(int)], decimals=0 ).astype(int)) 
+    #ax.set_xticklabels([1, 5, 10, 15, 20])
+    #depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 38.5, depth_labels.shape[0]-1]
+    depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 37.5, depth_labels.shape[0]-1]
     ax.set_yticks(depth_arange)
-    #ax.set_yticklabels(np.round(depth_labels[np.array(depth_arange).astype(int)], decimals=-2).astype(int)) 
-    ax.set_yticklabels(['', 100, 500, 1000, 2000, 4500, ''])
+    ax.set_yticklabels(np.round(depth_labels[np.array(depth_arange).astype(int)], decimals=-2).astype(int)) 
+    #ax.set_yticklabels(['', 100, 500, 1000, 2000, 4500, ''])
  
     return(ax, im)
 
-def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False):
+def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
@@ -148,9 +148,11 @@ def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_lab
     if diff:
        min_value = - max( abs(np.nanmin(field[:,y,:])), abs(np.nanmax(field[:,y,:])) )
        max_value =   max( abs(np.nanmin(field[:,y,:])), abs(np.nanmax(field[:,y,:])) )
-       cmap = 'bwr'
+       if cmap==None:
+          cmap = 'bwr'
     else:
-       cmap = 'viridis'
+       if cmap==None:
+          cmap = 'viridis'
     ax, im = plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at '+str(int(lat_labels[y]))+' degrees latitude')
@@ -217,9 +219,9 @@ def plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, 
 
     im = ax.pcolormesh(field[:,:,x], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
-    ax.invert_xaxis()
-    ax.set_xlabel('latitude')
-    ax.set_ylabel('depth')
+    #ax.invert_xaxis()
+    ax.set_xlabel('latitude '+u'\xb0'+'N')
+    ax.set_ylabel('depth (m)')
 
     # Give axis ticks in lat/lon/depth
     lat_arange = [0, 8.36, 15.5, 21.67, 27.25, 32.46, 37.5, 42.54, 47.75, 53.32, 59.5, 66.64, 75.5]
@@ -240,9 +242,10 @@ def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_lab
        if min_value == None:
           min_value = - max( abs(np.nanmin(field[:,:,x])), abs(np.nanmax(field[:,:,x])) )
           max_value =   max( abs(np.nanmin(field[:,:,x])), abs(np.nanmax(field[:,:,x])) )
-       cmap = 'bwr'
+       if cmap==None:
+          cmap = 'bwr'
     else:
-       if not cmap:
+       if cmap==None:
           cmap = 'viridis'
     ax, im = plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
@@ -276,10 +279,10 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, lon_l
     ax2, im2 = plot_xconst_crss_sec_ax(ax2, field2, x, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
     ax3, im3 = plot_xconst_crss_sec_ax(ax3, field1-field2, x, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
-    #ax1.set_title(str(field1_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
-    #ax2.set_title(str(field2_name)+' at '+str(int(lon_labels[x]))+' degrees longitude') 
-    ax1.set_title(str(field1_name)+' at x='+str(int(lon_labels[x])))
-    ax2.set_title(str(field2_name)+' at x='+str(int(lon_labels[x]))) 
+    ax1.set_title(str(field1_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
+    ax2.set_title(str(field2_name)+' at '+str(int(lon_labels[x]))+' degrees longitude') 
+    #ax1.set_title(str(field1_name)+' at x='+str(int(lon_labels[x])))
+    #ax2.set_title(str(field2_name)+' at x='+str(int(lon_labels[x]))) 
     ax3.set_title('The Difference')
 
     cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
