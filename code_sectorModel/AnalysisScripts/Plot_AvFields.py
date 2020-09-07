@@ -3,9 +3,9 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Model_Plotting as rfplt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -49,7 +49,7 @@ data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
-rootdir = '../../'+model_type+'_Outputs/'
+rootdir = '../../../'+model_type+'_Outputs/'
 
 level = point[0]
 y_coord = point[1]

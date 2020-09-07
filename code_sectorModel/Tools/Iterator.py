@@ -2,9 +2,9 @@
 # using machine learning/stats based models
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
+sys.path.append('../Tools')
+import CreateDataName as cn
+import ReadRoutines as rr
 
 import numpy as np
 from sklearn.preprocessing import PolynomialFeatures
@@ -60,7 +60,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
         predictions[0,:,:,:] = init
    
     #Read in mean and std to normalise inputs
-    mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+    mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
     #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
     mean_std_data = np.load(mean_std_file)
     input_mean  = mean_std_data['arr_0']

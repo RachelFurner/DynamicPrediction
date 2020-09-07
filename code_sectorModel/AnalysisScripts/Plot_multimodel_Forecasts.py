@@ -3,9 +3,9 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Model_Plotting as rfplt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,9 +29,9 @@ time_step = '24hrs'
 
 #------------------------------
 
-rootdir = '../../'+model_type+'_Outputs/'
-nn_dir = '../../nn_Outputs/'
-lr_dir = '../../lr_Outputs/'
+rootdir = '../../../'+model_type+'_Outputs/'
+nn_dir = '../../../nn_Outputs/'
+lr_dir = '../../../lr_Outputs/'
 
 if time_step == '1mnth':
    DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'

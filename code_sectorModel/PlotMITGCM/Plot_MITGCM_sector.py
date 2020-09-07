@@ -3,9 +3,9 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Sector_Model_Plotting as SecPlt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Sector_Model_Plotting as SecPlt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,7 +40,7 @@ else:
    print('WARNING - IMPROPER TIME STEP GIVEN!!')
    print('####################################')
 
-rootdir = '../../MITGCM_Analysis_Sector/'
+rootdir = '../../../MITGCM_Analysis_Sector/'
 
 level = point[0]
 y_coord = point[1]

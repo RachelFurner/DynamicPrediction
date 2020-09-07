@@ -8,12 +8,12 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
-from Tools import AssessModel as am
-from Tools import Model_Plotting as rfplt
-from Tools import Network_Classes as nc
+sys.path.append('../Tools')
+import CreateDataName as cn
+import ReadRoutines as rr
+import AssessModel as am
+import Model_Plotting as rfplt
+import Network_Classes as nc
 
 import numpy as np
 import os
@@ -68,9 +68,9 @@ if data_name is '3dLatLonDepUVBolSalEtaDnsPolyDeg2':
 data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 
-pysave_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
-output_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
-plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
+pysave_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
+output_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
+plot_dir = '../../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
 output_file = open(output_filename, 'w', buffering=1)
@@ -105,13 +105,13 @@ output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - t
 # Note memory restrictions with GPU means creating dataset on the fly is not possible!
 
 output_file.write('reading data\n')
-inputs_tr_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+inputs_tr_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
 zip_inputs_tr_file = inputs_tr_file+'.gz'
-inputs_val_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+inputs_val_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
 zip_inputs_val_file = inputs_val_file+'.gz'
-outputs_tr_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+outputs_tr_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
 zip_outputs_tr_file = outputs_tr_file+'.gz'
-outputs_val_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+outputs_val_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
 zip_outputs_val_file = outputs_val_file+'.gz'
 
 if os.path.isfile(zip_inputs_tr_file):

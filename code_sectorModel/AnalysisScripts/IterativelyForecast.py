@@ -3,11 +3,11 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Iterator as it
-from Tools import Model_Plotting as rfplt
-from Tools import AssessModel as am
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Iterator as it
+import Model_Plotting as rfplt
+import AssessModel as am
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -47,7 +47,7 @@ data_name = data_prefix+cn.create_dataname(run_vars)+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name+'_'+iterate_method
 
-rootdir = '../../'+model_type+'_Outputs/'
+rootdir = '../../../'+model_type+'_Outputs/'
 
 nc_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.nc'
 pred_filename = rootdir+'ITERATED_PREDICTION_ARRAYS/'+exp_name+'_IterativePredictions_'+str(start)+'.npz'

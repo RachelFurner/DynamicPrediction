@@ -4,10 +4,10 @@
 from comet_ml import Experiment
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
-from Tools import AssessModel as am
+sys.path.append('../Tools')
+import CreateDataName as cn
+import ReadRoutines as rr
+import AssessModel as am
 
 import numpy as np
 import os
@@ -68,11 +68,11 @@ val_end   = int(val_end_ratio * dataset_end_index)
 x_dim         = ( ds.isel( T=slice(0) ) ).sizes['X']
 y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
-plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
+plot_dir = '../../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
 
-output_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
+output_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
 output_file = open(output_filename, 'w', buffering=1)
 
 output_file.write('matplotlib backend is: \n')
@@ -122,7 +122,7 @@ outputs_train_mean = np.array(outputs_train_mean).mean(axis=0)
 outputs_train_std = np.array(outputs_train_std).mean(axis=0)
 
 ## Save mean and std to file, so can be used to un-normalise when using model to predict
-mean_std_file = '../../INPUT_OUTPUT_ARRAYS/Whole_Grid_MeanStd.npz'
+mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/Whole_Grid_MeanStd.npz'
 np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std )
 
 no_input_channels = input_batch.shape[1]
@@ -321,7 +321,7 @@ ax1.legend(['Training Loss', 'Validation Loss'])
 plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-info_filename = '../../nn_Outputs/MODELS/'+model_name+'_info.txt'
+info_filename = '../../../nn_Outputs/MODELS/'+model_name+'_info.txt'
 info_file = open(info_filename, 'w')
 np.set_printoptions(threshold=np.inf)
 info_file.write('hyper_params:    '+str(hyper_params)+'\n')
@@ -335,7 +335,7 @@ info_file.write('Weights of the network:\n')
 info_file.write(str(h[0].weight.data.cpu().numpy()))
 
 output_file.write('pickle model \n')
-pkl_filename = '../../nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
+pkl_filename = '../../../nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 

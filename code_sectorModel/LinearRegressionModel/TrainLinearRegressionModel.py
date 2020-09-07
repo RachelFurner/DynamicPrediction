@@ -5,11 +5,15 @@
 # Import neccessary packages
 #----------------------------
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import AssessModel as am
-from Tools import Model_Plotting as rfplt
-from Tools import ReadRoutines as rr
+sys.path.append('../Tools')
+#from Tools import CreateDataName as cn
+#from Tools import AssessModel as am
+#from Tools import Model_Plotting as rfplt
+#from Tools import ReadRoutines as rr
+import CreateDataName as cn
+import AssessModel as am
+import Model_Plotting as rfplt
+import ReadRoutines as rr
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -58,7 +62,7 @@ data_name = data_prefix+data_name+'_'+time_step
 
 model_name = model_prefix+data_name
 
-plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
+plot_dir = '../../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
 
@@ -85,7 +89,7 @@ print(norm_outputs_val.shape)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
 print('setting up model')
-pkl_filename = '../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
+pkl_filename = '../../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
 if TrainModel:
     print('training model')
     
@@ -102,7 +106,7 @@ if TrainModel:
     lr.get_params()
 
     # Write info on Alpha in file    
-    info_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_info.txt'
+    info_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_info.txt'
     info_file=open(info_filename,"w")
     info_file.write("Best parameters set found on development set:\n")
     info_file.write('\n')
@@ -117,7 +121,7 @@ if TrainModel:
     info_file.write('')
 
     # Store coeffs in an npz file and print to info file
-    coef_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_coefs.npz'
+    coef_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_coefs.npz'
     np.savez( coef_filename, np.asarray(lr.best_estimator_.intercept_), np.asarray(lr.best_estimator_.coef_) )
     info_file.write("lr.best_estimator_.intercept_: \n")
     info_file.write(str(lr.best_estimator_.intercept_))
@@ -147,7 +151,7 @@ gc.collect()
 #------------------------------------------
 # De-normalise the outputs and predictions
 #------------------------------------------
-mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 zip_mean_std_file = mean_std_file+'.gz' 
 if os.path.isfile(mean_std_file):
    #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
@@ -193,8 +197,8 @@ am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal')
 
 print('plot results')
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='')
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='')
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train')
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
 
 #-------------------------------------------------------------------
 # plot histograms:

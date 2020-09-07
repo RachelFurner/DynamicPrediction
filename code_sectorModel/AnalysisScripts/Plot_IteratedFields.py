@@ -3,9 +3,9 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Model_Plotting as rfplt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,7 +36,7 @@ point = [ 5,10, 5]
 compare_w_truth = True 
 
 #----------------------
-rootdir = '../'+model_type+'_Outputs/'
+rootdir = '../../../'+model_type+'_Outputs/'
 
 data_name = cn.create_dataname(run_vars)
 data_name = data_prefix+data_name+'_'+time_step 

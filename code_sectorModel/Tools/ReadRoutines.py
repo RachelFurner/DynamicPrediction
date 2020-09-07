@@ -15,8 +15,8 @@ from skimage.util import view_as_windows
 from torch.utils import data
 from torchvision import transforms, utils
 import torch
-from Tools import mds as mds
-from Tools import Model_Plotting as rfplt
+import mds as mds
+import Model_Plotting as rfplt
 import os
 import matplotlib.pyplot as plt
 
@@ -155,7 +155,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
      t as inputs.
    '''
 
-   info_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_info.txt'
+   info_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_info.txt'
    info_file=open(info_filename,"w")
 
    StepSize = 1 # how many output steps (months!) to predict over
@@ -658,13 +658,13 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
       # Plot histograms of the data
       #-----------------------------
       fig = rfplt.Plot_Histogram(outputs_tr, 100)
-      plt.savefig('../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
       
       fig = rfplt.Plot_Histogram(outputs_val, 100)
-      plt.savefig('../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
       
       fig = rfplt.Plot_Histogram(outputs_te, 100)
-      plt.savefig('../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
+      plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
       
    #----------------------------------------------
    # Normalise Data (based on training data only)
@@ -689,7 +689,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    norm_outputs_tr, norm_outputs_val, norm_outputs_te, outputs_mean, outputs_std = normalise_data(outputs_tr[:], outputs_val[:], outputs_te[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
-   mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+   mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
   
    #-----------------
@@ -712,12 +712,12 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
    if save_arrays: 
       print('save arrays')
-      inputs_tr_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
-      inputs_val_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
-      inputs_te_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
-      outputs_tr_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
-      outputs_val_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
-      outputs_te_filename = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
+      inputs_tr_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
+      inputs_val_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
+      inputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
+      outputs_tr_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
+      outputs_val_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+      outputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
       np.save(inputs_tr_filename,  norm_inputs_tr)
       np.save(inputs_val_filename, norm_inputs_val)
       np.save(inputs_te_filename,  norm_inputs_te)
@@ -1122,7 +1122,7 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
    # as npz file
-   mean_std_file = '../../INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_MeanStd.npz'
+   mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_MeanStd.npz'
    np.savez_compressed( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
   
    # Normalise inputs and outputs 
@@ -1150,7 +1150,7 @@ def ReadMITGCMfield(MITGCM_filename, trainval_split_ratio, valtest_split_ratio, 
    #-----------------
    # Save the arrays
    #-----------------
-   inputsoutputs_file = '../../INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
+   inputsoutputs_file = '../../../INPUT_OUTPUT_ARRAYS/WholeGrid_'+data_name+'_InputsOutputs.npz'
    np.savez(inputsoutputs_file, norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te)
  
    print('shape for inputs and outputs: full; tr; val; te')
