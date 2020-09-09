@@ -3,9 +3,9 @@
 
 print('import packages')
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Channel_Model_Plotting as ChnlPlt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Channel_Model_Plotting as ChnlPlt
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,7 +21,7 @@ from netCDF4 import Dataset
 # Set plotting variables
 #------------------------
 # Note shape is 38, 108, 240 (z,y,x) and 36000 time steps (100 years)
-time = 12000
+time = 50 
 point = [ 2, 50, 100]
 
 time_step = '24hrs'
@@ -29,9 +29,10 @@ time_step = '24hrs'
 #----------------------
 
 datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-data_filename=datadir + 'daily_ave_3d.nc'
+data_filename=datadir + 'daily_ave_50yrs.nc'
+grid_filename=datadir + 'grid.nc'
 mon_file = datadir + 'monitor.nc'
-rootdir = '../../MITGCM_Analysis_Channel/'
+rootdir = '../../../MITGCM_Analysis_Channel/'
 
 level = point[0]
 y_coord = point[1]
@@ -47,7 +48,8 @@ da_T = ds['THETA'][:,:,:-8,:]
 da_W = ds['WVEL'][:,:,:-8,:]
 da_X = ds['X']
 da_Y = ds['Y'][:-8]
-da_Z = ds['Zmd000038']
+ds_grid = xr.open_dataset(grid_filename)
+da_Z = ds_grid['RC']
 
 z_size = da_T.shape[1]
 y_size = da_T.shape[2]
@@ -156,9 +158,9 @@ plt.close()
 ##---------------------------------------------------------------------------
 ## Plot timeseries predictions
 ##---------------------------------------------------------------------------
-print('plot timeseries')
-fig = ChnlPlt.plt_timeseries(point, 360, {'MITGCM':da_T.values}, time_step=time_step)
-plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_1yr_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
-fig = ChnlPlt.plt_2_timeseries(point, 360, 18000, {'MITGCM':da_T.values}, time_step=time_step)
-plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_50yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
+#print('plot timeseries')
+#fig = ChnlPlt.plt_timeseries(point, 360, {'MITGCM':da_T.values}, time_step=time_step)
+#plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_1yr_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
+#fig = ChnlPlt.plt_2_timeseries(point, 360, 18000, {'MITGCM':da_T.values}, time_step=time_step)
+#plt.savefig(rootdir+'PLOTS/'+time_step+'_timeseries_50yrs_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2]), bbox_inches = 'tight', pad_inches = 0.1)
 

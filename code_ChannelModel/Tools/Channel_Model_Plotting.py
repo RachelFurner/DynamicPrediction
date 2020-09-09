@@ -126,9 +126,9 @@ def plot_yconst_crss_sec_ax(ax, field, y, x_labels, y_labels, depth_labels, min_
     x_arange = np.arange(0,x_labels.size,50)
     ax.set_xticks(x_arange)
     ax.set_xticklabels(np.round(x_labels[np.array(x_arange).astype(int)]/1000, decimals=0 ).astype(int)) 
-    depth_arange = np.arange(0,depth_labels.size,5)
+    depth_arange = [0, 6, 9, 15, 20, 25, 29, 33, depth_labels.shape[0]-1]
     ax.set_yticks(depth_arange)
-    ax.set_yticklabels(np.round(depth_labels[np.array(depth_arange).astype(int)], decimals=0).astype(int)) 
+    ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int)) 
  
     return(ax, im)
 
@@ -219,9 +219,9 @@ def plot_xconst_crss_sec_ax(ax, field, x, x_labels, y_labels, depth_labels, min_
     y_arange = np.arange(0,y_labels.size,25)
     ax.set_xticks(y_arange)
     ax.set_xticklabels(np.round(y_labels[np.array(y_arange).astype(int)]/1000, decimals=0).astype(int)) 
-    depth_arange = np.arange(0,depth_labels.size,5)
+    depth_arange = [0, 6, 9, 15, 20, 25, 29, 33, depth_labels.shape[0]-1]
     ax.set_yticks(depth_arange)
-    ax.set_yticklabels(np.round(depth_labels[np.array(depth_arange).astype(int)], decimals=0).astype(int)) 
+    ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int)) 
     
     return(ax, im)
 

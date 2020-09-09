@@ -4,19 +4,17 @@
 from comet_ml import Experiment
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
-from Tools import AssessModel as am
+sys.path.append('../Tools')
+import ReadRoutines as rr
 
 import numpy as np
 import os
 import xarray as xr
-import matplotlib.pyplot as plt
 import pickle
 
-from sklearn.preprocessing import PolynomialFeatures
-import sklearn.metrics as metrics
+import matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
 
 from torch.utils import data
 import torch.nn as nn
@@ -24,8 +22,6 @@ from torch.autograd import Variable
 import torch
 from torchvision import transforms, utils
 
-import matplotlib
-matplotlib.use('agg')
 
 import time as time
 
@@ -35,7 +31,7 @@ tic = time.time()
 # Manually set variables for this run
 #--------------------------------------
 hyper_params = {
-    "batch_size": 32,
+    "batch_size": 16,
     "num_epochs":  2,
     "learning_rate": 0.0001,
     "criterion": torch.nn.MSELoss(),
@@ -46,21 +42,26 @@ time_step = '24hrs'
 
 model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])+'_batchsize'+str(hyper_params['batch_size'])
 
-subsample_rate = 5      # number of time steps to skip over when creating training and test data
+###subsample_rate = 5      # number of time steps to skip over when creating training and test data
+subsample_rate = 500     # number of time steps to skip over when creating training and test data
 train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-#DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-#MITGCM_filename = DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
-#dataset_end_index = 50*360  # Look at 50 yrs of data
 DIR = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-MITGCM_filename = DIR+'daily_ave_3d.nc'
+MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
 plot_freq = 1    # Plot scatter plot every n epochs
 seed_value = 12321
 
 #-------------------------------------------
+output_filename = '../../../Channel_'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
+output_file = open(output_filename, 'w', buffering=1)
+
+plot_dir = '../../../Channel_'+model_type+'_Outputs/PLOTS/'+model_name
+if not os.path.isdir(plot_dir):
+   os.system("mkdir %s" % (plot_dir))
+
 ds       = xr.open_dataset(MITGCM_filename)
 tr_start = 0
 tr_end   = int(train_end_ratio * dataset_end_index)
@@ -68,12 +69,10 @@ val_end   = int(val_end_ratio * dataset_end_index)
 x_dim         = ( ds.isel( T=slice(0) ) ).sizes['X']
 y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
-plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
-if not os.path.isdir(plot_dir):
-   os.system("mkdir %s" % (plot_dir))
-
-output_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
-output_file = open(output_filename, 'w', buffering=1)
+no_tr_samples = tr_end/subsample_rate
+no_val_samples = (val_end - tr_end)/subsample_rate
+output_file.write('no_input_samples ;'+str(no_tr_samples)+'\n')
+output_file.write('no_output_samples ;'+str(no_val_samples)+'\n')
 
 output_file.write('matplotlib backend is: \n')
 output_file.write(matplotlib.get_backend()+'\n')
@@ -92,7 +91,7 @@ output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - t
 #------------------------------------------------------------------------------------------
 
 mean_std_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, transform=None)
-mean_std_loader = data.DataLoader(mean_std_Dataset,batch_size=4096, shuffle=False, num_workers=1)
+mean_std_loader = data.DataLoader(mean_std_Dataset,batch_size=32, shuffle=False, num_workers=0)
 
 inputs_train_mean = []
 inputs_train_std = []
@@ -122,7 +121,7 @@ outputs_train_mean = np.array(outputs_train_mean).mean(axis=0)
 outputs_train_std = np.array(outputs_train_std).mean(axis=0)
 
 ## Save mean and std to file, so can be used to un-normalise when using model to predict
-mean_std_file = '../../INPUT_OUTPUT_ARRAYS/Whole_Grid_MeanStd.npz'
+mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/Channel_Whole_Grid_MeanStd.npz'
 np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std )
 
 no_input_channels = input_batch.shape[1]
@@ -136,6 +135,7 @@ output_file.write('no_output_channels ;'+str(no_output_channels)+'\n')
 #-------------------------------------------------------------------------------------
 Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, 
                                               transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
+
 Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, 
                                               transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
 
@@ -182,7 +182,7 @@ for epoch in range(hyper_params["num_epochs"]):
 
     # Training
 
-    train_loss_temp = 0.0
+    train_loss_epoch_temp = 0.0
 
     if epoch%plot_freq == 0:
         fig = plt.figure(figsize=(9,9))
@@ -224,10 +224,10 @@ for epoch in range(hyper_params["num_epochs"]):
             output_batch = output_batch.cpu().detach().numpy()
             predicted = predicted.cpu().detach().numpy()
             ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-            bottom = min(min(predicted), min(output_batch), bottom)
-            top    = max(max(predicted), max(output_batch), top)  
+            bottom = min(np.amin(predicted), np.amin(output_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(output_batch), top)  
 
-    tr_loss_single_epoch = train_loss_epoch_temp / norm_inputs_tr.shape[0]
+    tr_loss_single_epoch = train_loss_epoch_temp / no_tr_samples
     output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
     train_loss_epoch.append( tr_loss_single_epoch )
 
@@ -244,7 +244,7 @@ for epoch in range(hyper_params["num_epochs"]):
 
     # Validation
 
-    val_loss_temp = 0.0
+    val_loss_epoch_temp = 0.0
     
     if epoch%plot_freq == 0:
         fig = plt.figure(figsize=(9,9))
@@ -275,13 +275,13 @@ for epoch in range(hyper_params["num_epochs"]):
         val_loss_epoch_temp += loss.item()*input_batch.shape[0]
 
         if epoch%plot_freq == 0:
-            output_batch = outputs_batch.cpu().detach().numpy()
+            output_batch = output_batch.cpu().detach().numpy()
             predicted = predicted.cpu().detach().numpy()
             ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-            bottom = min(min(predicted), min(output_batch), bottom)
-            top    = max(max(predicted), max(output_batch), top)    
+            bottom = min(np.amin(predicted), np.amin(output_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(output_batch), top)    
 
-    val_loss_single_epoch = val_loss_epoch_temp / norm_inputs_val.shape[0]
+    val_loss_single_epoch = val_loss_epoch_temp / no_val_samples
     output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
     val_loss_epoch.append(val_loss_single_epoch)
 
@@ -292,7 +292,7 @@ for epoch in range(hyper_params["num_epochs"]):
         ax1.set_xlim(bottom, top)
         ax1.set_ylim(bottom, top)
         ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-        ax1.annotate('Epoch MSE: '+str(np.round(val_mse_epoch_temp / norm_inputs_val.shape[0],5)),
+        ax1.annotate('Epoch MSE: '+str(np.round(val_mse_epoch_temp / no_val_samples,5)),
                       (0.15, 0.9), xycoords='figure fraction')
         ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
         plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
@@ -321,7 +321,7 @@ ax1.legend(['Training Loss', 'Validation Loss'])
 plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-info_filename = '../../nn_Outputs/MODELS/'+model_name+'_info.txt'
+info_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_info.txt'
 info_file = open(info_filename, 'w')
 np.set_printoptions(threshold=np.inf)
 info_file.write('hyper_params:    '+str(hyper_params)+'\n')
@@ -335,7 +335,7 @@ info_file.write('Weights of the network:\n')
 info_file.write(str(h[0].weight.data.cpu().numpy()))
 
 output_file.write('pickle model \n')
-pkl_filename = '../../nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
+pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 
