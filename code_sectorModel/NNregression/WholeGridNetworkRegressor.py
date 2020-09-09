@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from comet_ml import Experiment
+#from comet_ml import Experiment
 
 import sys
 sys.path.append('../Tools')
@@ -23,6 +23,8 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch
 from torchvision import transforms, utils
+
+import time as time
 
 import matplotlib
 matplotlib.use('agg')
