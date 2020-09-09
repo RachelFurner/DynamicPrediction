@@ -31,7 +31,7 @@ tic = time.time()
 # Manually set variables for this run
 #--------------------------------------
 hyper_params = {
-    "batch_size": 16,
+    "batch_size": 512,
     "num_epochs":  2,
     "learning_rate": 0.0001,
     "criterion": torch.nn.MSELoss(),
@@ -43,7 +43,7 @@ time_step = '24hrs'
 model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])+'_batchsize'+str(hyper_params['batch_size'])
 
 ###subsample_rate = 5      # number of time steps to skip over when creating training and test data
-subsample_rate = 500     # number of time steps to skip over when creating training and test data
+subsample_rate = 20     # number of time steps to skip over when creating training and test data
 train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
@@ -92,7 +92,7 @@ output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - t
 #------------------------------------------------------------------------------------------
 
 mean_std_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, transform=None)
-mean_std_loader = data.DataLoader(mean_std_Dataset,batch_size=32, shuffle=False, num_workers=0)
+mean_std_loader = data.DataLoader(mean_std_Dataset,batch_size=hyper_params["batch_size"], shuffle=False, num_workers=0)
 
 inputs_train_mean = []
 inputs_train_std = []
@@ -293,14 +293,12 @@ for epoch in range(hyper_params["num_epochs"]):
         ax1.set_xlim(bottom, top)
         ax1.set_ylim(bottom, top)
         ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-        ax1.annotate('Epoch MSE: '+str(np.round(val_mse_epoch_temp / no_val_samples,5)),
+        ax1.annotate('Epoch MSE: '+str(np.round(val_loss_epoch_temp / no_val_samples,5)),
                       (0.15, 0.9), xycoords='figure fraction')
         ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
         plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
         plt.close()
 
-    output_file.write('Epoch {}, Training Loss: {:.8f}'.format(epoch, train_loss_epoch[-1]))
-    output_file.write('Epoch {}, Validation Loss: {:.8f}'.format(epoch, val_loss_epoch[-1]))    
     toc = time.time()
     output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
 
