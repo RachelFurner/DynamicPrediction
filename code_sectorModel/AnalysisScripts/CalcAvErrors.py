@@ -5,12 +5,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import Iterator as it
-from Tools import Model_Plotting as rfplt
-from Tools import AssessModel as am
-from Tools import Network_Classes as nc
+sys.path.append('../Tools')
+import CreateDataName as cn
+import Iterator as it
+import Model_Plotting as rfplt
+import AssessModel as am
+import Network_Classes as nc
 import xarray as xr
 import pickle
 import netCDF4 as nc4
@@ -23,7 +23,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 
-model_type = 'nn'
+model_type = 'lr'
 
 time_step = '24hrs'
 data_prefix=''
@@ -37,10 +37,10 @@ if model_type == 'nn':
    no_nodes = 100
    model_prefix = 'MSE_'+str(no_layers)+'layers_'+str(no_nodes)+'nodes_lr0.001_batch4092_'
 else:
-   model_prefix = ''
+   model_prefix = 'alpha.0001_'
 
 calc_predictions = True 
-no_points = 100  # in months/days
+no_points = 500  # in months/days
 skip_rate = 5    # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
 if time_step == '1mnth':
@@ -87,7 +87,7 @@ mask = ds['Mask'].values
 # Read in the model
 #-------------------
 if model_type == 'lr':
-    pkl_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
+    pkl_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
     print(pkl_filename)
     with open(pkl_filename, 'rb') as file:
         print('opening '+pkl_filename)
@@ -96,7 +96,7 @@ elif model_type == 'nn':
     model = nc.NetworkRegression(inputDim, outputDim, no_layers, no_nodes) 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
-    model_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
+    model_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
     model.load_state_dict(torch.load(model_filename))
     model.eval()
    
@@ -105,7 +105,7 @@ elif model_type == 'nn':
 #---------------------
 print('set up netcdf file')
 
-nc_file = nc4.Dataset('../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('../../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -139,7 +139,7 @@ nc_T[:] = ds['T'].data[1:no_points*skip_rate+1:skip_rate]
 # 'truth' as inputs, rather than iteratively predicting through time
 #--------------------------------------------------------------------------------------
 print('get predictions')
-pred_filename = '../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
+pred_filename = '../../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
 
@@ -174,8 +174,8 @@ predictedDelT = predicted_data['arr_1']
 print('calc errors')
 DelT_truth = ( Temp_truth[1:no_points*skip_rate+1:skip_rate,:,:,:] - 
                Temp_truth[0:no_points*skip_rate:skip_rate,:,:,:] )
-Errors = (predictedDelT[1:,:,:,:] - DelT_truth[:,:,:,:])
-AbsErrors = np.abs(predictedDelT[1:,:,:,:] - DelT_truth[:,:,:,:])
+Errors = (predictedDelT[:,:,:,:] - DelT_truth[:,:,:,:])
+AbsErrors = np.abs(predictedDelT[:,:,:,:] - DelT_truth[:,:,:,:])
 
 # Average temporally and spatially 
 Time_Av_DelT_Truth  = np.nanmean(DelT_truth , axis=0)
@@ -219,4 +219,4 @@ ax2.set_xlabel('No of months')
 
 plt.tight_layout()
 plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
-plt.savefig('../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error.png', bbox_inches = 'tight', pad_inches = 0.1)

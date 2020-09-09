@@ -4,8 +4,8 @@
 # and then plotted with imshow
 
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
+sys.path.append('../Tools')
+import CreateDataName as cn
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -15,14 +15,14 @@ import os
 #----------------------------
 # Set variables for this run
 #----------------------------
-plot_log = True
+plot_log = False
 
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 
 time_step = '24hrs'
 data_prefix=''
-model_prefix = ''
+model_prefix = 'alpha.001_'
 exp_prefix = ''
 
 plt.rcParams.update({'font.size': 28})
@@ -32,7 +32,7 @@ data_name = data_prefix+data_name+'_'+time_step
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
-rootdir = '../../'+model_type+'_Outputs/'
+rootdir = '../../../'+model_type+'_Outputs/'
 
 plotdir = rootdir+'PLOTS/'+model_name+'/COEFFS'
 if not os.path.isdir(plotdir):
@@ -189,7 +189,7 @@ elif run_vars['dimension'] == 3:
 else:
    print('ERROR, dimension neither 2 nor 3')
 if run_vars['eta']:
-   tick_labels.append('Eta')   
+   tick_labels.append('SSH')   
    temp_no_variables = 9
    tick_locations.append(grid_lines[-1]+(temp_no_variables/2)+.5)
    grid_lines.append(grid_lines[-1]+temp_no_variables)
@@ -249,7 +249,7 @@ if run_vars['poly_degree'] is 1:
    xlabel_ticks = list(np.array(tick_locations).astype(float))
    xgrid_lines = [0]+list(np.array(grid_lines).astype(float))
    
-   ylabels = ['1'] 
+   ylabels = [''] 
    ylabel_ticks = [1]
    ygrid_lines = [0, 2]
    
@@ -330,11 +330,11 @@ elif run_vars['poly_degree'] is 2:
    
    if no_location_vars > 1:
       # if last variable is any of the location info, then need to keep the last label in...otherwise use above lines
-      ylabels = ['1']+tick_labels[:] 
+      ylabels = ['']+tick_labels[:] 
       ylabel_ticks = [1.5]+list(np.array(tick_locations[:])+3.)  # three rows representing coeffs x 1 
       ygrid_lines = [0, 3]+list(np.array(grid_lines[:])+3.)      # three rows representing coeffs x 1 
    else:
-      ylabels = ['1']+tick_labels[:-1]
+      ylabels = ['']+tick_labels[:-1]
       ylabel_ticks = [1.5]+list(np.array(tick_locations[:-1])+3.)  # three rows representing coeffs x 1 
       ygrid_lines = [0, 3]+list(np.array(grid_lines[:-1])+3.)      # three rows representing coeffs x 1
    
@@ -422,7 +422,7 @@ elif run_vars['poly_degree'] is 2:
                               'Below NW', 'Below N', 'Below NE', 'Below W', 'Below', 'Below E', 'Below SW', 'Below S', 'Below SE'
                                ])
          ## Let the horizontal axes labeling appear on top.
-         ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False, labelsize=7)
+         ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False, labelsize=16)
          ## Rotate the tick labels and set their alignment.
          plt.setp(ax.get_xticklabels(), rotation=-60, ha="right", rotation_mode="anchor")
          ## remove ticks, so only labels show

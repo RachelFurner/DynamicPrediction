@@ -5,11 +5,15 @@
 # Import neccessary packages
 #----------------------------
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import AssessModel as am
-from Tools import Model_Plotting as rfplt
-from Tools import ReadRoutines as rr
+sys.path.append('../Tools')
+#from Tools import CreateDataName as cn
+#from Tools import AssessModel as am
+#from Tools import Model_Plotting as rfplt
+#from Tools import ReadRoutines as rr
+import CreateDataName as cn
+import AssessModel as am
+import Model_Plotting as rfplt
+import ReadRoutines as rr
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,11 +35,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':1}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':False, 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = ''
-model_prefix = ''
+model_prefix = 'alpha.001_'
 
 TrainModel = True  
 
@@ -58,13 +62,14 @@ data_name = data_prefix+data_name+'_'+time_step
 
 model_name = model_prefix+data_name
 
-plot_dir = '../../'+model_type+'_Outputs/PLOTS/'+model_name
+plot_dir = '../../../'+model_type+'_Outputs/PLOTS/'+model_name
 if not os.path.isdir(plot_dir):
    os.system("mkdir %s" % (plot_dir))
 
 #--------------------------------------------------------------
 # Read in data
 #--------------------------------------------------------------
+print('reading in data')
 norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, plot_histograms=False)
 del norm_inputs_te
 del norm_outputs_te
@@ -78,15 +83,17 @@ print(norm_inputs_tr.shape)
 print(norm_inputs_val.shape)
 print(norm_outputs_tr.shape)
 print(norm_outputs_val.shape)
+
 #-------------------------------------------------------------
 # Set up a model in scikitlearn to predict deltaT (the trend)
 # Run ridge regression tuning alpha through cross val
 #-------------------------------------------------------------
-pkl_filename = '../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
+print('setting up model')
+pkl_filename = '../../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
 if TrainModel:
     print('training model')
     
-    alpha_s = [0.01, 0.03, 0.1, 1.0]
+    alpha_s = [0.001]
     parameters = [{'alpha': alpha_s}]
     n_folds=3
    
@@ -99,7 +106,7 @@ if TrainModel:
     lr.get_params()
 
     # Write info on Alpha in file    
-    info_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_info.txt'
+    info_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_info.txt'
     info_file=open(info_filename,"w")
     info_file.write("Best parameters set found on development set:\n")
     info_file.write('\n')
@@ -114,7 +121,7 @@ if TrainModel:
     info_file.write('')
 
     # Store coeffs in an npz file and print to info file
-    coef_filename = '../../'+model_type+'_Outputs/MODELS/'+model_name+'_coefs.npz'
+    coef_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_coefs.npz'
     np.savez( coef_filename, np.asarray(lr.best_estimator_.intercept_), np.asarray(lr.best_estimator_.coef_) )
     info_file.write("lr.best_estimator_.intercept_: \n")
     info_file.write(str(lr.best_estimator_.intercept_))
@@ -144,7 +151,7 @@ gc.collect()
 #------------------------------------------
 # De-normalise the outputs and predictions
 #------------------------------------------
-mean_std_file = '../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
+mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
 zip_mean_std_file = mean_std_file+'.gz' 
 if os.path.isfile(mean_std_file):
    #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
@@ -190,28 +197,28 @@ am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal')
 
 print('plot results')
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='training')
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train')
 am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
 
 #-------------------------------------------------------------------
 # plot histograms:
 #-------------------------------------------------
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr, 100) 
-plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val, 100)
-plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_predictions.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_tr-denorm_outputs_tr, 100)
-plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_train_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig = rfplt.Plot_Histogram(denorm_lr_predicted_val-denorm_outputs_val, 100) 
-plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #----------------------------------------------
 # Plot scatter plots of errors against outputs
 #----------------------------------------------
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='training', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='train', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 
 

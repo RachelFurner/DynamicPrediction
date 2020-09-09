@@ -7,10 +7,10 @@ print('Import neccessary packages')
 from comet_ml import Experiment
 
 import sys
-sys.path.append('../../code_git/')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
-from Tools import AssessModel as am
+sys.path.append('../Tools')
+import CreateDataName as cn
+import ReadRoutines as rr
+import AssessModel as am
 
 import numpy as np
 import os

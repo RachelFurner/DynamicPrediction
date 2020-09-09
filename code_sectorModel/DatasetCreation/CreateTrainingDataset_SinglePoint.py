@@ -5,11 +5,11 @@
 # Import neccessary packages
 #----------------------------
 import sys
-sys.path.append('../')
-from Tools import CreateDataName as cn
-from Tools import ReadRoutines as rr
-from Tools import AssessModel as am
-from Tools import Model_Plotting as rfplt
+sys.path.append('../Tools')
+import CreateDataName as cn
+import ReadRoutines as rr
+import AssessModel as am
+import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt

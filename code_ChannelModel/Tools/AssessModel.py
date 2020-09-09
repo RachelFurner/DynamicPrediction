@@ -70,9 +70,15 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
    top    = top + 0.1*abs(top)
   
    if not xlabel:
-      xlabel = 'Truth'
+      xlabel = 'True temperature change ('+u'\xb0'+'C)'
+      xlabel_filename = 'truth'
+   else:
+      xlabel_filename = xlabel
    if not ylabel:
-      ylabel = 'Predicted'
+      ylabel = 'Predicted temperature change ('+u'\xb0'+'C)'
+      ylabel_filename = 'predicted'
+   else:
+      ylabel_filename = ylabel
  
    fig = plt.figure(figsize=(9,9))
    ax1 = fig.add_subplot(111)
@@ -94,7 +100,7 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
    else:  # Assume we expect points to fit on 0 line, i.e. plotting errors against something
       ax1.plot([bottom, top], [0, 0], 'k--', lw=1)
    
-   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel+'Vs'+ylabel+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel_filename+'Vs'+ylabel_filename+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
    return()
