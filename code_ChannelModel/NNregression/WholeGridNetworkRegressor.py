@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from comet_ml import Experiment
+#from comet_ml import Experiment
 
 import sys
 sys.path.append('../Tools')
@@ -47,7 +47,8 @@ subsample_rate = 500     # number of time steps to skip over when creating train
 train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-DIR = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
