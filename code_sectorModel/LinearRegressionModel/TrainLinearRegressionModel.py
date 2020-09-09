@@ -218,7 +218,7 @@ plt.savefig(plot_dir+'/'+model_name+'_histogram_val_errors.png', bbox_inches = '
 #----------------------------------------------
 # Plot scatter plots of errors against outputs
 #----------------------------------------------
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='train', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 
 

@@ -132,11 +132,9 @@ def plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, 
     ax.set_xticks(lon_arange)
     ax.set_xticklabels(np.round(lon_labels[np.array(lon_arange).astype(int)], decimals=0 ).astype(int)) 
     #ax.set_xticklabels([1, 5, 10, 15, 20])
-    #depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 38.5, depth_labels.shape[0]-1]
-    depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 37.5, depth_labels.shape[0]-1]
+    depth_arange = [0, 7, 15, 21, 28, 37, depth_labels.shape[0]-1]
     ax.set_yticks(depth_arange)
-    ax.set_yticklabels(np.round(depth_labels[np.array(depth_arange).astype(int)], decimals=-2).astype(int)) 
-    #ax.set_yticklabels(['', 100, 500, 1000, 2000, 4500, ''])
+    ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int))
  
     return(ax, im)
 
@@ -227,9 +225,9 @@ def plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, 
     lat_arange = [0, 8.36, 15.5, 21.67, 27.25, 32.46, 37.5, 42.54, 47.75, 53.32, 59.5, 66.64, 75.5]
     ax.set_xticks(lat_arange)
     ax.set_xticklabels(np.round(lat_labels[np.array(lat_arange).astype(int)], decimals=-1).astype(int)) 
-    depth_arange = [0, 7.35, 15.34, 20.75, 28.03, 38.5, depth_labels.shape[0]-1]
+    depth_arange = [0, 7, 15, 21, 28, 37, depth_labels.shape[0]-1]
     ax.set_yticks(depth_arange)
-    ax.set_yticklabels(['', 100, 500, 1000, 2000, 4500, ''])
+    ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int))
     
     return(ax, im)
 
