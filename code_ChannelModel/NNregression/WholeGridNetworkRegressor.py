@@ -2,6 +2,7 @@
 # coding: utf-8
 
 #from comet_ml import Experiment
+print('starting script')
 
 import sys
 sys.path.append('../Tools')
@@ -25,15 +26,17 @@ from torchvision import transforms, utils
 
 import time as time
 
+print('packages imported')
+
 torch.cuda.empty_cache()
 tic = time.time()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
 hyper_params = {
-    "batch_size": 512,
-    "num_epochs":  2,
-    "learning_rate": 0.0001,
+    "batch_size": 32,
+    "num_epochs":  1,
+    "learning_rate": 0.001,
     "criterion": torch.nn.MSELoss(),
 }
 
@@ -43,12 +46,12 @@ time_step = '24hrs'
 model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])+'_batchsize'+str(hyper_params['batch_size'])
 
 ###subsample_rate = 5      # number of time steps to skip over when creating training and test data
-subsample_rate = 20     # number of time steps to skip over when creating training and test data
+subsample_rate = 500    # number of time steps to skip over when creating training and test data
 train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+#DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
@@ -70,20 +73,28 @@ val_end   = int(val_end_ratio * dataset_end_index)
 x_dim         = ( ds.isel( T=slice(0) ) ).sizes['X']
 y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
-no_tr_samples = tr_end/subsample_rate
-no_val_samples = (val_end - tr_end)/subsample_rate
+no_tr_samples = int(tr_end/subsample_rate)
+no_val_samples = int((val_end - tr_end)/subsample_rate)
+print('no_input_samples ;'+str(no_tr_samples)+'\n')
+print('no_output_samples ;'+str(no_val_samples)+'\n')
 output_file.write('no_input_samples ;'+str(no_tr_samples)+'\n')
 output_file.write('no_output_samples ;'+str(no_val_samples)+'\n')
 
+print('matplotlib backend is: \n')
+print(matplotlib.get_backend()+'\n')
+print("os.environ['DISPLAY']: \n")
+print(os.environ['DISPLAY']+'\n')
 output_file.write('matplotlib backend is: \n')
 output_file.write(matplotlib.get_backend()+'\n')
 output_file.write("os.environ['DISPLAY']: \n")
 output_file.write(os.environ['DISPLAY']+'\n')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print('Using device:'+device+'\n')
 output_file.write('Using device:'+device+'\n')
 
 toc = time.time()
+print('Finished setting variables at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished setting variables at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #------------------------------------------------------------------------------------------
@@ -128,8 +139,14 @@ np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean
 no_input_channels = input_batch.shape[1]
 no_output_channels = output_batch.shape[1]
 
+print('no_input_channels ;'+str(no_input_channels)+'\n')
+print('no_output_channels ;'+str(no_output_channels)+'\n')
 output_file.write('no_input_channels ;'+str(no_input_channels)+'\n')
 output_file.write('no_output_channels ;'+str(no_output_channels)+'\n')
+
+toc = time.time()
+print('Finished calculating mean and std at {:0.4f} seconds'.format(toc - tic)+'\n')
+output_file.write('Finished calculating mean and std at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #-------------------------------------------------------------------------------------
 # Create training and valdiation Datsets and dataloaders this time with normalisation
@@ -144,6 +161,7 @@ train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_param
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
 
 toc = time.time()
+print('Finished reading in training and validation data at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished reading in training and validation data at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #--------------
@@ -169,6 +187,7 @@ h = h.cuda()
 optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
 
 toc = time.time()
+print('Finished Setting up model at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished Setting up model at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 #------------------
@@ -229,6 +248,7 @@ for epoch in range(hyper_params["num_epochs"]):
             top    = max(np.amax(predicted), np.amax(output_batch), top)  
 
     tr_loss_single_epoch = train_loss_epoch_temp / no_tr_samples
+    print('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
     output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
     train_loss_epoch.append( tr_loss_single_epoch )
 
@@ -283,6 +303,7 @@ for epoch in range(hyper_params["num_epochs"]):
             top    = max(np.amax(predicted), np.amax(output_batch), top)    
 
     val_loss_single_epoch = val_loss_epoch_temp / no_val_samples
+    print('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
     output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
     val_loss_epoch.append(val_loss_single_epoch)
 
@@ -300,12 +321,14 @@ for epoch in range(hyper_params["num_epochs"]):
         plt.close()
 
     toc = time.time()
+    print('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
     output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
 
 del input_batch, output_batch, predicted 
 torch.cuda.empty_cache()
 
 toc = time.time()
+print('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
  
 # Plot training and validation loss 
@@ -333,12 +356,14 @@ info_file.write('\n')
 info_file.write('Weights of the network:\n')
 info_file.write(str(h[0].weight.data.cpu().numpy()))
 
+print('pickle model \n')
 output_file.write('pickle model \n')
 pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_pickle.pkl'
 with open(pkl_filename, 'wb') as pckl_file:
     pickle.dump(h, pckl_file)
 
 toc = time.time()
+print('Finished script at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished script at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 output_file.close()
