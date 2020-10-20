@@ -38,7 +38,7 @@ if model_type == 'nn':
    no_nodes = 100
    model_prefix = 'MSE_'+str(no_layers)+'layers_'+str(no_nodes)+'nodes_lr0.001_batch4092_'
 else:
-   model_prefix = 'alpha.0001_'
+   model_prefix = 'alpha.001_'
 
 DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
 MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
@@ -129,7 +129,8 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_AvErrors_x'+str(x_coord)+
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                         title=None, min_value=None, max_value=None, cmap='Reds')
+                                         #title=None, min_value=None, max_value=None, cmap='Reds')
+                                         title=None, min_value=None, max_value=0.0003, cmap='Reds')
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_AvAbsErrors_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(wtd_Av_Error[:,:,:], 'Weighted Averaged Errors', x_coord, 

@@ -94,7 +94,8 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, lon_lab
     ax3.set_title('The Difference')
 
     cb1axes = fig.add_axes([0.05, 0.035, 0.60, 0.03]) 
-    cb3axes = fig.add_axes([0.73, 0.035, 0.24, 0.03]) 
+    #cb3axes = fig.add_axes([0.70, 0.035, 0.30, 0.03]) 
+    cb3axes = fig.add_axes([0.68, 0.035, 0.34, 0.03]) 
     cb1=plt.colorbar(im1, ax=(ax1,ax2), cax=cb1axes, orientation='horizontal')
     cb3=plt.colorbar(im3, ax=ax3, cax=cb3axes, orientation='horizontal')
 

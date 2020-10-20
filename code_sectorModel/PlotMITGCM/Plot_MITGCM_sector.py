@@ -5,7 +5,7 @@ print('import packages')
 import sys
 sys.path.append('../Tools')
 import CreateDataName as cn
-import Sector_Model_Plotting as SecPlt
+import Model_Plotting as SecPlt
 
 import numpy as np
 import matplotlib.pyplot as plt
