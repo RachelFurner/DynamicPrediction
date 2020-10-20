@@ -31,7 +31,7 @@ tic = time.time()
 # Manually set variables for this run
 #--------------------------------------
 hyper_params = {
-    "batch_size": 512,
+    "batch_size": 16,
     "num_epochs":  2,
     "learning_rate": 0.0001,
     "criterion": torch.nn.MSELoss(),
