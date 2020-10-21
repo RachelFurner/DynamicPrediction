@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Code to train a network to learn the dynamic evolution of an MITgcm channel configuration
+# Designed to take the entire field for all variables, apply a NN (with conv layers), and output
+# the entire field for all variables one day later (i.e. the next iteration of the MITgcm netcdf 
+# file here, although note this is 2 steps of the underlying model which runs a 12 hourly timestep.
+# The data is subsampled in time to give quasi-independence
+
 #from comet_ml import Experiment
 print('starting script')
 
@@ -27,12 +33,19 @@ from torchvision import transforms, utils
 import time as time
 
 print('packages imported')
+print('matplotlib backend is: \n')
+print(matplotlib.get_backend()+'\n')
+print("os.environ['DISPLAY']: \n")
+print(os.environ['DISPLAY']+'\n')
+
 
 torch.cuda.empty_cache()
 tic = time.time()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
+TEST = True
+
 hyper_params = {
     "batch_size": 32,
     "num_epochs":  1,
@@ -50,16 +63,25 @@ subsample_rate = 500    # number of time steps to skip over when creating traini
 train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-#DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
-plot_freq = 1    # Plot scatter plot every n epochs
+plot_freq = 10    # Plot scatter plot every n epochs
 seed_value = 12321
 
+
 #-------------------------------------------
-output_filename = '../../../Channel_'+model_type+'_Outputs/MODELS/'+model_name+'_output.txt'
+# Overwrite certain variables if testing code and set up test bits
+if TEST:
+   hyper_params['num_epochs'] = 1
+   subsample_rate = 1500 # Keep datasets small when in testing mode
+
+if TEST:
+   output_filename = '../../../Channel_'+model_type+'_Outputs/MODELS/'+model_name+'_TestOutput.txt'
+else:
+   output_filename = '../../../Channel_'+model_type+'_Outputs/MODELS/'+model_name+'_Output.txt'
 output_file = open(output_filename, 'w', buffering=1)
 
 plot_dir = '../../../Channel_'+model_type+'_Outputs/PLOTS/'+model_name
@@ -69,25 +91,16 @@ if not os.path.isdir(plot_dir):
 ds       = xr.open_dataset(MITGCM_filename)
 tr_start = 0
 tr_end   = int(train_end_ratio * dataset_end_index)
-val_end   = int(val_end_ratio * dataset_end_index)
-x_dim         = ( ds.isel( T=slice(0) ) ).sizes['X']
-y_dim         = ( ds.isel( T=slice(0) ) ).sizes['Y']
+val_end  = int(val_end_ratio * dataset_end_index)
+x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
+y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
-no_tr_samples = int(tr_end/subsample_rate)
-no_val_samples = int((val_end - tr_end)/subsample_rate)
+no_tr_samples = int(tr_end/subsample_rate)+1
+no_val_samples = int((val_end - tr_end)/subsample_rate)+1
 print('no_input_samples ;'+str(no_tr_samples)+'\n')
-print('no_output_samples ;'+str(no_val_samples)+'\n')
+print('no_target_samples ;'+str(no_val_samples)+'\n')
 output_file.write('no_input_samples ;'+str(no_tr_samples)+'\n')
-output_file.write('no_output_samples ;'+str(no_val_samples)+'\n')
-
-print('matplotlib backend is: \n')
-print(matplotlib.get_backend()+'\n')
-print("os.environ['DISPLAY']: \n")
-print(os.environ['DISPLAY']+'\n')
-output_file.write('matplotlib backend is: \n')
-output_file.write(matplotlib.get_backend()+'\n')
-output_file.write("os.environ['DISPLAY']: \n")
-output_file.write(os.environ['DISPLAY']+'\n')
+output_file.write('no_target_samples ;'+str(no_val_samples)+'\n')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:'+device+'\n')
@@ -107,42 +120,42 @@ mean_std_loader = data.DataLoader(mean_std_Dataset,batch_size=hyper_params["batc
 
 inputs_train_mean = []
 inputs_train_std = []
-outputs_train_mean = []
-outputs_train_std = []
+targets_train_mean = []
+targets_train_std = []
 
 for batch_sample in mean_std_loader:
     # shape (batch_size, channels, y, z)
     input_batch  = batch_sample['input']
-    output_batch = batch_sample['output']
+    target_batch = batch_sample['output']
     
     inputs_batch_mean  = np.nanmean(input_batch.numpy(), axis = (0,2,3))
-    outputs_batch_mean = np.nanmean(output_batch.numpy(), axis = (0,2,3))
+    targets_batch_mean = np.nanmean(target_batch.numpy(), axis = (0,2,3))
 
     inputs_batch_std  = np.nanstd(input_batch.numpy() , axis = (0,2,3))
-    outputs_batch_std = np.nanstd(output_batch.numpy(), axis = (0,2,3))
+    targets_batch_std = np.nanstd(target_batch.numpy(), axis = (0,2,3))
     
     inputs_train_mean.append(inputs_batch_mean)
     inputs_train_std.append(inputs_batch_std)
 
-    outputs_train_mean.append(outputs_batch_mean)
-    outputs_train_std.append(outputs_batch_std)
+    targets_train_mean.append(targets_batch_mean)
+    targets_train_std.append(targets_batch_std)
 
 inputs_train_mean = np.array(inputs_train_mean).mean(axis=0)
 inputs_train_std = np.array(inputs_train_std).mean(axis=0)
-outputs_train_mean = np.array(outputs_train_mean).mean(axis=0)
-outputs_train_std = np.array(outputs_train_std).mean(axis=0)
+targets_train_mean = np.array(targets_train_mean).mean(axis=0)
+targets_train_std = np.array(targets_train_std).mean(axis=0)
 
 ## Save mean and std to file, so can be used to un-normalise when using model to predict
 mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/Channel_Whole_Grid_MeanStd.npz'
-np.savez( mean_std_file, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std )
+np.savez( mean_std_file, inputs_train_mean, inputs_train_std, targets_train_mean, targets_train_std )
 
 no_input_channels = input_batch.shape[1]
-no_output_channels = output_batch.shape[1]
+no_target_channels = target_batch.shape[1]
 
 print('no_input_channels ;'+str(no_input_channels)+'\n')
-print('no_output_channels ;'+str(no_output_channels)+'\n')
+print('no_target_channels ;'+str(no_target_channels)+'\n')
 output_file.write('no_input_channels ;'+str(no_input_channels)+'\n')
-output_file.write('no_output_channels ;'+str(no_output_channels)+'\n')
+output_file.write('no_target_channels ;'+str(no_target_channels)+'\n')
 
 toc = time.time()
 print('Finished calculating mean and std at {:0.4f} seconds'.format(toc - tic)+'\n')
@@ -152,10 +165,10 @@ output_file.write('Finished calculating mean and std at {:0.4f} seconds'.format(
 # Create training and valdiation Datsets and dataloaders this time with normalisation
 #-------------------------------------------------------------------------------------
 Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, 
-                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
+                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, targets_train_mean, targets_train_std)] ) )
 
 Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, 
-                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std)] ) )
+                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_train_mean, inputs_train_std, targets_train_mean, targets_train_std)] ) )
 
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"])
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"])
@@ -179,7 +192,7 @@ h = nn.Sequential(
             # upscale
             nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=256, out_channels=no_output_channels, kernel_size=(3,3), padding=(1,1)),
+            nn.ConvTranspose2d(in_channels=256, out_channels=no_target_channels, kernel_size=(3,3), padding=(1,1)),
             nn.ReLU(True)
              )
 h = h.cuda()
@@ -197,6 +210,7 @@ output_file.write('Finished Setting up model at {:0.4f} seconds'.format(toc - ti
 train_loss_batch = []
 train_loss_epoch = []
 val_loss_epoch = []
+first_pass = True
 
 for epoch in range(hyper_params["num_epochs"]):
 
@@ -212,14 +226,14 @@ for epoch in range(hyper_params["num_epochs"]):
 
     for batch_sample in train_loader:
         input_batch  = batch_sample['input']
-        output_batch = batch_sample['output']
+        target_batch = batch_sample['output']
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
             input_batch = Variable(input_batch.cuda().float())
-            output_batch = Variable(output_batch.cuda().float())
+            target_batch = Variable(target_batch.cuda().float())
         else:
             inputs = Variable(inputs.float())
-            outputs = Variable(outputs.float())
+            targets = Variable(targets.float())
         
         h.train(True)
 
@@ -228,24 +242,44 @@ for epoch in range(hyper_params["num_epochs"]):
     
         # get prediction from the model, given the inputs
         predicted = h(input_batch)
- 
+
+        if TEST and first_pass:
+           print('For test run check if output is correct shape, the following two shapes should match!\n')
+           print('target_batch.shape for training data: '+str(target_batch.shape)+'\n')
+           print('predicted.shape for training data: '+str(predicted.shape)+'\n')
+           output_file.write('For test run check if output is correct shape, the following two shapes should match!\n')
+           output_file.write('target_batch.shape for training data: '+str(target_batch.shape)+'\n')
+           output_file.write('predicted.shape for training data: '+str(predicted.shape)+'\n')
+           
         # get loss for the predicted output
-        loss = hyper_params["criterion"](predicted, output_batch)
+        pre_opt_loss = hyper_params["criterion"](predicted, target_batch)
+        
         # get gradients w.r.t to parameters
-        loss.backward()
-    
+        pre_opt_loss.backward()
+     
         # update parameters
         optimizer.step()
+
+        if TEST:  # Recalculate loss post optimizer step to ensure its decreased
+           h.train(False)
+           post_opt_predicted = h(input_batch)
+           post_opt_loss = hyper_params["criterion"](post_opt_predicted, target_batch)
+           print('For test run check if loss decreases over a single training step on a batch of data\n')
+           print('loss pre optimization: ' + str(pre_opt_loss.item()) + '\n')
+           print('loss post optimization: ' + str(post_opt_loss.item()) + '\n')
+           output_file.write('For test run check if loss decreases over a single training step on a batch of data\n')
+           output_file.write('loss pre optimization: ' + str(pre_opt_loss.item()) + '\n')
+           output_file.write('loss post optimization: ' + str(post_opt_loss.item()) + '\n')
         
-        train_loss_batch.append( loss.item() )
-        train_loss_epoch_temp += loss.item()*input_batch.shape[0] 
+        train_loss_batch.append( pre_opt_loss.item() )
+        train_loss_epoch_temp += pre_opt_loss.item()*input_batch.shape[0] 
 
         if epoch%plot_freq == 0:
-            output_batch = output_batch.cpu().detach().numpy()
+            target_batch = target_batch.cpu().detach().numpy()
             predicted = predicted.cpu().detach().numpy()
-            ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-            bottom = min(np.amin(predicted), np.amin(output_batch), bottom)
-            top    = max(np.amax(predicted), np.amax(output_batch), top)  
+            ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(target_batch), top)  
 
     tr_loss_single_epoch = train_loss_epoch_temp / no_tr_samples
     print('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
@@ -275,15 +309,15 @@ for epoch in range(hyper_params["num_epochs"]):
 
     for batch_sample in val_loader:
         input_batch  = batch_sample['input']
-        output_batch = batch_sample['output']
+        target_batch = batch_sample['output']
     
         # Converting inputs and labels to Variable and send to GPU if available
         if torch.cuda.is_available():
             input_batch = Variable(input_batch.cuda().float())
-            output_batch = Variable(output_batch.cuda().float())
+            target_batch = Variable(target_batch.cuda().float())
         else:
             input_batch = Variable(input_batch.float())
-            output_batch = Variable(output_batch.float())
+            target_batch = Variable(target_batch.float())
         
         h.train(False)
 
@@ -291,16 +325,16 @@ for epoch in range(hyper_params["num_epochs"]):
         predicted = h(input_batch)
     
         # get loss for the predicted output
-        loss = hyper_params["criterion"](predicted, output_batch)
+        loss = hyper_params["criterion"](predicted, target_batch)
 
         val_loss_epoch_temp += loss.item()*input_batch.shape[0]
 
         if epoch%plot_freq == 0:
-            output_batch = output_batch.cpu().detach().numpy()
+            target_batch = target_batch.cpu().detach().numpy()
             predicted = predicted.cpu().detach().numpy()
-            ax1.scatter(output_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-            bottom = min(np.amin(predicted), np.amin(output_batch), bottom)
-            top    = max(np.amax(predicted), np.amax(output_batch), top)    
+            ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(target_batch), top)    
 
     val_loss_single_epoch = val_loss_epoch_temp / no_val_samples
     print('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
@@ -324,12 +358,47 @@ for epoch in range(hyper_params["num_epochs"]):
     print('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
     output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
 
-del input_batch, output_batch, predicted 
+    #first_pass = False
+
+del input_batch, target_batch, predicted 
 torch.cuda.empty_cache()
 
 toc = time.time()
 print('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
 output_file.write('Finished training model at {:0.4f} seconds'.format(toc - tic)+'\n')
+
+#if TEST: # Output the predictions for a single input into a netcdf so can check for data ranges etc and ensure it looks sensible
+#   print('Train_Dataset :')
+#   print(Train_Dataset)
+#   test_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=1)
+#   for batch_sample in test_loader:
+#       input_batch  = batch_sample['input'][0,:,:,:]
+#       target_batch = batch_sample['output'][0,:,:,:]
+#    
+#       # Converting inputs and labels to Variable and send to GPU if available
+#       if torch.cuda.is_available():
+#           input_batch = Variable(input_batch.cuda().float())
+#           target_batch = Variable(target_batch.cuda().float())
+#       else:
+#           input_batch = Variable(input_batch.float())
+#           target_batch = Variable(target_batch.float())
+#
+#       input_batch.reshape[1,input_batch.shape[0],input_batch.shape[1],input_batch.shape[2]]
+#       target_batch.reshape[1,target_batch.shape[0],target_batch.shape[1],target_batch.shape[2]]
+#       print('input_batch.shape: ')
+#       print(input_batch.shape)
+#       print('target_batch.shape: ')
+#       print(target_batch.shape)
+#       
+#       h.train(False)
+#
+#       # get prediction from the model, given the inputs
+#       predicted = h(input_batch)
+#   print(predicted.shape)
+#
+#   toc = time.time()
+#   print('Finished creating TEST output ncfile at {:0.4f} seconds'.format(toc - tic)+'\n')
+#   output_file.write('Finished creating TEST output ncfile at {:0.4f} seconds'.format(toc - tic)+'\n')
  
 # Plot training and validation loss 
 fig = plt.figure()
@@ -350,7 +419,7 @@ info_file.write('hyper_params:    '+str(hyper_params)+'\n')
 info_file.write('no_tr_samples:   '+str(len(Train_Dataset))+'\n')
 info_file.write('no_val_samples:  '+str(len(Val_Dataset))+'\n')
 info_file.write('no_input_channels:   '+str(no_input_channels)+'\n')
-info_file.write('no_output_channels:  '+str(no_output_channels)+'\n')
+info_file.write('no_target_channels:  '+str(no_target_channels)+'\n')
 info_file.write('\n')
 info_file.write('\n')
 info_file.write('Weights of the network:\n')
