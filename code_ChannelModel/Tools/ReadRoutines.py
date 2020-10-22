@@ -220,7 +220,7 @@ def RF_DeNormalise(samples, outputs_train_mean, outputs_train_std):
        Training output std
     """
 
-    for channel in range(sample.shape[1]):
+    for channel in range(samples.shape[1]):
        if not (outputs_train_std[channel] == 0.0):
           samples[:,channel, :, :]  = (samples[:,channel, :, :] * outputs_train_std[channel] ) + outputs_train_mean[channel]
 
