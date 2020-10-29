@@ -55,19 +55,27 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
 
    def __getitem__(self, idx):
 
-       da_T_in    = self.ds_inputs['THETA'].values[idx,:,:,:]
-       da_S_in    = self.ds_inputs['SALT'].values[idx,:,:,:]
-       da_U_tmp   = self.ds_inputs['UVEL'].values[idx,:,:,:]
-       da_V_tmp   = self.ds_inputs['VVEL'].values[idx,:,:,:]
-       da_Eta_in  = self.ds_inputs['ETAN'].values[idx,:,:]
+       land = 100 # Ignore y cells past 100 as these are land 
 
-       da_T_out   = self.ds_outputs['THETA'].values[idx,:,:,:]
-       da_S_out   = self.ds_outputs['SALT'].values[idx,:,:,:]
-       da_U_tmp   = self.ds_outputs['UVEL'].values[idx,:,:,:]
-       da_V_tmp   = self.ds_outputs['VVEL'].values[idx,:,:,:]
-       da_Eta_out = self.ds_outputs['ETAN'].values[idx,:,:]
+       da_T_in     = self.ds_inputs['THETA'].values[idx,:,:land,:] 
+       da_S_in     = self.ds_inputs['SALT'].values[idx,:,:land,:]
+       da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:land,:]
+       da_U_in     = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average to get onto same grid as T points  
+       da_V_in     = self.ds_inputs['VVEL'].values[idx,:,:land,:] # Note land covers the extra point, so no need to average here 
+       da_Eta_in   = self.ds_inputs['ETAN'].values[idx,0,:land,:]
+
+       da_T_out     = self.ds_outputs['THETA'].values[idx,:,:land,:]
+       da_S_out     = self.ds_outputs['SALT'].values[idx,:,:land,:]
+       da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:land,:]
+       da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
+       da_V_out     = self.ds_outputs['VVEL'].values[idx,:,:land,:]  # Note land covers the extra point, so no need to average here
+       da_Eta_out   = self.ds_outputs['ETAN'].values[idx,0,:land,:]
 
        #da_mask = self.ds_inputs['Mask'].values[:,:,:]
+       #mask = np.ones((da_T_in.shape[0],da_T_in.shape[1],da_T_in.shape[2]))
+       #print('mask.shape:')
+       #print(mask.shape)
+       #mask[:,100:,:] = 0
 
        if np.isnan(da_T_in).any():
           print('da_T_in contains a NaN')
@@ -75,12 +83,12 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_S_in).any():
           print('da_S_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_S_in))) )
-       if np.isnan(da_U_tmp).any():
-          print('da_U_tmp contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_U_tmp))) )
-       if np.isnan(da_V_tmp).any():
-          print('da_V_tmp contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_V_tmp))) )
+       if np.isnan(da_U_in).any():
+          print('da_U_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
+       if np.isnan(da_V_in).any():
+          print('da_V_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_V_in))) )
        if np.isnan(da_Eta_in).any():
           print('da_Eta_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_Kwz_in))) )
@@ -91,34 +99,19 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_S_out).any():
           print('da_S_out contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_S_out))) )
-       if np.isnan(da_U_tmp).any():
-          print('da_U_tmp contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_U_tmp))) )
-       if np.isnan(da_V_tmp).any():
-          print('da_V_tmp contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_V_tmp))) )
+       if np.isnan(da_U_in).any():
+          print('da_U_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
+       if np.isnan(da_V_in).any():
+          print('da_V_in contains a NaN')
+          print('nans at '+str(np.argwhere(np.isnan(da_V_in))) )
        if np.isnan(da_Eta_out).any():
           print('da_Eta_out contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_Kwz_out))) )
 
-       #if np.isnan(da_mask).any():
-       #   print('da_mask contains a NaN')
-       #   print('nans at '+str(np.argwhere(np.isnan(da_mask))) )
-
-       # average to get onto same grid as T points
-       da_U_in    = 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:]) 
-       da_V_in    = 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:])
-       da_U_out   = 0.5 * (da_U_tmp[:,:,:-1]+da_U_tmp[:,:,1:])
-       da_V_out   = 0.5 * (da_V_tmp[:,:-1,:]+da_V_tmp[:,1:,:])
-       # take the ocean value when next to land to avoid averaging -999 with 'ocean' value
-       da_U_in    = np.where( da_U_tmp[:,:,1:]  == -999., da_U_tmp[:,:,:-1], da_U_in )
-       da_U_in    = np.where( da_U_tmp[:,:,:-1] == -999., da_U_tmp[:,:,1:],  da_U_in )
-       da_V_in    = np.where( da_V_tmp[:,1:,:]  == -999., da_V_tmp[:,:-1,:], da_V_in )
-       da_V_in    = np.where( da_V_tmp[:,:-1,:] == -999., da_V_tmp[:,1:,:],  da_V_in )
-       da_U_out   = np.where( da_U_tmp[:,:,1:]  == -999., da_U_tmp[:,:,:-1], da_U_out )
-       da_U_out   = np.where( da_U_tmp[:,:,:-1] == -999., da_U_tmp[:,:,1:],  da_U_out )
-       da_V_out   = np.where( da_V_tmp[:,1:,:]  == -999., da_V_tmp[:,:-1,:], da_V_out )
-       da_V_out   = np.where( da_V_tmp[:,:-1,:] == -999., da_V_tmp[:,1:,:],  da_V_out )
+       #if np.isnan(mask).any():
+       #   print('mask contains a NaN')
+       #   print('nans at '+str(np.argwhere(np.isnan(mask))) )
 
        sample_input  = np.zeros(( 0, da_T_in.shape[1],  da_T_in.shape[2]  ))  # shape: (no channels, y, x)
        sample_output = np.zeros(( 0, da_T_out.shape[1], da_T_out.shape[2]  ))  # shape: (no channels, y, x)
@@ -152,9 +145,9 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        sample_output = np.concatenate((sample_output, 
                                        da_Eta_out[:, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
 
-       #for level in range(da_mask.shape[0]):
-       #    sample_input  = np.concatenate((sample_input , da_mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
-       #    sample_output = np.concatenate((sample_output, da_mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
+       #for level in range(mask.shape[0]):
+       #    sample_input  = np.concatenate((sample_input , mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
+       #    sample_output = np.concatenate((sample_output, mask[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0) 
  
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
