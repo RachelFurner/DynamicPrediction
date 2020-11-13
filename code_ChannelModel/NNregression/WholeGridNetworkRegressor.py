@@ -44,10 +44,13 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f %s%s" % (num, 'Yi', suffix)
 
 print('packages imported')
-print('matplotlib backend is: \n')
-print(matplotlib.get_backend()+'\n')
-print("os.environ['DISPLAY']: \n")
-print(os.environ['DISPLAY']+'\n')
+print('matplotlib backend is: ')
+print(matplotlib.get_backend())
+print("os.environ['DISPLAY']: ")
+print(os.environ['DISPLAY'])
+print('torch.__version__ :')
+print(torch.__version__)
+#
 
 torch.cuda.empty_cache()
 tic = time.time()
@@ -57,8 +60,8 @@ tic = time.time()
 TEST = True 
 
 hyper_params = {
-    "batch_size": 32,
-    "num_epochs":  10,
+    "batch_size": 64,
+    "num_epochs": 100,
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
 }
@@ -68,12 +71,12 @@ time_step = '24hrs'
 
 model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])+'_batchsize'+str(hyper_params['batch_size'])
 
-subsample_rate = 50     # number of time steps to skip over when creating training and test data
-train_end_ratio = 0.7   # Take training samples from 0 to this far through the dataset
+subsample_rate = 5      # number of time steps to skip over when creating training and test data
+train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+#DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
@@ -88,7 +91,7 @@ seed_value = 12321
 
 # Overwrite certain variables if testing code and set up test bits
 if TEST:
-   hyper_params['batch_size'] = 16
+   hyper_params['batch_size'] = 64
    hyper_params['num_epochs'] = 1
    subsample_rate = 500 # Keep datasets small when in testing mode
 
@@ -122,7 +125,6 @@ output_file.write('Using device:'+device+'\n')
 
 # Set variables to remove randomness and ensure reproducible results
 if reproducible:
-   #random.seed(seed_value)
    os.environ['PYTHONHASHSEED'] = str(seed_value)
    np.random.seed(seed_value)
    torch.manual_seed(seed_value)
@@ -211,21 +213,30 @@ output_file.write('Finished reading in training and validation data at {:0.4f} s
 #--------------
 # Set up model
 #--------------
-# inputs are (no_samples, 153(+38?)channels, 108y, 240x).
+# inputs are (no_samples, 153channels, 108y, 240x).
 # Not doing pooling, as dataset small to begin with, and no computational need, or scientific justification....
 h = nn.Sequential(
             # downscale
-            nn.Conv2d(in_channels=no_input_channels, out_channels=256, kernel_size=(3,3), padding=(1,1)),
+            nn.Conv2d(in_channels=no_input_channels, out_channels=150, kernel_size=(6,6), padding=(5,5)),
             nn.ReLU(True),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3,3),padding=(1,1)),
+            nn.MaxPool2d(2,2)
+            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
+            nn.ReLU(True),
+            nn.MaxPool2d(2,2)
+
+            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
             nn.ReLU(True),
 
             # upscale
-            nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=(3,3), padding=(1,1)),
+            nn.MaxUnpool2d(2,2)
+            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
             nn.ReLU(True),
-            nn.ConvTranspose2d(in_channels=256, out_channels=no_target_channels, kernel_size=(3,3), padding=(1,1)),
-            nn.ReLU(True)
+            nn.MaxUnpool2d(2,2)
+            nn.Conv2d(in_channels=150, out_channels=no_input_channels, kernel_size=(6,6),padding=(5,5)),
+            nn.ReLU(True),
+
              )
+ 
 h = h.cuda()
 
 optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
@@ -243,10 +254,10 @@ first_pass = True
 torch.cuda.empty_cache()
 
 print('')
-#for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-#                         key= lambda x: -x[1])[:10]:
-#    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
-print(torch.cuda.memory_summary(device))
+for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+                         key= lambda x: -x[1])[:10]:
+    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+#print(torch.cuda.memory_summary(device))
 print('')
 
 print('')
@@ -261,11 +272,11 @@ for epoch in range(hyper_params["num_epochs"]):
 
     train_loss_epoch_temp = 0.0
 
-    #if epoch%plot_freq == 0:
-    #    fig = plt.figure(figsize=(9,9))
-    #    ax1 = fig.add_subplot(111)
-    #    bottom = 0.
-    #    top = 0.
+    if epoch%plot_freq == 0:
+        fig = plt.figure(figsize=(9,9))
+        ax1 = fig.add_subplot(111)
+        bottom = 0.
+        top = 0.
 
     for batch_sample in train_loader:
         print('')
@@ -330,13 +341,13 @@ for epoch in range(hyper_params["num_epochs"]):
         if TEST: 
            print('train_loss_epoch_temp; '+str(train_loss_epoch_temp))
 
-        #if epoch%plot_freq == 0:
-        #    target_batch = target_batch.cpu().detach().numpy()
-        #    predicted = predicted.cpu().detach().numpy()
-        #    ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-        #    bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
-        #    top    = max(np.amax(predicted), np.amax(target_batch), top)  
-        #    print('did plotting')
+        if epoch%plot_freq == 0:
+            target_batch = target_batch.cpu().detach().numpy()
+            predicted = predicted.cpu().detach().numpy()
+            ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(target_batch), top)  
+            print('did plotting')
 
         del input_batch
         del target_batch
@@ -344,11 +355,11 @@ for epoch in range(hyper_params["num_epochs"]):
         torch.cuda.empty_cache()
         first_pass = False
         i=i+1
-        #print('batch complete')
-        #for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-        #                         key= lambda x: -x[1])[:10]:
-        #    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
-        print(torch.cuda.memory_summary(device))
+        print('batch complete')
+        for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+                                 key= lambda x: -x[1])[:10]:
+            print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+        #print(torch.cuda.memory_summary(device))
         print('')
 
     tr_loss_single_epoch = train_loss_epoch_temp / no_tr_samples
@@ -360,27 +371,27 @@ for epoch in range(hyper_params["num_epochs"]):
        print('tr_loss_single_epoch; '+str(tr_loss_single_epoch))
        print('train_loss_epoch; '+str(train_loss_epoch))
 
-    #if epoch%plot_freq == 0:
-    #    ax1.set_xlabel('Truth')
-    #    ax1.set_ylabel('Predictions')
-    #    ax1.set_title('Training errors, epoch '+str(epoch))
-    #    ax1.set_xlim(bottom, top)
-    #    ax1.set_ylim(bottom, top)
-    #    ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-    #    ax1.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-    #    plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png', bbox_inches = 'tight', pad_inches = 0.1)
-    #    plt.close()
+    if epoch%plot_freq == 0:
+        ax1.set_xlabel('Truth')
+        ax1.set_ylabel('Predictions')
+        ax1.set_title('Training errors, epoch '+str(epoch))
+        ax1.set_xlim(bottom, top)
+        ax1.set_ylim(bottom, top)
+        ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+        ax1.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+        plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png', bbox_inches = 'tight', pad_inches = 0.1)
+        plt.close()
 
     # Validation
 
     val_loss_epoch_temp = 0.0
     i=1
     
-    #if epoch%plot_freq == 0:
-    #    fig = plt.figure(figsize=(9,9))
-    #    ax1 = fig.add_subplot(111)
-    #    bottom = 0.
-    #    top = 0.
+    if epoch%plot_freq == 0:
+        fig = plt.figure(figsize=(9,9))
+        ax1 = fig.add_subplot(111)
+        bottom = 0.
+        top = 0.
 
     for batch_sample in val_loader:
         print('')
@@ -411,22 +422,22 @@ for epoch in range(hyper_params["num_epochs"]):
         if TEST: 
            print('val_loss_epoch_temp; '+str(val_loss_epoch_temp))
 
-        #if epoch%plot_freq == 0:
-        #    target_batch = target_batch.cpu().detach().numpy()
-        #    predicted = predicted.cpu().detach().numpy()
-        #    ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
-        #    bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
-        #    top    = max(np.amax(predicted), np.amax(target_batch), top)    
+        if epoch%plot_freq == 0:
+            target_batch = target_batch.cpu().detach().numpy()
+            predicted = predicted.cpu().detach().numpy()
+            ax1.scatter(target_batch, predicted, edgecolors=(0, 0, 0), alpha=0.15)
+            bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
+            top    = max(np.amax(predicted), np.amax(target_batch), top)    
         i=i+1
         del input_batch
         del target_batch
         gc.collect()
         torch.cuda.empty_cache()
-        #print('batch complete')
-        #for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-        #                         key= lambda x: -x[1])[:10]:
-        #    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
-        print(torch.cuda.memory_summary(device))
+        print('batch complete')
+        for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+                                 key= lambda x: -x[1])[:10]:
+            print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+        #print(torch.cuda.memory_summary(device))
         print('')
 
     val_loss_single_epoch = val_loss_epoch_temp / no_val_samples
@@ -438,18 +449,18 @@ for epoch in range(hyper_params["num_epochs"]):
        print('val_loss_single_epoch; '+str(val_loss_single_epoch))
        print('val_loss_epoch; '+str(val_loss_epoch))
 
-    #if epoch%plot_freq == 0:
-    #    ax1.set_xlabel('Truth')
-    #    ax1.set_ylabel('Predictions')
-    #    ax1.set_title('Validation errors, epoch '+str(epoch))
-    #    ax1.set_xlim(bottom, top)
-    #    ax1.set_ylim(bottom, top)
-    #    ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-    #    ax1.annotate('Epoch MSE: '+str(np.round(val_loss_epoch_temp / no_val_samples,5)),
-    #                  (0.15, 0.9), xycoords='figure fraction')
-    #    ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
-    #    plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
-    #    plt.close()
+    if epoch%plot_freq == 0:
+        ax1.set_xlabel('Truth')
+        ax1.set_ylabel('Predictions')
+        ax1.set_title('Validation errors, epoch '+str(epoch))
+        ax1.set_xlim(bottom, top)
+        ax1.set_ylim(bottom, top)
+        ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+        ax1.annotate('Epoch MSE: '+str(np.round(val_loss_epoch_temp / no_val_samples,5)),
+                      (0.15, 0.9), xycoords='figure fraction')
+        ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
+        plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png', bbox_inches = 'tight', pad_inches = 0.1)
+        plt.close()
 
     toc = time.time()
     print('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
