@@ -57,10 +57,10 @@ tic = time.time()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-TEST = False
+TEST = True 
 
 hyper_params = {
-    "batch_size": 64,
+    "batch_size":  4,
     "num_epochs": 100,
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
@@ -91,7 +91,7 @@ seed_value = 12321
 
 # Overwrite certain variables if testing code and set up test bits
 if TEST:
-   hyper_params['batch_size'] = 64
+   hyper_params['batch_size'] =  4
    hyper_params['num_epochs'] = 1
    subsample_rate = 500 # Keep datasets small when in testing mode
 
@@ -114,10 +114,10 @@ y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
 
 no_tr_samples = int(tr_end/subsample_rate)+1
 no_val_samples = int((val_end - tr_end)/subsample_rate)+1
-print('no_input_samples ;'+str(no_tr_samples)+'\n')
-print('no_target_samples ;'+str(no_val_samples)+'\n')
-output_file.write('no_input_samples ;'+str(no_tr_samples)+'\n')
-output_file.write('no_target_samples ;'+str(no_val_samples)+'\n')
+print('no_training_samples ;'+str(no_tr_samples)+'\n')
+print('no_validation_samples ;'+str(no_val_samples)+'\n')
+output_file.write('no_training_samples ;'+str(no_tr_samples)+'\n')
+output_file.write('no_validation_samples ;'+str(no_val_samples)+'\n')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:'+device+'\n')
@@ -217,27 +217,39 @@ output_file.write('Finished reading in training and validation data at {:0.4f} s
 # Not doing pooling, as dataset small to begin with, and no computational need, or scientific justification....
 h = nn.Sequential(
             # downscale
-            nn.Conv2d(in_channels=no_input_channels, out_channels=150, kernel_size=(6,6), padding=(5,5)),
+            # ****Note scher uses a kernel size of 6, but no idea how he then manages to keep his x and y dimensions
+            # unchanged over the conv layers....***
+            nn.Conv2d(in_channels=no_input_channels, out_channels=150, kernel_size=(7,7), padding=(3,3)),
             nn.ReLU(True),
-            nn.MaxPool2d(2,2)
-            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
+            nn.MaxPool2d((2,2)),
+            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(7,7),padding=(3,3)),
             nn.ReLU(True),
-            nn.MaxPool2d(2,2)
+            nn.MaxPool2d((2,2)),
 
-            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
+            nn.ConvTranspose2d(in_channels=150, out_channels=150, kernel_size=(7,7), padding=(3,3)),
             nn.ReLU(True),
 
             # upscale
-            nn.MaxUnpool2d(2,2)
-            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
+            nn.Upsample(scale_factor=(2,2)),
+            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(7,7), padding=(3,3)),
             nn.ReLU(True),
-            nn.MaxUnpool2d(2,2)
-            nn.Conv2d(in_channels=150, out_channels=no_input_channels, kernel_size=(6,6),padding=(5,5)),
-            nn.ReLU(True),
-
+            nn.Upsample(scale_factor=(2,2)),
+            nn.Conv2d(in_channels=150, out_channels=no_target_channels, kernel_size=(7,7), padding=(3,3)),
+            nn.ReLU(True)
              )
- 
 h = h.cuda()
+
+#            # upscale
+#            nn.MaxUnpool2d(2,2),
+#            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
+#            nn.ReLU(True),
+#            nn.MaxUnpool2d(2,2),
+#            nn.Conv2d(in_channels=150, out_channels=no_input_channels, kernel_size=(6,6),padding=(5,5)),
+#            nn.ReLU(True),
+#
+#             )
+# 
+#h = h.cuda()
 
 optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
 
