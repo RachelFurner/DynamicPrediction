@@ -58,14 +58,12 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        land = 100 # Ignore y cells past 100 as these are land 
 
        da_T_in     = self.ds_inputs['THETA'].values[idx,:,:land,:] 
-       da_S_in     = self.ds_inputs['SALT'].values[idx,:,:land,:]
        da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:land,:]
        da_U_in     = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average to get onto same grid as T points  
        da_V_in     = self.ds_inputs['VVEL'].values[idx,:,:land,:] # Note land covers the extra point, so no need to average here 
        da_Eta_in   = self.ds_inputs['ETAN'].values[idx,0,:land,:]
 
        da_T_out     = self.ds_outputs['THETA'].values[idx,:,:land,:]
-       da_S_out     = self.ds_outputs['SALT'].values[idx,:,:land,:]
        da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:land,:]
        da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
        da_V_out     = self.ds_outputs['VVEL'].values[idx,:,:land,:]  # Note land covers the extra point, so no need to average here
@@ -80,9 +78,6 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_T_in).any():
           print('da_T_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_T_in))) )
-       if np.isnan(da_S_in).any():
-          print('da_S_in contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_S_in))) )
        if np.isnan(da_U_in).any():
           print('da_U_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
@@ -96,9 +91,6 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_T_out).any():
           print('da_T_out contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_T_out))) )
-       if np.isnan(da_S_out).any():
-          print('da_S_out contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_S_out))) )
        if np.isnan(da_U_in).any():
           print('da_U_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
@@ -121,12 +113,6 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
                                             da_T_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
            sample_output = np.concatenate((sample_output, 
                                            da_T_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
-
-       for level in range(da_S_in.shape[0]):
-           sample_input  = np.concatenate((sample_input , 
-                                            da_S_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
-           sample_output = np.concatenate((sample_output,
-                                           da_S_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
 
        for level in range(da_U_in.shape[0]):
            sample_input  = np.concatenate((sample_input ,
