@@ -19,6 +19,7 @@ import mds as mds
 import Model_Plotting as rfplt
 import os
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, depth):
 
@@ -161,6 +162,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    StepSize = 1 # how many output steps (months!) to predict over
    halo_size = 1
    halo_list = (range(-halo_size, halo_size+1))
+   subsample_rate = 200
 
    start = 0
    if time_step == '24hrs':
@@ -252,7 +254,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    z_up_3 = 31             # one higher than the point we want to forecast for, i.e. first point we're not forecasting  
 
 
-   for t in range(start, trainval_split, 200):  
+   for t in range(start, trainval_split, subsample_rate):  
         #---------#
         # Region1 #
         #---------#
@@ -360,7 +362,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         outputs_tr = np.concatenate( (outputs_tr, outputs_3), axis=0)
 
 
-   for t in range(trainval_split, valtest_split, 200):  
+   for t in range(trainval_split, valtest_split, subsample_rate):  
 
         #---------#
         # Region1 #
@@ -469,7 +471,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
         outputs_val = np.concatenate( (outputs_val, outputs_3), axis=0)
 
 
-   for t in range(valtest_split, data_end_index, 200):  
+   for t in range(valtest_split, data_end_index, subsample_rate):  
 
         #---------#
         # Region1 #
@@ -665,7 +667,28 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
       
       fig = rfplt.Plot_Histogram(outputs_te, 100)
       plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
-      
+     
+   # Count number of large samples...
+   print('*********************************')
+   print('Number of training & validation samples > 0.0005: '+str(sum(outputs_tr > 0.0005)+ sum(outputs_tr <= -0.0005))+', '+str(sum(outputs_val > 0.0005)+ sum(outputs_val <= -0.0005)) )
+   print('Number of training & validation samples > 0.001:  '+str(sum(outputs_tr > 0.001) + sum(outputs_tr <= -0.001)) +', '+str(sum(outputs_val > 0.001) + sum(outputs_val <= -0.001)) )
+   print('Number of training & validation samples > 0.002:  '+str(sum(outputs_tr > 0.002) + sum(outputs_tr <= -0.002)) +', '+str(sum(outputs_val > 0.002) + sum(outputs_val <= -0.002)) )
+   print('Number of training & validation samples > 0.0025: '+str(sum(outputs_tr > 0.0025)+ sum(outputs_tr <= -0.0025))+', '+str(sum(outputs_val > 0.0025)+ sum(outputs_val <= -0.0025)) )
+   print('Number of training & validation samples > 0.003:  '+str(sum(outputs_tr > 0.003) + sum(outputs_tr <= -0.003)) +', '+str(sum(outputs_val > 0.003) + sum(outputs_val <= -0.003)) )
+   print('Number of training & validation samples > 0.004:  '+str(sum(outputs_tr > 0.004) + sum(outputs_tr <= -0.004)) +', '+str(sum(outputs_val > 0.004) + sum(outputs_val <= -0.004)) )
+   print('Number of training & validation samples > 0.005:  '+str(sum(outputs_tr > 0.005) + sum(outputs_tr <= -0.005)) +', '+str(sum(outputs_val > 0.005) + sum(outputs_val <= -0.005)) )
+   print('*********************************')
+   
+   #print most extreme values...
+   print('highest and lowest values in training data:   ' + str(np.max(outputs_tr))  + ', ' +str(np.min(outputs_tr)) )
+   print('highest and lowest values in validation data: ' + str(np.max(outputs_val)) + ', ' +str(np.min(outputs_val)) )
+
+   # print out moments of dataset
+   print('mean of train and val sets : ' + str(np.mean(outputs_tr))  + ', ' + str(np.mean(outputs_val)) )
+   print('std  of train and val sets : ' + str(np.std(outputs_tr))   + ', ' + str(np.std(outputs_val)) )
+   print('skew of train and val sets : ' + str(stats.skew(outputs_tr))   + ', ' + str(stats.skew(outputs_val)) )
+   print('kurtosis of train and val sets : ' + str(stats.kurtosis(outputs_tr))   + ', ' + str(stats.kurtosis(outputs_val)) )
+
    #----------------------------------------------
    # Normalise Data (based on training data only)
    #----------------------------------------------
@@ -717,6 +740,8 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
       inputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
       outputs_tr_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTr.npy'
       outputs_val_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsVal.npy'
+      outputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
+      np.save(inputs_tr_filename,  norm_inputs_tr)
       outputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+time_step+'_OutputsTe.npy'
       np.save(inputs_tr_filename,  norm_inputs_tr)
       np.save(inputs_val_filename, norm_inputs_val)

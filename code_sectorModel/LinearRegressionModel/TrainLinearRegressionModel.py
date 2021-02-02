@@ -35,7 +35,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':1}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 model_type = 'lr'
 time_step = '24hrs'
 data_prefix = ''
@@ -43,16 +43,19 @@ model_prefix = 'alpha.001_'
 
 TrainModel = True  
 
-if time_step == '1mnth':
-   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-   MITGCM_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
+if time_step == '24hrs':
+   DIR = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/'
+   MITGCM_filename=DIR+'mnc_test_0002/cat_tave.nc'
    density_file = DIR+'DensityData.npy'
-elif time_step == '24hrs':
-   DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-   MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
-   density_file = DIR+'DensityData.npy'
+   #DIR = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
+   #MITGCM_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+   #density_file = DIR+'DensityData.npy'
 else:
    print('ERROR - No proper time step given')
+
+print('run_vars; '+str(run_vars))
+print('model_type   ; '+str(model_type))
+print('model_prefix ; '+str(model_prefix))
 
 #---------------------------
 # calculate other variables 
@@ -70,7 +73,7 @@ if not os.path.isdir(plot_dir):
 # Read in data
 #--------------------------------------------------------------
 print('reading in data')
-norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, plot_histograms=False)
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, time_step=time_step, plot_histograms=True)
 del norm_inputs_te
 del norm_outputs_te
 
@@ -197,8 +200,12 @@ am.get_stats(model_type, model_name, name1='Training', truth1=denorm_outputs_tr,
                                 name2='Validation',  truth2=denorm_outputs_val, exp2=denorm_lr_predicted_val, pers2=predict_persistance_val, name='TrainVal')
 
 print('plot results')
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train')
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val')
+top    = max(max(denorm_outputs_tr), max(denorm_lr_predicted_tr), max(denorm_outputs_val), max(denorm_lr_predicted_val))
+top    = top + 0.1*abs(top)
+bottom = min(min(denorm_outputs_tr), min(denorm_lr_predicted_tr), min(denorm_outputs_val), min(denorm_lr_predicted_val))
+bottom = bottom - 0.1*abs(top)
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train', top=top, bottom=bottom)
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val', top=top, bottom=bottom)
 
 #-------------------------------------------------------------------
 # plot histograms:
