@@ -16,6 +16,7 @@ import ReadRoutines as rr
 
 sys.path.append('.')
 from WholeGridNetworkRegressorModules import *
+from Models import CreateModel
 
 import numpy as np
 import os
@@ -61,34 +62,45 @@ tic = time.time()
 # Manually set variables for this run
 #-------------------------------------
 TEST = False
-CalculatingMeanStd = True 
+CalculatingMeanStd = False
 TrainingModel      = True 
+LoadSavedModel = True 
+saved_epochs = 4
+
+#name_prefix = 'FullRun_'
+name_prefix = 'RestartedRun_'
+
+#model_style = 'ScherStyle'
+model_style = 'UNet'
 
 hyper_params = {
-    "batch_size": 32,
-    "num_epochs": 10,
+    "batch_size": 64,
+    "num_epochs": 5 , # amount of new epochs to train, so added to any already saved.
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
     }
 
-subsample_rate = 5      # number of time steps to skip over when creating training and test data
-train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
-val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
+#subsample_rate = 5      # number of time steps to skip over when creating training and test data
+#train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
+#val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
+subsample_rate = 10000   # number of time steps to skip over when creating training and test data
+train_end_ratio = 0.5   # Take training samples from 0 to this far through the dataset
+val_end_ratio = 0.99    # Take validation samples from train_end_ratio to this far through the dataset
 
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
-MITGCM_filename = DIR+'daily_ave_50yrs.nc'
-dataset_end_index = 50*360  # Look at 50 yrs of data
-
-plot_freq = 100    # Plot scatter plot every n epochs
-
+plot_freq = 250    # Plot scatter plot every n epochs
+save_freq = 5
 #-----------------------------------------------------------------------------
 # Set additional variables etc, these lines should not change between runs...
 #-----------------------------------------------------------------------------
 reproducible = True
 seed_value = 12321
 
-model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])
+DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+MITGCM_filename = DIR+'daily_ave_50yrs.nc'
+dataset_end_index = 50*360  # Look at 50 yrs of data
+
+model_name = name_prefix+model_style+'_lr'+str(hyper_params['learning_rate'])
 
 # Overwrite certain variables if testing code and set up test bits
 if TEST:
@@ -135,8 +147,9 @@ TimeCheck(tic, output_file, 'setting variables')
 # Calulate, or read in mean and std
 #-----------------------------------
 if CalculatingMeanStd:
-   no_input_channels, no_target_channels = CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], output_file)
-inputs_mean, inputs_std, targets_mean, targets_std, no_input_channels, no_target_channels = ReadMeanStd(model_name, output_file = output_file)
+   no_channels = CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], output_file)
+
+data_mean, data_std, data_range, no_channels = ReadMeanStd(model_name, output_file = output_file)
 
 TimeCheck(tic, output_file, 'getting mean & std')
 
@@ -145,9 +158,11 @@ TimeCheck(tic, output_file, 'getting mean & std')
 #-------------------------------------------------------------------------------------
 # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
 Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, 
-                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_mean, inputs_std, targets_mean, targets_std)] ) )
+                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
 Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, 
-                                              transform = transforms.Compose( [ rr.RF_Normalise(inputs_mean, inputs_std, targets_mean, targets_std)] ) )
+                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+#Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index )
+#Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index )
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True )
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True )
 
@@ -156,7 +171,7 @@ TimeCheck(tic, output_file, 'reading training & validation data')
 #--------------
 # Set up model
 #--------------
-h, optimizer = CreateModel(no_input_channels, no_target_channels, hyper_params["learning_rate"])
+h, optimizer = CreateModel(model_style, no_channels, no_channels, hyper_params["learning_rate"], reproducible, seed_value)
 
 TimeCheck(tic, output_file, 'setting up model')
 
@@ -169,18 +184,23 @@ for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals
     print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
 print('')
 
-if TrainingModel:
-   TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, train_loader, val_loader, h, optimizer, hyper_params)
-LoadModel(model_name, h)
+if LoadSavedModel:
+   LoadModel(model_name, h, saved_epochs)
+   if TrainingModel:
+      TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
+                 train_loader, val_loader, h, optimizer, hyper_params, start_epoch=saved_epochs+1)
+elif TrainingModel:  # Training mode BUT NOT loading model!
+   TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
+              train_loader, val_loader, h, optimizer, hyper_params)
 
 TimeCheck(tic, output_file, 'training model')
 
 #------------------
 # Assess the model 
 #------------------
-#OutputSinglePrediction(model_name, Train_Dataset, h)
+#OutputSinglePrediction(model_name, Train_Dataset, h, saved_epochs+hyper_params['num_epochs'])
 
-OutputStats(model_name, train_loader, h)
+OutputStats(model_name, train_loader, h, saved_epochs+hyper_params['num_epochs'])
 
 TimeCheck(tic, output_file, 'assessing model')
 
