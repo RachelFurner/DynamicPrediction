@@ -155,8 +155,19 @@ def ReadMeanStd(model_name, output_file=None):
    return(inputs_mean, inputs_std, inputs_range, no_channels)
 
 
-def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params, start_epoch=0):
+def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, start_epoch=0):
+
    no_depth_levels = 38  # Hard coded...perhaps should change...?
+   # Set variables to remove randomness and ensure reproducible results
+   if reproducible:
+      os.environ['PYTHONHASHSEED'] = str(seed_value)
+      np.random.seed(seed_value)
+      torch.manual_seed(seed_value)
+      torch.cuda.manual_seed(seed_value)
+      torch.cuda.manual_seed_all(seed_value)
+      torch.backends.cudnn.enabled = False
+      torch.backends.cudnn.deterministic = True
+      torch.backends.cudnn.benchmark = False
 
    train_loss_epoch = []
    train_loss_epoch_Temp = []
@@ -232,11 +243,11 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
               output_file.write('predicted.shape for training data: '+str(predicted.shape)+'\n')
               
            # get loss for the predicted output
-           pre_opt_loss = hyper_params["criterion"](predicted, target_batch)
+           loss = hyper_params["criterion"](predicted, target_batch)
            #print('calculated loss')
            
            # get gradients w.r.t to parameters
-           pre_opt_loss.backward()
+           loss.backward()
            #print('calculated loss gradients')
         
            # update parameters
@@ -248,13 +259,13 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
               post_opt_predicted = h(input_batch)
               post_opt_loss = hyper_params["criterion"](post_opt_predicted, target_batch)
               print('For test run check if loss decreases over a single training step on a batch of data')
-              print('loss pre optimization: ' + str(pre_opt_loss.item()) )
+              print('loss pre optimization: ' + str(loss.item()) )
               print('loss post optimization: ' + str(post_opt_loss.item()) )
               output_file.write('For test run check if loss decreases over a single training step on a batch of data\n')
-              output_file.write('loss pre optimization: ' + str(pre_opt_loss.item()) + '\n')
+              output_file.write('loss pre optimization: ' + str(loss.item()) + '\n')
               output_file.write('loss post optimization: ' + str(post_opt_loss.item()) + '\n')
            
-           train_loss_epoch_tmp += pre_opt_loss.item()*input_batch.shape[0]
+           train_loss_epoch_tmp += loss.item()*input_batch.shape[0]
            train_loss_epoch_Temp_tmp += hyper_params["criterion"](predicted[:,:no_depth_levels,:,:],
                                                                target_batch[:,:no_depth_levels,:,:]).item() * input_batch.shape[0]
            train_loss_epoch_U_tmp += hyper_params["criterion"](predicted[:,no_depth_levels:2*no_depth_levels,:,:],
@@ -371,9 +382,9 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            predicted = h(input_batch)
        
            # get loss for the predicted output
-           loss = hyper_params["criterion"](predicted, target_batch)
+           val_loss = hyper_params["criterion"](predicted, target_batch)
    
-           val_loss_epoch_tmp += loss.item()*input_batch.shape[0]
+           val_loss_epoch_tmp += val_loss.item()*input_batch.shape[0]
    
            if TEST: 
               print('val_loss_epoch_tmp; '+str(val_loss_epoch_tmp))
@@ -431,8 +442,13 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            print('save model \n')
            output_file.write('save model \n')
            pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
-           torch.save(h.state_dict(), pkl_filename)
-   
+           #torch.save(h.state_dict(), pkl_filename)
+           torch.save({
+                       'epoch': epoch,
+                       'model_state_dict': h.state_dict(),
+                       'optimizer_state_dict': optimizer.state_dict(),
+                       'loss': loss,
+                       }, pkl_filename)
    
        toc = time.time()
        print('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
@@ -466,10 +482,18 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    #info_file.write('Weights of the network:\n')
    #info_file.write(str(h[0].weight.data.cpu().numpy()))
   
-def LoadModel(model_name, h, saved_epoch):
+def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf):
    pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
-   h.load_state_dict(torch.load(pkl_filename))
-   h.eval()
+   checkpoint = torch.load(pkl_filename)
+   h.load_state_dict(checkpoint['model_state_dict'])
+   optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+   epoch = checkpoint['epoch']
+   loss = checkpoint['loss']
+
+   if tr_inf == 'tr':
+      h.train()
+   elif tr_inf == 'inf':
+      h.eval()
 
 def OutputSinglePrediction(model_name, Train_Dataset, h, no_epochs):
    #-----------------------------------------------------------------------------------------

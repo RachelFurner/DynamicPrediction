@@ -64,18 +64,18 @@ tic = time.time()
 TEST = False
 CalculatingMeanStd = False
 TrainingModel      = True 
-LoadSavedModel = True 
-saved_epochs = 4
+LoadSavedModel = False 
+saved_epochs = 0
 
-#name_prefix = 'FullRun_'
-name_prefix = 'RestartedRun_'
+name_prefix = 'FullRun_'
+#name_prefix = 'RestartedRun_'
 
 #model_style = 'ScherStyle'
 model_style = 'UNet'
 
 hyper_params = {
     "batch_size": 64,
-    "num_epochs": 5 , # amount of new epochs to train, so added to any already saved.
+    "num_epochs": 10, # amount of new epochs to train, so added to any already saved.
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
     }
@@ -185,13 +185,15 @@ for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals
 print('')
 
 if LoadSavedModel:
-   LoadModel(model_name, h, saved_epochs)
    if TrainingModel:
+      LoadModel(model_name, h, optimizer, saved_epochs, 'tr')
       TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
-                 train_loader, val_loader, h, optimizer, hyper_params, start_epoch=saved_epochs+1)
+                 train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, start_epoch=saved_epochs+1)
+   else:
+      LoadModel(model_name, h, optimizer, saved_epochs, 'inf')
 elif TrainingModel:  # Training mode BUT NOT loading model!
    TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
-              train_loader, val_loader, h, optimizer, hyper_params)
+              train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value)
 
 TimeCheck(tic, output_file, 'training model')
 
