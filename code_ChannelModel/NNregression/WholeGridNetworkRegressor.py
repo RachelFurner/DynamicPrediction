@@ -57,11 +57,11 @@ tic = time.time()
 #-------------------- -----------------
 # Manually set variables for this run
 #--------------------------------------
-TEST = True 
+TEST = False
 
 hyper_params = {
-    "batch_size":  4,
-    "num_epochs": 100,
+    "batch_size":  32,
+    "num_epochs":  40,
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
 }
@@ -71,12 +71,12 @@ time_step = '24hrs'
 
 model_name = 'ScherStyleCNNNetwork_lr'+str(hyper_params['learning_rate'])+'_batchsize'+str(hyper_params['batch_size'])
 
-subsample_rate = 5      # number of time steps to skip over when creating training and test data
+subsample_rate = 25     # number of time steps to skip over when creating training and test data
 train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+#DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
@@ -91,7 +91,7 @@ seed_value = 12321
 
 # Overwrite certain variables if testing code and set up test bits
 if TEST:
-   hyper_params['batch_size'] =  4
+   hyper_params['batch_size'] = 16
    hyper_params['num_epochs'] = 1
    subsample_rate = 500 # Keep datasets small when in testing mode
 
@@ -122,6 +122,9 @@ output_file.write('no_validation_samples ;'+str(no_val_samples)+'\n')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device:'+device+'\n')
 output_file.write('Using device:'+device+'\n')
+
+print('Batch Size: '+str(hyper_params['batch_size'])+'\n')
+output_file.write('Batch Size: '+str(hyper_params['batch_size'])+'\n')
 
 # Set variables to remove randomness and ensure reproducible results
 if reproducible:
@@ -238,18 +241,6 @@ h = nn.Sequential(
             nn.ReLU(True)
              )
 h = h.cuda()
-
-#            # upscale
-#            nn.MaxUnpool2d(2,2),
-#            nn.Conv2d(in_channels=150, out_channels=150, kernel_size=(6,6),padding=(5,5)),
-#            nn.ReLU(True),
-#            nn.MaxUnpool2d(2,2),
-#            nn.Conv2d(in_channels=150, out_channels=no_input_channels, kernel_size=(6,6),padding=(5,5)),
-#            nn.ReLU(True),
-#
-#             )
-# 
-#h = h.cuda()
 
 optimizer = torch.optim.Adam( h.parameters(), lr=hyper_params["learning_rate"] )
 
@@ -519,21 +510,21 @@ nc_file.createDimension('X', target_sample.shape[3])
 nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
 nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
 nc_X = nc_file.createVariable('X', 'i4', 'X')
-nc_TrueTemp = nc_file.createVariable('True_Temp', 'f4', ('Z', 'Y', 'X'))
-nc_PredTemp = nc_file.createVariable('Pred_Temp', 'f4', ('Z', 'Y', 'X'))
+nc_TrueTemp   = nc_file.createVariable('True_Temp'  , 'f4', ('Z', 'Y', 'X'))
+nc_PredTemp   = nc_file.createVariable('Pred_Temp'  , 'f4', ('Z', 'Y', 'X'))
 nc_TempErrors = nc_file.createVariable('Temp_Errors', 'f4', ('Z', 'Y', 'X'))
-nc_TrueSal = nc_file.createVariable('True_Sal', 'f4', ('Z', 'Y', 'X'))
-nc_PredSal = nc_file.createVariable('Pred_Sal', 'f4', ('Z', 'Y', 'X'))
-nc_SalErrors = nc_file.createVariable('Sal_Errors', 'f4', ('Z', 'Y', 'X'))
-nc_TrueU = nc_file.createVariable('True_U', 'f4', ('Z', 'Y', 'X'))
-nc_PredU = nc_file.createVariable('Pred_U', 'f4', ('Z', 'Y', 'X'))
-nc_UErrors = nc_file.createVariable('U_Errors', 'f4', ('Z', 'Y', 'X'))
-nc_TrueV = nc_file.createVariable('True_V', 'f4', ('Z', 'Y', 'X'))
-nc_PredV = nc_file.createVariable('Pred_V', 'f4', ('Z', 'Y', 'X'))
-nc_VErrors = nc_file.createVariable('V_Errors', 'f4', ('Z', 'Y', 'X'))
-nc_TrueEta = nc_file.createVariable('True_Eta', 'f4', ('Y', 'X'))
-nc_PredEta = nc_file.createVariable('Pred_Eta', 'f4', ('Y', 'X'))
-nc_EtaErrors = nc_file.createVariable('Eta_Errors', 'f4', ('Y', 'X'))
+nc_TrueSal    = nc_file.createVariable('True_Sal'   , 'f4', ('Z', 'Y', 'X'))
+nc_PredSal    = nc_file.createVariable('Pred_Sal'   , 'f4', ('Z', 'Y', 'X'))
+nc_SalErrors  = nc_file.createVariable('Sal_Errors' , 'f4', ('Z', 'Y', 'X'))
+nc_TrueU      = nc_file.createVariable('True_U'     , 'f4', ('Z', 'Y', 'X'))
+nc_PredU      = nc_file.createVariable('Pred_U'     , 'f4', ('Z', 'Y', 'X'))
+nc_UErrors    = nc_file.createVariable('U_Errors'   , 'f4', ('Z', 'Y', 'X'))
+nc_TrueV      = nc_file.createVariable('True_V'     , 'f4', ('Z', 'Y', 'X'))
+nc_PredV      = nc_file.createVariable('Pred_V'     , 'f4', ('Z', 'Y', 'X'))
+nc_VErrors    = nc_file.createVariable('V_Errors'   , 'f4', ('Z', 'Y', 'X'))
+nc_TrueEta    = nc_file.createVariable('True_Eta'   , 'f4', ('Y', 'X'))
+nc_PredEta    = nc_file.createVariable('Pred_Eta'   , 'f4', ('Y', 'X'))
+nc_EtaErrors  = nc_file.createVariable('Eta_Errors' , 'f4', ('Y', 'X'))
 # Fill variables
 nc_Z[:] = np.arange(no_depth_levels)
 nc_Y[:] = np.arange(target_sample.shape[2])
@@ -550,9 +541,9 @@ nc_UErrors[:,:,:]    = predicted[0,2*no_depth_levels:3*no_depth_levels,:,:] - ta
 nc_TrueV[:,:,:]      = target_sample[0,3*no_depth_levels:4*no_depth_levels,:,:]
 nc_PredV[:,:,:]      = predicted[0,3*no_depth_levels:4*no_depth_levels,:,:]
 nc_VErrors[:,:,:]    = predicted[0,3*no_depth_levels:4*no_depth_levels,:,:] - target_sample[0,3*no_depth_levels:4*no_depth_levels,:,:]
-nc_TrueEta[:,:]    = target_sample[0,4*no_depth_levels,:,:]
-nc_PredEta[:,:]    = predicted[0,4*no_depth_levels,:,:]
-nc_EtaErrors[:,:]  = predicted[0,4*no_depth_levels,:,:] - target_sample[0,4*no_depth_levels,:,:]
+nc_TrueEta[:,:]      = target_sample[0,4*no_depth_levels,:,:]
+nc_PredEta[:,:]      = predicted[0,4*no_depth_levels,:,:]
+nc_EtaErrors[:,:]    = predicted[0,4*no_depth_levels,:,:] - target_sample[0,4*no_depth_levels,:,:]
 
 toc = time.time()
 print('Finished creating dummy output ncfile at {:0.4f} seconds'.format(toc - tic)+'\n')
