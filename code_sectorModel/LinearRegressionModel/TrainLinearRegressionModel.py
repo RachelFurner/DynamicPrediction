@@ -30,7 +30,10 @@ import gc
 import os
 
 torch.cuda.empty_cache()
-plt.rcParams.update({'font.size': 14})
+plt.rcParams.update({'font.size': 10})
+plt.rc('font', family='sans serif')
+plt.rc('xtick', labelsize='x-small')
+plt.rc('ytick', labelsize='x-small')
 
 #----------------------------
 # Set variables for this run
@@ -204,8 +207,8 @@ top    = max(max(denorm_outputs_tr), max(denorm_lr_predicted_tr), max(denorm_out
 top    = top + 0.1*abs(top)
 bottom = min(min(denorm_outputs_tr), min(denorm_lr_predicted_tr), min(denorm_outputs_val), min(denorm_lr_predicted_val))
 bottom = bottom - 0.1*abs(top)
-am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train', top=top, bottom=bottom)
-am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val', top=top, bottom=bottom)
+am.plot_results(model_type, model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train', top=top, bottom=bottom, text='(a)')
+am.plot_results(model_type, model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val', top=top, bottom=bottom, text='(b)')
 
 #-------------------------------------------------------------------
 # plot histograms:
