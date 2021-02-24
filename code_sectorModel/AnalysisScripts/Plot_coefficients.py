@@ -71,7 +71,7 @@ if run_vars['dimension'] == 2:
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
    if run_vars['current']:
-      tick_labels.append('U_Current')   
+      tick_labels.append('Zonal Current')   
       temp_no_inputs = 9
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -79,7 +79,7 @@ if run_vars['dimension'] == 2:
       subgroup_grid_lines_bold.append([0,9])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('V_Current')   
+      tick_labels.append('Meridional Current')   
       temp_no_inputs = 9
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -88,7 +88,7 @@ if run_vars['dimension'] == 2:
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
    if run_vars['bolus_vel']:
-      tick_labels.append('Kwx_Bolus_velocities')
+      tick_labels.append('Zonal Bolus Velocities')
       temp_no_inputs = 9
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -96,7 +96,7 @@ if run_vars['dimension'] == 2:
       subgroup_grid_lines_bold.append([0,9])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('Kwy_Bolus_velocities')
+      tick_labels.append('Meridional Bolus Velocities')
       temp_no_inputs = 9
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -104,7 +104,7 @@ if run_vars['dimension'] == 2:
       subgroup_grid_lines_bold.append([0,9])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('Kwz_Bolus_velocities')
+      tick_labels.append('Vertical Bolus Velocities')
       temp_no_inputs = 9
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -140,7 +140,7 @@ elif run_vars['dimension'] == 3:
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
    if run_vars['current']:
-      tick_labels.append('U_Current')   
+      tick_labels.append('U Current')   
       temp_no_inputs = 27
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -148,7 +148,7 @@ elif run_vars['dimension'] == 3:
       subgroup_grid_lines_bold.append([0,9,18,27])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('V_Current')   
+      tick_labels.append('V Current')   
       temp_no_inputs = 27
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -157,7 +157,7 @@ elif run_vars['dimension'] == 3:
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
    if run_vars['bolus_vel']:
-      tick_labels.append('Kwx_Bolus_velocities')
+      tick_labels.append('U Bolus Velocities')
       temp_no_inputs = 27
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -165,7 +165,7 @@ elif run_vars['dimension'] == 3:
       subgroup_grid_lines_bold.append([0,9,18,27])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('Kwy_Bolus_velocities')
+      tick_labels.append('V Bolus Velocities')
       temp_no_inputs = 27
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -173,7 +173,7 @@ elif run_vars['dimension'] == 3:
       subgroup_grid_lines_bold.append([0,9,18,27])
       no_inputs = no_inputs + temp_no_inputs
       no_variables = no_variables + 1
-      tick_labels.append('Kwz_Bolus_velocities')
+      tick_labels.append('W Bolus Velocities')
       temp_no_inputs = 27
       tick_locations.append(grid_lines[-1]+(temp_no_inputs/2)+.5)
       grid_lines.append(grid_lines[-1]+temp_no_inputs)
@@ -203,7 +203,7 @@ if run_vars['eta']:
    no_variables = no_variables + 1
 if run_vars['lat'] or run_vars['lon'] or run_vars['dep']:
    no_location_vars = 0
-   tick_labels.append('Location_info')   
+   tick_labels.append('Location Info')   
    temp_no_inputs = 0
    if run_vars['lat']:
       temp_no_inputs = temp_no_inputs + 1
@@ -404,7 +404,7 @@ elif run_vars['poly_degree'] is 2:
          j_group_start = int(xgrid_lines[j])
          j_group_end   = int(xgrid_lines[j+1])
          av_coeffs[i,j] = np.nanmean(coeffs[i_group_start:i_group_end, j_group_start:j_group_end])
-   fig = plt.figure(figsize=( 4,  4), dpi=300 )
+   fig = plt.figure(figsize=(4.5, 4.5), dpi=300 )
    ax = fig.add_subplot(111, aspect='equal')
    im = ax.pcolormesh(av_coeffs, shading='nearest', edgecolor='face', snap=True )
    
@@ -441,7 +441,7 @@ elif run_vars['poly_degree'] is 2:
       for j in range(min(i+2, no_variables)):
          j_group_start = int(ygrid_lines[j])
          j_group_end   = int(ygrid_lines[j+1])
-         fig = plt.figure(figsize=(5, 5))
+         fig = plt.figure(figsize=(4.5, 4.5), dpi=300)
          ax = fig.add_subplot(111, aspect='equal')
          if plot_log:
             im = ax.pcolormesh( coeffs[j_group_start:j_group_end, i_group_start:i_group_end],
