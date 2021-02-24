@@ -21,7 +21,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':False, 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 
 model_type = 'lr'
 
@@ -29,18 +29,10 @@ time_step = '24hrs'
 data_prefix=''
 exp_prefix = ''
 
-#Specific variables needed for if running with networks
-if model_type == 'nn':
-   inputDim = 26106
-   outputDim = 1
-   no_layers = 1
-   no_nodes = 100
-   model_prefix = 'MSE_'+str(no_layers)+'layers_'+str(no_nodes)+'nodes_lr0.001_batch4092_'
-else:
-   model_prefix = 'alpha.001_'
+model_prefix = 'alpha.001_'
 
 calc_predictions = True 
-no_points = 500  # in months/days
+no_points = 500  # no days of predictions being calculated
 skip_rate = 14   # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
 if time_step == '24hrs':
@@ -121,6 +113,7 @@ nc_wtd_av_Errors = nc_file.createVariable('Weighted_Av_Errors', 'f4', ('Z', 'Y',
 nc_AbsErrors = nc_file.createVariable('AbsErrors', 'f4', ('T', 'Z', 'Y', 'X'))
 nc_av_AbsErrors = nc_file.createVariable('Av_AbsErrors', 'f4', ('Z', 'Y', 'X'))
 nc_wtd_av_AbsErrors = nc_file.createVariable('Weighted_Av_AbsErrors', 'f4', ('Z', 'Y', 'X'))
+nc_Cor_Coef = nc_file.createVariable('Cor_Coef', 'f4', ('Z', 'Y', 'X'))
 
 # Fill some variables - rest done during iteration steps
 nc_Z[:] = ds['Z'].data
@@ -184,7 +177,14 @@ Time_Av_AbsErrors = np.nanmean(AbsErrors, axis=0)
 Spacial_Av_AbsErrors = np.nanmean(AbsErrors[:,1:-1,1:-3,1:-2], axis=(1,2,3))  # Remove points not being predicted (boundaries) from this
 Weighted_Av_AbsError = np.where( Time_Av_DelT_Truth==0., np.nan, Time_Av_AbsErrors/Time_Av_DelT_Truth )
 
+# Calculate Spatial Correlation Coefficients
 
+DelT_cor_coef = np.zeros((DelT_truth.shape[1], DelT_truth.shape[2], DelT_truth.shape[3]))
+for i in range(DelT_truth.shape[1]):
+   for j in range(DelT_truth.shape[2]):
+      for k in range(DelT_truth.shape[3]):
+         DelT_cor_coef[i,j,k] = np.corrcoef(predictedDelT[:,i,j,k], DelT_truth[:,i,j,k])[0,1]
+          
 # Save to netcdf
 print('save to netcdf')
 nc_PredictedTemp[:,:,:,:] = predictedTemp[1:]
@@ -195,6 +195,7 @@ nc_wtd_av_Errors[:,:,:] = Weighted_Av_Error
 nc_AbsErrors[:,:,:,:] = AbsErrors
 nc_av_AbsErrors[:,:,:] = Time_Av_AbsErrors 
 nc_wtd_av_AbsErrors[:,:,:] = Weighted_Av_AbsError
+nc_Cor_Coef[:,:,:] = DelT_cor_coef 
 nc_file.close()
 
 #-----------------

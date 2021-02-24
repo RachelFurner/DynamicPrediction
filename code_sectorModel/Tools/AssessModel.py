@@ -10,6 +10,11 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report
 import sklearn.metrics as metrics
 
+plt.rcParams.update({'font.size': 10})
+plt.rc('font', family='sans serif')
+plt.rc('xtick', labelsize='x-small')
+plt.rc('ytick', labelsize='x-small')
+
 def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name=None):
 
    # calculate stats
@@ -61,8 +66,13 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
    return(exp1_mse, exp2_mse)   
 
   
-def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True, top=None, bottom=None):
+def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True, top=None, bottom=None, text=None):
  
+   plt.rcParams.update({'font.size': 10})
+   plt.rc('font', family='sans serif')
+   plt.rc('xtick', labelsize='x-small')
+   plt.rc('ytick', labelsize='x-small')
+
    outdir = '../../../'+model_type+'_Outputs/'
 
    data1=data1.reshape(-1)
@@ -86,7 +96,7 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
    else:
       ylabel_filename = ylabel
  
-   fig = plt.figure(figsize=(9,9))
+   fig = plt.figure(figsize=(3.7,3.7), dpi=300)
    ax1 = fig.add_subplot(111)
    ax1.scatter(data1, data2, edgecolors=(0, 0, 0), alpha=0.15)
    ax1.set_xlabel(xlabel)
@@ -101,12 +111,14 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
       # Calculate the correlation coefficient and mse
       cor_coef = np.corrcoef(data1, data2)[0,1]
       mse = metrics.mean_squared_error(data1, data2)
-      ax1.annotate('Correlation Coefficient: '+str(np.round(cor_coef,5)), (0.15, 0.9), xycoords='figure fraction')
-      ax1.annotate('Mean Squared Error: '+str(np.format_float_scientific(mse, 5)), (0.15, 0.87), xycoords='figure fraction')
+      ax1.annotate('Correlation Coefficient: '+str(np.round(cor_coef,2)), (0.22, 0.87), xycoords='figure fraction')
+      ax1.annotate('Mean Squared Error: '+str(np.format_float_scientific(mse, 2)), (0.22, 0.83), xycoords='figure fraction')
+      if text:
+         ax1.annotate(text, (0.0, 0.90), xycoords='figure fraction')
    else:  # Assume we expect points to fit on 0 line, i.e. plotting errors against something
       ax1.plot([bottom, top], [0, 0], 'k--', lw=1)
    
-   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel_filename+'Vs'+ylabel_filename+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel_filename+'Vs'+ylabel_filename+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1) #  Leave as png, as otherwise far far too large filesize! , format='eps')
    plt.close()
  
    return()
