@@ -73,7 +73,7 @@ name_prefix = ''
 model_style = 'UNet'
 
 hyper_params = {
-    "batch_size": 16,
+    "batch_size": 32,
     "num_epochs": 10, # amount of new epochs to train, so added to any already saved.
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
