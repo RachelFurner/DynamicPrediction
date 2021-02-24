@@ -37,19 +37,15 @@ if model_type == 'nn':
    no_nodes = 100
    model_prefix = 'MSE_'+str(no_layers)+'layers_'+str(no_nodes)+'nodes_lr0.001_batch4092_'
 else:
-   model_prefix = 'alpha.0001_'
+   model_prefix = 'alpha.001_'
 
 calc_predictions = True 
 no_points = 500  # in months/days
-skip_rate = 5    # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
+skip_rate = 14   # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
-if time_step == '1mnth':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-   data_filename=DIR+'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
-   density_file = DIR+'DensityData.npy'
-elif time_step == '24hrs':
-   DIR  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-   data_filename=DIR+'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
+if time_step == '24hrs':
+   DIR  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/'
+   data_filename=DIR+'mnc_test_0002/cat_tave.nc'
    density_file = DIR+'DensityData.npy'
 else:
    print('ERROR!!! No suitable time step given!!')
@@ -220,3 +216,4 @@ ax2.set_xlabel('No of months')
 plt.tight_layout()
 plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
 plt.savefig('../../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error.png', bbox_inches = 'tight', pad_inches = 0.1)
+

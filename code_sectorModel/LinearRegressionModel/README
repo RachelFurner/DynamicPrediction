@@ -1,8 +1,0 @@
-Both scripts use scikit learn and so rely on CPUs (scikit learn does not interface with GPUs)
-Can be run interactively, or through the slurm batch queue, using the batch scripts contained here.
-
-Python script LinearRegression_model.py creates a regression model based on various inputs, and plots the predicted results against the truth (based on a single step, generally one month), and creates stats (again based on single step predictions).
-
-Script IterativelyForecast.py takes the truth and feeds this into the linear regressor, and then uses LR output as input to the LR to create a timeseries of forecasts iteratively. This gives us an understanding of how well the LR can do when applied iteratively over time, rather than just looking at the bias for a single step.
-
-

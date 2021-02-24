@@ -58,14 +58,14 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        land = 100 # Ignore y cells past 100 as these are land 
 
        da_T_in     = self.ds_inputs['THETA'].values[idx,:,:land,:] 
-       da_S_in     = self.ds_inputs['SALT'].values[idx,:,:land,:]
+       #da_S_in     = self.ds_inputs['SALT'].values[idx,:,:land,:] 
        da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:land,:]
        da_U_in     = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average to get onto same grid as T points  
        da_V_in     = self.ds_inputs['VVEL'].values[idx,:,:land,:] # Note land covers the extra point, so no need to average here 
        da_Eta_in   = self.ds_inputs['ETAN'].values[idx,0,:land,:]
 
        da_T_out     = self.ds_outputs['THETA'].values[idx,:,:land,:]
-       da_S_out     = self.ds_outputs['SALT'].values[idx,:,:land,:]
+       #da_S_out     = self.ds_outputs['SALT'].values[idx,:,:land,:]
        da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:land,:]
        da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
        da_V_out     = self.ds_outputs['VVEL'].values[idx,:,:land,:]  # Note land covers the extra point, so no need to average here
@@ -80,9 +80,9 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_T_in).any():
           print('da_T_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_T_in))) )
-       if np.isnan(da_S_in).any():
-          print('da_S_in contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_S_in))) )
+       #if np.isnan(da_S_in).any():
+       #   print('da_S_in contains a NaN')
+       #   print('nans at '+str(np.argwhere(np.isnan(da_S_in))) )
        if np.isnan(da_U_in).any():
           print('da_U_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
@@ -96,9 +96,9 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
        if np.isnan(da_T_out).any():
           print('da_T_out contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_T_out))) )
-       if np.isnan(da_S_out).any():
-          print('da_S_out contains a NaN')
-          print('nans at '+str(np.argwhere(np.isnan(da_S_out))) )
+       #if np.isnan(da_S_out).any():
+       #   print('da_S_out contains a NaN')
+       #   print('nans at '+str(np.argwhere(np.isnan(da_S_out))) )
        if np.isnan(da_U_in).any():
           print('da_U_in contains a NaN')
           print('nans at '+str(np.argwhere(np.isnan(da_U_in))) )
@@ -122,11 +122,11 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
            sample_output = np.concatenate((sample_output, 
                                            da_T_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
 
-       for level in range(da_S_in.shape[0]):
-           sample_input  = np.concatenate((sample_input , 
-                                            da_S_in[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
-           sample_output = np.concatenate((sample_output,
-                                           da_S_out[level, :, :].reshape(1,da_T_in.shape[1],da_T_in.shape[2])),axis=0)              
+       #for level in range(da_S_in.shape[0]):
+       #    sample_input  = np.concatenate((sample_input ,
+       #                                     da_S_in[level, :, :].reshape(1,da_S_in.shape[1],da_S_in.shape[2])),axis=0)              
+       #    sample_output = np.concatenate((sample_output, 
+       #                                    da_S_out[level, :, :].reshape(1,da_S_in.shape[1],da_S_in.shape[2])),axis=0)              
 
        for level in range(da_U_in.shape[0]):
            sample_input  = np.concatenate((sample_input ,
@@ -174,37 +174,28 @@ class RF_Normalise(object):
        Training output mean
        Training output std
     """
-    def __init__(self, inputs_train_mean, inputs_train_std, outputs_train_mean, outputs_train_std):
-        self.inputs_train_mean = inputs_train_mean
-        self.inputs_train_std  = inputs_train_std
-        self.outputs_train_mean = outputs_train_mean
-        self.outputs_train_std  = outputs_train_std
+    def __init__(self, train_mean, train_std, train_range):
+        self.train_mean  = train_mean
+        self.train_std   = train_std
+        self.train_range = train_range
 
     def __call__(self, sample):
         sample_input, sample_output = sample['input'], sample['output']
 
-        # Using transforms.Normalize returns the function, rather than the normalised array - can;t figure out how to avoid this...
+        # Using transforms.Normalize returns the function, rather than the normalised array - can't figure out how to avoid this...
         #sample_input  = transforms.Normalize(sample_input, self.inputs_train_mean, self.inputs_train_std)
         #sample_output = transforms.Normalize(sample_output,self.outputs_train_mean, self.outputs_train_std)
 
-        if np.isnan(self.inputs_train_mean).any():
-            print('inputs_train_mean contains a NaN')
-        if np.isnan(self.inputs_train_std).any():
-            print('inputs_train_std contains a NaN')
-        if np.isnan(self.outputs_train_mean).any():
-            print('outputs_train_mean contains a NaN')
-        if np.isnan(self.outputs_train_std).any():
-            print('outputs_train_std contains a NaN')
-
         for channel in range(sample_input.shape[0]):
-           if not (self.inputs_train_std[channel] == 0.0):
-              sample_input[channel, :, :]  = (sample_input[channel, :, :] - self.inputs_train_mean[channel]) / self.inputs_train_std[channel]
-           if not (self.outputs_train_std[channel] == 0.0):
-              sample_output[channel, :, :] = (sample_output[channel, :, :] - self.outputs_train_mean[channel]) / self.outputs_train_std[channel]
+           #if not (self.train_std[channel] == 0.0):
+           #   sample_input[channel, :, :]  = (sample_input[channel, :, :] - self.train_mean[channel]) / self.train_std[channel]
+           #   sample_output[channel, :, :] = (sample_output[channel, :, :] - self.train_mean[channel]) / self.train_std[channel]
+           sample_input[channel, :, :]  = (sample_input[channel, :, :] - self.train_mean[channel]) / self.train_range[channel]
+           sample_output[channel, :, :] = (sample_output[channel, :, :] - self.train_mean[channel]) / self.train_range[channel]
 
         return {'input':sample_input, 'output':sample_output}
 
-def RF_DeNormalise(samples, outputs_train_mean, outputs_train_std):
+def RF_DeNormalise(samples, train_mean, train_std, train_range):
     """de-Normalise data based on training means and std (given)
 
     Args:
@@ -214,8 +205,9 @@ def RF_DeNormalise(samples, outputs_train_mean, outputs_train_std):
     """
 
     for channel in range(samples.shape[1]):
-       if not (outputs_train_std[channel] == 0.0):
-          samples[:,channel, :, :]  = (samples[:,channel, :, :] * outputs_train_std[channel] ) + outputs_train_mean[channel]
+       #if not (train_std[channel] == 0.0):
+       #   samples[:,channel, :, :]  = (samples[:,channel, :, :] * train_std[channel] ) + train_mean[channel]
+       samples[:,channel, :, :]  = (samples[:,channel, :, :] * train_range[channel] ) + train_mean[channel]
 
     return samples
 

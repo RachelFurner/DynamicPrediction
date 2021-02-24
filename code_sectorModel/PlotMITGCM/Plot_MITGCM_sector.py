@@ -21,20 +21,16 @@ from netCDF4 import Dataset
 # Set plotting variables
 #------------------------
 
-time = 12000
+time = 2500
 point = [ 2, 8, 6]
 
 time_step = '24hrs'
 #----------------------
 
-if time_step == '1mnth':
-   datadir  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/20000yr_Windx1.00_mm_diag/'
-   data_filename=datadir + 'cat_tave_2000yrs_SelectedVars_masked_withBolus.nc'
-   mon_file = datadir + 'monitor.0000000000.t001_2000yrs.nc'
-elif time_step == '24hrs':
-   datadir  = '/data/hpcdata/users/racfur/MITGCM_OUTPUT/100yr_Windx1.00_FrequentOutput/'
-   data_filename=datadir + 'cat_tave_50yr_SelectedVars_masked_withBolus.nc'
-   mon_file = datadir + 'monitor.0000000000.t001._50yrs.nc'
+if time_step == '24hrs':
+   datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/mnc_test_0002/'
+   data_filename=datadir + 'cat_tave.nc'
+   mon_file = datadir + 'cat_monitor.nc'
 else:
    print('####################################')
    print('WARNING - IMPROPER TIME STEP GIVEN!!')
@@ -79,7 +75,7 @@ nc_mon = Dataset(mon_file)
 #--------------------------
 fig, ax, im = SecPlt.plot_depth_fld(da_T[time,:,:,:], 'Temperature from Model', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=None, max_value=None)
+                                   title=None, min_value=None, max_value=None, cbar_label='Temperature ('+u'\xb0'+'C)')
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
@@ -87,7 +83,7 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_z'+str(level), bbox_inches 
 #-----------------------
 fig, ax, im = SecPlt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature', y_coord,
                                          da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=None, max_value=None)
+                                         title=None, min_value=None, max_value=None, cbar_label='Temperature ('+u'\xb0'+'C)')
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
@@ -95,30 +91,30 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord), bbox_inche
 #-----------------------
 fig, ax, im = SecPlt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature', x_coord,
                                          da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=None, max_value=None)
+                                         title=None, min_value=None, max_value=None, cbar_label='Temperature ('+u'\xb0'+'C)')
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = SecPlt.plot_xconst_crss_sec(da_W[time,:,:,:], 'Vertical Velocity', x_coord,
                                          da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=-0.00003, max_value=0.00003, cmap='bwr')
+                                         title=None, min_value=-0.00003, max_value=0.00003, cmap='bwr', cbar_label='Temperature ('+u'\xb0'+'C)')
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Wvel_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #----------------------------------
 # Plot diffs between time t and t+1
 #----------------------------------
-fig = SecPlt.plot_depth_fld_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', level,
-                                da_X.values, da_Y.values, da_Z.values,
-                                title=None)
+fig = SecPlt.plot_depth_fld_diff(da_T[time,:,:,:], 'Temperature\n', da_T[time+1,:,:,:], 'Temperature\n', level,
+                                 da_X.values, da_Y.values, da_Z.values, title=None,
+                                 cbar_label='Temperature ('+u'\xb0'+'C)', cbar_diff_label='Temperature Change ('+u'\xb0'+'C)', Sci=True)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = SecPlt.plot_yconst_crss_sec_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', y_coord,
-                                      da_X.values, da_Y.values, da_Z.values,
-                                      title=None)
+fig = SecPlt.plot_yconst_crss_sec_diff(da_T[time,:,:,:], 'Temperature', da_T[time+1,:,:,:], 'Temperature', y_coord,
+                                      da_X.values, da_Y.values, da_Z.values, title=None,
+                                      cbar_label='Temperature ('+u'\xb0'+'C)',  cbar_diff_label='Temperature Change ('+u'\xb0'+'C)', Sci=True)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_y'+str(y_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = SecPlt.plot_xconst_crss_sec_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', x_coord,
-                                      da_X.values, da_Y.values, da_Z.values,
-                                      title=None)
+fig = SecPlt.plot_xconst_crss_sec_diff(da_T[time,:,:,:], 'Temperature', da_T[time+1,:,:,:], 'Temperature', x_coord,
+                                      da_X.values, da_Y.values, da_Z.values, title=None,
+                                      cbar_label='Temperature ('+u'\xb0'+'C)', cbar_diff_label='Temperature Change ('+u'\xb0'+'C)', Sci=True)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
 #---------------------------------------------------------------------------

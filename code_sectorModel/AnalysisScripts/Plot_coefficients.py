@@ -328,13 +328,12 @@ elif run_vars['poly_degree'] is 2:
    xlabel_ticks = list(np.array(tick_locations).astype(float))
    xgrid_lines = [0]+list(np.array(grid_lines).astype(float))
    
-   if no_location_vars > 1:
-      # if last variable is any of the location info, then need to keep the last label in...otherwise use above lines
-      ylabels = ['']+tick_labels[:] 
+   if no_location_vars > 1:  # if last variable is any of the location info, then need to keep the last label in
+      ylabels = ['Linear Terms']+tick_labels[:] 
       ylabel_ticks = [1.5]+list(np.array(tick_locations[:])+3.)  # three rows representing coeffs x 1 
       ygrid_lines = [0, 3]+list(np.array(grid_lines[:])+3.)      # three rows representing coeffs x 1 
    else:
-      ylabels = ['']+tick_labels[:-1]
+      ylabels = ['Linear Terms']+tick_labels[:-1]
       ylabel_ticks = [1.5]+list(np.array(tick_locations[:-1])+3.)  # three rows representing coeffs x 1 
       ygrid_lines = [0, 3]+list(np.array(grid_lines[:-1])+3.)      # three rows representing coeffs x 1
    

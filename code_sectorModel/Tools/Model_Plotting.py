@@ -44,7 +44,8 @@ def plot_depth_ax(ax, field, level, lon_labels, lat_labels, depth_labels, min_va
  
     return(ax, im)
 
-def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None): 
+def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None,
+                   diff=False, cmap=None, cbar_label=None, Sci=None): 
     
     # Create a figure
     fig = plt.figure(figsize=(4,8))
@@ -60,10 +61,16 @@ def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_label
           cmap = 'viridis'
     ax, im = plot_depth_ax(ax, field, level, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
-    ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m')
+    #ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m')
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3))
+    if cbar_label:
+       cb.set_label(cbar_label)    
+    if Sci:
+       cb.formatter.set_powerlimits((2, 2))
+       #cb.ax.yaxis.set_offset_position('left')
+       cb.update_ticks()
 
     if title:
        plt.suptitle(title, fontsize=14)
@@ -73,7 +80,8 @@ def plot_depth_fld(field, field_name, level, lon_labels, lat_labels, depth_label
 
     return(fig, ax, im)
 
-def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, lon_labels, lat_labels, depth_labels, title=None):
+def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, lon_labels, lat_labels, depth_labels, title=None,
+                        cbar_label=None, cbar_diff_label=None, Sci=None):
     
     flds_min_value = min( np.nanmin(field1[level,:,:]), np.nanmin(field2[level,:,:]) )
     flds_max_value = max( np.nanmax(field1[level,:,:]), np.amax(field2[level,:,:]) )
@@ -81,29 +89,37 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, lon_lab
     diff_min_value = -max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
     diff_max_value =  max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
  
-    fig = plt.figure(figsize=(14,8))
-    ax1 = plt.subplot(131)
-    ax2 = plt.subplot(132)
-    ax3 = plt.subplot(133)
+    fig = plt.figure(figsize=(8 ,8))
+    ax1 = plt.subplot(121)
+    ax2 = plt.subplot(122)
     ax1, im1 = plot_depth_ax(ax1, field1, level, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax2, im2 = plot_depth_ax(ax2, field2, level, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax3, im3 = plot_depth_ax(ax3, field1-field2, level, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+    ax2, im2 = plot_depth_ax(ax2, field1-field2, level, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
-    ax1.set_title(str(field1_name)+' at '+str(int(depth_labels[level]))+'m')
-    ax2.set_title(str(field2_name)+' at '+str(int(depth_labels[level]))+'m')
-    ax3.set_title('The Difference')
+    #ax1.set_title(str(field1_name)+' at '+str(int(depth_labels[level]))+'m')
+    #ax2.set_title('Temp change \nover one day')
 
-    cb1axes = fig.add_axes([0.05, 0.035, 0.60, 0.03]) 
-    #cb3axes = fig.add_axes([0.70, 0.035, 0.30, 0.03]) 
-    cb3axes = fig.add_axes([0.68, 0.035, 0.34, 0.03]) 
-    cb1=plt.colorbar(im1, ax=(ax1,ax2), cax=cb1axes, orientation='horizontal')
-    cb3=plt.colorbar(im3, ax=ax3, cax=cb3axes, orientation='horizontal')
+    cb1axes = fig.add_axes([0.05, 0.045, 0.35, 0.03]) 
+    cb1=plt.colorbar(im1, ax=ax1, cax=cb1axes, orientation='horizontal')
+    if cbar_label:
+       cb1.set_label(cbar_label)    
+    if Sci:
+       cb1.formatter.set_powerlimits((2, 2))
+       #cb1.ax.yaxis.set_offset_position('left')
+
+    cb2axes = fig.add_axes([0.55, 0.045, 0.35, 0.03]) 
+    cb2=plt.colorbar(im2, ax=ax2, cax=cb2axes, orientation='horizontal')
+    if cbar_diff_label:
+       cb2.set_label(cbar_diff_label)    
+    if Sci:
+       cb2.formatter.set_powerlimits((2, 2))
+       cb2.ax.yaxis.set_offset_position('left')
+       cb2.update_ticks()
 
     if title:
        plt.suptitle(title, fontsize=14)
 
     plt.tight_layout()
-    plt.subplots_adjust(wspace=0.2, hspace = 0.01, bottom=0.15)
+    plt.subplots_adjust(wspace=0.4, hspace = 0.01, bottom=0.15)
 
     return(fig)
 
@@ -139,7 +155,8 @@ def plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, 
  
     return(ax, im)
 
-def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
+def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None,
+                         diff=False, cmap=None, cbar_label=None, Sci=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
@@ -154,10 +171,15 @@ def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_lab
           cmap = 'viridis'
     ax, im = plot_yconst_crss_sec_ax(ax, field, y, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
-    ax.set_title(str(field_name)+' at '+str(int(lat_labels[y]))+' degrees latitude')
+    #ax.set_title(str(field_name)+' at '+str(int(lat_labels[y]))+' degrees latitude')
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9)
+    if cbar_label:
+       cb.set_label(cbar_label)    
+    if Sci:
+       cb.formatter.set_powerlimits((2, 2))
+       cb.update_ticks()
     
     if title:
        plt.suptitle(title, fontsize=14)
@@ -167,7 +189,8 @@ def plot_yconst_crss_sec(field, field_name, y, lon_labels, lat_labels, depth_lab
 
     return(fig, ax, im)
 
-def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, lon_labels, lat_labels, depth_labels, title=None):
+def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, lon_labels, lat_labels, depth_labels, title=None,
+                              cbar_label=None, cbar_diff_label=None, Sci=None):
     
     flds_min_value = min( np.nanmin(field1[:,y,:]), np.nanmin(field2[:,y,:]) )
     flds_max_value = max( np.nanmax(field1[:,y,:]), np.amax(field2[:,y,:]) )
@@ -175,22 +198,32 @@ def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, lon_l
     diff_min_value = -max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
     diff_max_value =  max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
  
-    fig = plt.figure(figsize=(9,17))
-    ax1 = plt.subplot(311)
-    ax2 = plt.subplot(312)
-    ax3 = plt.subplot(313)
+    fig = plt.figure(figsize=(9,11))
+    ax1 = plt.subplot(211)
+    ax2 = plt.subplot(212)
     ax1, im1 = plot_yconst_crss_sec_ax(ax1, field1, y, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax2, im2 = plot_yconst_crss_sec_ax(ax2, field2, y, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax3, im3 = plot_yconst_crss_sec_ax(ax3, field1-field2, y, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+    ax2, im2 = plot_yconst_crss_sec_ax(ax2, field1-field2, y, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
-    ax1.set_title(str(field1_name)+' at '+str(int(lat_labels[y]))+' degrees latitude')
-    ax2.set_title(str(field2_name)+' at '+str(int(lat_labels[y]))+' degrees latitude') 
-    ax3.set_title('The Difference')
+    #ax1.set_title(str(field1_name)+' at '+str(int(lat_labels[y]))+' degrees latitude')
+    #ax2.set_title('Temp change over a day')
 
-    cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
-    cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
-    cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
-    cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes)
+    cb1axes = fig.add_axes([0.92, 0.58, 0.03, 0.35]) 
+    cb1=plt.colorbar(im1, ax=ax1, orientation='vertical', cax=cb1axes)
+    if cbar_label:
+       cb1.set_label(cbar_label)    
+    if Sci:
+       cb1.formatter.set_powerlimits((2, 2))
+       cb1.ax.yaxis.set_offset_position('left')
+       cb1.update_ticks()
+
+    cb2axes = fig.add_axes([0.92, 0.08, 0.03, 0.35]) 
+    cb2=plt.colorbar(im2, ax=ax2, orientation='vertical', cax=cb2axes)
+    if cbar_diff_label:
+       cb2.set_label(cbar_diff_label)    
+    if Sci:
+       cb2.formatter.set_powerlimits((2, 2))
+       cb2.ax.yaxis.set_offset_position('left')
+       cb2.update_ticks()
  
     if title:
        plt.suptitle(title, fontsize=14)
@@ -210,15 +243,11 @@ def plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, 
 
     if not min_value:
        min_value = np.nanmin(field[:,:,x])  # Lowest value
-    # Need to work this bit out....
-    #if var[0] == 'S':
-    #    min_value = 33.5
     if not max_value:
        max_value = np.nanmax(field[:,:,x])   # Highest value
 
     im = ax.pcolormesh(field[:,:,x], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.invert_yaxis()
-    #ax.invert_xaxis()
     ax.set_xlabel('latitude '+u'\xb0'+'N')
     ax.set_ylabel('depth (m)')
 
@@ -232,7 +261,8 @@ def plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, 
     
     return(ax, im)
 
-def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
+def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_labels, title=None, min_value=None, max_value=None,
+                         diff=False, cmap=None, cbar_label=None, Sci=None):
     
     # Create a figure
     fig = plt.figure(figsize=(9,5))
@@ -248,12 +278,17 @@ def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_lab
           cmap = 'viridis'
     ax, im = plot_xconst_crss_sec_ax(ax, field, x, lon_labels, lat_labels, depth_labels, min_value, max_value, cmap)
 
-    ax.set_title(str(field_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
-    #ax.set_title(str(field_name)+' at x='+str(int(lon_labels[x])))
+    #ax.set_title(str(field_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9)
-    
+    if cbar_label:
+       cb.set_label(cbar_label)    
+    if Sci: 
+       cb.formatter.set_powerlimits((2, 2))
+       cb.ax.yaxis.set_offset_position('left')
+       cb.update_ticks()
+
     if title:
        plt.suptitle(title, fontsize=14)
 
@@ -262,7 +297,8 @@ def plot_xconst_crss_sec(field, field_name, x, lon_labels, lat_labels, depth_lab
 
     return(fig, ax, im)
 
-def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, lon_labels, lat_labels, depth_labels, title=None):
+def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, lon_labels, lat_labels, depth_labels, title=None,
+                              cbar_label=None, cbar_diff_label=None, Sci=None):
     
     flds_min_value = min( np.nanmin(field1[:,:,x]), np.nanmin(field2[:,:,x]) )
     flds_max_value = max( np.nanmax(field1[:,:,x]), np.amax(field2[:,:,x]) )
@@ -270,24 +306,32 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, lon_l
     diff_min_value = -max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
     diff_max_value =  max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
  
-    fig = plt.figure(figsize=(9,17))
-    ax1 = plt.subplot(311)
-    ax2 = plt.subplot(312)
-    ax3 = plt.subplot(313)
+    fig = plt.figure(figsize=(9,11))
+    ax1 = plt.subplot(211)
+    ax2 = plt.subplot(212)
     ax1, im1 = plot_xconst_crss_sec_ax(ax1, field1, x, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax2, im2 = plot_xconst_crss_sec_ax(ax2, field2, x, lon_labels, lat_labels, depth_labels, flds_min_value, flds_max_value)
-    ax3, im3 = plot_xconst_crss_sec_ax(ax3, field1-field2, x, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+    ax2, im2 = plot_xconst_crss_sec_ax(ax2, field1-field2, x, lon_labels, lat_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
-    ax1.set_title(str(field1_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
-    ax2.set_title(str(field2_name)+' at '+str(int(lon_labels[x]))+' degrees longitude') 
-    #ax1.set_title(str(field1_name)+' at x='+str(int(lon_labels[x])))
-    #ax2.set_title(str(field2_name)+' at x='+str(int(lon_labels[x]))) 
-    ax3.set_title('The Difference')
+    #ax1.set_title(str(field1_name)+' at '+str(int(lon_labels[x]))+' degrees longitude')
+    #ax2.set_title('Temp change over a day')
 
-    cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
-    cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
-    cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
-    cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes)
+    cb1axes = fig.add_axes([0.92, 0.58, 0.03, 0.35]) 
+    cb1=plt.colorbar(im1, ax=ax1, orientation='vertical', cax=cb1axes)
+    if cbar_label:
+       cb1.set_label(cbar_label)    
+    if Sci:
+       cb1.formatter.set_powerlimits((2, 2))
+       cb1.ax.yaxis.set_offset_position('left')
+       cb1.update_ticks()
+
+    cb2axes = fig.add_axes([0.92, 0.08, 0.03, 0.35]) 
+    cb2=plt.colorbar(im2, ax=ax2, orientation='vertical', cax=cb2axes)
+    if cbar_diff_label:
+       cb2.set_label(cbar_diff_label)    
+    if Sci:
+       cb2.formatter.set_powerlimits((2, 2))
+       cb2.ax.yaxis.set_offset_position('left')
+       cb2.update_ticks()
  
     if title:
        plt.suptitle(title, fontsize=14)
@@ -343,10 +387,10 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, time_step=None):
    ax.set_ylabel('Temperature')
    if time_step == '24hrs':
       ax.set_xlabel('No of days')
-      ax.set_title(str(int(length/30))+' months')
+      #ax.set_title(str(int(length/30))+' months')
    else:
       ax.set_xlabel('No of months')
-      ax.set_title(str(int(length/12))+' years')
+      #ax.set_title(str(int(length/12))+' years')
    if ylim:
       ax.set_ylim(ylim)
  
