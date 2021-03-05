@@ -8,7 +8,6 @@
 # The data is subsampled in time to give quasi-independence
 
 #from comet_ml import Experiment
-print('starting script')
 
 import sys
 sys.path.append('../Tools')
@@ -155,7 +154,7 @@ def ReadMeanStd(model_name, output_file=None):
    return(inputs_mean, inputs_std, inputs_range, no_channels)
 
 
-def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, start_epoch=0):
+def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, existing_losses, start_epoch=0):
 
    no_depth_levels = 38  # Hard coded...perhaps should change...?
    # Set variables to remove randomness and ensure reproducible results
@@ -169,16 +168,13 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
       torch.backends.cudnn.deterministic = True
       torch.backends.cudnn.benchmark = False
 
-   train_loss_epoch = []
-   train_loss_epoch_Temp = []
-   train_loss_epoch_U = []
-   train_loss_epoch_V = []
-   train_loss_epoch_Eta = []
-   val_loss_epoch = []
-   val_loss_epoch_Temp = []
-   val_loss_epoch_U = []
-   val_loss_epoch_V = []
-   val_loss_epoch_Eta = []
+   train_loss_epoch = existing_losses['train_loss_epoch']
+   train_loss_epoch_Temp = existing_losses['train_loss_epoch_Temp']
+   train_loss_epoch_U    = existing_losses['train_loss_epoch_U']
+   train_loss_epoch_V    = existing_losses['train_loss_epoch_V']
+   train_loss_epoch_Eta  = existing_losses['train_loss_epoch_Eta']
+   val_loss_epoch = existing_losses['val_loss_epoch']
+
    first_pass = True
    torch.cuda.empty_cache()
    
@@ -192,7 +188,6 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    for epoch in range(start_epoch,hyper_params["num_epochs"]+start_epoch):
    
        print('epoch ; '+str(epoch))
-       i=1
    
        # Training
    
@@ -202,15 +197,23 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
        train_loss_epoch_V_tmp = 0.
        train_loss_epoch_Eta_tmp = 0.
    
-       if epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
-           fig = plt.figure(figsize=(9,9))
-           ax1 = fig.add_subplot(111)
+       
+       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+           fig_temp = plt.figure(figsize=(9,9))
+           ax_temp  = fig_temp.add_subplot(111)
+           fig_U    = plt.figure(figsize=(9,9))
+           ax_U     = fig_U.add_subplot(111)
+           fig_V    = plt.figure(figsize=(9,9))
+           ax_V     = fig_V.add_subplot(111)
+           fig_Eta  = plt.figure(figsize=(9,9))
+           ax_Eta   = fig_Eta.add_subplot(111)
            bottom = 0.
            top = 0.
-   
+
+       batch_no = 0
        for batch_sample in train_loader:
-           print('')
-           print('------------------- Training batch number : '+str(i)+'-------------------')
+           #print('')
+           #print('------------------- Training batch number : '+str(batch_no)+'-------------------')
    
            input_batch  = batch_sample['input']
            target_batch = batch_sample['output']
@@ -279,29 +282,32 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            if TEST: 
               print('train_loss_epoch_tmp; '+str(train_loss_epoch_tmp))
    
-           if epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
-               target_batch = target_batch.cpu().detach().numpy()
-               predicted = predicted.cpu().detach().numpy()
-               ax1.scatter(target_batch[:,:no_depth_levels,:,:], predicted[:,:no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-               ax1.scatter(target_batch[:,no_depth_levels:2*no_depth_levels,:,:], predicted[:,no_depth_levels:2*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-               ax1.scatter(target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:], predicted[:,2*no_depth_levels:3*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-               ax1.scatter(target_batch[:,3*no_depth_levels,:,:], predicted[:,3*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-               ax1.legend()
-               bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
-               top    = max(np.amax(predicted), np.amax(target_batch), top)  
-               print('did plotting')
+           if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+              if batch_no == 0:
+                 target_batch_subsamp = target_batch[0,:,::2,::2].cpu().detach().numpy()
+                 predicted_subsamp = predicted[0,:,::2,::2].cpu().detach().numpy()
+                 ax_temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
+                                 predicted_subsamp[:no_depth_levels,:,:],
+                                 edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
+                 ax_U.scatter(target_batch_subsamp[no_depth_levels:2*no_depth_levels,:,:],
+                              predicted_subsamp[no_depth_levels:2*no_depth_levels,:,:],
+                              edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
+                 ax_V.scatter(target_batch_subsamp[2*no_depth_levels:3*no_depth_levels,:,:], 
+                              predicted_subsamp[2*no_depth_levels:3*no_depth_levels,:,:],
+                              edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
+                 ax_Eta.scatter(target_batch_subsamp[3*no_depth_levels,:,:], 
+                                predicted_subsamp[3*no_depth_levels,:,:],
+                                edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
+                 bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
+                 top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
    
            gc.collect()
            torch.cuda.empty_cache()
-           for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-                                    key= lambda x: -x[1])[:10]:
-               print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+           #for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+           #                         key= lambda x: -x[1])[:10]:
+           #    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
            #print(torch.cuda.memory_summary(device))
-           print('')
+           #print('')
 
            if first_pass:
               # Plot histogram of data, for bug fixing and checking...
@@ -313,56 +319,98 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
                     data = input_batch[:,no_var*no_depth_levels,:,:].cpu().reshape(-1)
                  fig2 = plt.figure(figsize=(10, 8))
                  plt.hist(data, bins = no_bins)
-                 #plt.yscale('log')
-                 #plt.annotate('skew = '+str(np.round(skew(data),5)), (0.1,0.9), xycoords='figure fraction')
-                 plt.savefig(plot_dir+'/'+model_name+'_histogram_var'+str(no_var)+'_batch'+str(i)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+                 plt.savefig(plot_dir+'/'+model_name+'_histogram_var'+str(no_var)+'_batch'+str(batch_no)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
                  plt.close()
 
            del input_batch
            del target_batch
            first_pass = False
-           print('batch complete')
-           i=i+1
+           #print('batch complete')
+           batch_no = batch_no + 1
  
        tr_loss_single_epoch = train_loss_epoch_tmp / no_tr_samples
        print('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
        output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
+       #print('RF after printing training loss')
        train_loss_epoch.append( tr_loss_single_epoch )
        train_loss_epoch_Temp.append( train_loss_epoch_Temp_tmp / no_tr_samples )
        train_loss_epoch_U.append( train_loss_epoch_U_tmp / no_tr_samples )
        train_loss_epoch_V.append( train_loss_epoch_V_tmp / no_tr_samples )
        train_loss_epoch_Eta.append( train_loss_epoch_Eta_tmp / no_tr_samples )
-   
+  
+       #print('RF before if statements')
        if TEST: 
+          print('IN TEST!!!')
           print('tr_loss_single_epoch; '+str(tr_loss_single_epoch))
           print('train_loss_epoch; '+str(train_loss_epoch))
    
-       if epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
-           ax1.set_xlabel('Truth')
-           ax1.set_ylabel('Predictions')
-           ax1.set_title('Training errors, epoch '+str(epoch))
-           ax1.set_xlim(bottom, top)
-           ax1.set_ylim(bottom, top)
-           ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax1.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
+       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+
+           ax_temp.set_xlabel('Truth')
+           ax_temp.set_ylabel('Predictions')
+           ax_temp.set_title('Training errors, epoch '+str(epoch))
+           ax_temp.set_xlim(bottom, top)
+           ax_temp.set_ylim(bottom, top)
+           ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_Temp_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+           ax_U.set_xlabel('Truth')
+           ax_U.set_ylabel('Predictions')
+           ax_U.set_title('Training errors, epoch '+str(epoch))
+           ax_U.set_xlim(bottom, top)
+           ax_U.set_ylim(bottom, top)
+           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_U.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_U_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+           ax_V.set_xlabel('Truth')
+           ax_V.set_ylabel('Predictions')
+           ax_V.set_title('Training errors, epoch '+str(epoch))
+           ax_V.set_xlim(bottom, top)
+           ax_V.set_ylim(bottom, top)
+           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_V.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_V_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+           ax_Eta.set_xlabel('Truth')
+           ax_Eta.set_ylabel('Predictions')
+           ax_Eta.set_title('Training errors, epoch '+str(epoch))
+           ax_Eta.set_xlim(bottom, top)
+           ax_Eta.set_ylim(bottom, top)
+           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_Eta.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_Eta_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
            plt.close()
    
        # Validation
    
        val_loss_epoch_tmp = 0.0
-       i=1
+       batch_no = 0
        
-       if epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
-           fig = plt.figure(figsize=(9,9))
-           ax1 = fig.add_subplot(111)
+       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+           fig_temp = plt.figure(figsize=(9,9))
+           ax_temp  = fig_temp.add_subplot(111)
+           fig_U    = plt.figure(figsize=(9,9))
+           ax_U     = fig_U.add_subplot(111)
+           fig_V    = plt.figure(figsize=(9,9))
+           ax_V     = fig_V.add_subplot(111)
+           fig_Eta  = plt.figure(figsize=(9,9))
+           ax_Eta   = fig_Eta.add_subplot(111)
            bottom = 0.
            top = 0.
    
+       #print('RF in val , just about to start batch loop')
        for batch_sample in val_loader:
-           print('')
-           print('------------------- Validation batch number : '+str(i)+'-------------------')
+       #    print('')
+       #    print('------------------- Validation batch number : '+str(batch_no)+'-------------------')
    
            input_batch  = batch_sample['input']
            target_batch = batch_sample['output']
@@ -380,65 +428,107 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    
            # get prediction from the model, given the inputs
            predicted = h(input_batch)
+           #print('prediction made')
        
            # get loss for the predicted output
            val_loss = hyper_params["criterion"](predicted, target_batch)
    
            val_loss_epoch_tmp += val_loss.item()*input_batch.shape[0]
+           #print('loss calculated and added')
    
            if TEST: 
               print('val_loss_epoch_tmp; '+str(val_loss_epoch_tmp))
   
-           if ( epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1) ):
-               target_batch = target_batch.cpu().detach().numpy()
-               predicted = predicted.cpu().detach().numpy()
-               ax1.scatter(target_batch[:,:no_depth_levels,:,:], predicted[:,:no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-               ax1.scatter(target_batch[:,no_depth_levels:2*no_depth_levels,:,:], predicted[:,no_depth_levels:2*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-               ax1.scatter(target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:], predicted[:,2*no_depth_levels:3*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-               ax1.scatter(target_batch[:,3*no_depth_levels,:,:], predicted[:,3*no_depth_levels,:,:],
-                           edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-               ax1.legend()
-               bottom = min(np.amin(predicted), np.amin(target_batch), bottom)
-               top    = max(np.amax(predicted), np.amax(target_batch), top)    
-           i=i+1
+           if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+              if batch_no == 0:
+                 target_batch_subsamp = target_batch[0,:,::2,::2].cpu().detach().numpy()
+                 predicted_subsamp = predicted[0,:,::2,::2].cpu().detach().numpy()
+                 ax_temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
+                                 predicted_subsamp[:no_depth_levels,:,:],
+                                 edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
+                 ax_U.scatter(target_batch_subsamp[no_depth_levels:2*no_depth_levels,:,:],
+                              predicted_subsamp[no_depth_levels:2*no_depth_levels,:,:],
+                              edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
+                 ax_V.scatter(target_batch_subsamp[2*no_depth_levels:3*no_depth_levels,:,:], 
+                              predicted_subsamp[2*no_depth_levels:3*no_depth_levels,:,:],
+                              edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
+                 ax_Eta.scatter(target_batch_subsamp[3*no_depth_levels,:,:], 
+                                predicted_subsamp[3*no_depth_levels,:,:],
+                                edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
+                 bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
+                 top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
+   
+           batch_no = batch_no + 1
            del input_batch
            del target_batch
            gc.collect()
            torch.cuda.empty_cache()
-           print('batch complete')
-           for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-                                    key= lambda x: -x[1])[:10]:
-               print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
+           #print('batch complete')
+           #for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+           #                         key= lambda x: -x[1])[:10]:
+           #    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
            #print(torch.cuda.memory_summary(device))
-           print('')
+           #print('')
+           #print('variables deleted')
    
        val_loss_single_epoch = val_loss_epoch_tmp / no_val_samples
        print('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
        output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
        val_loss_epoch.append(val_loss_single_epoch)
+       #print('loss appended')
    
        if TEST: 
           print('val_loss_single_epoch; '+str(val_loss_single_epoch))
           print('val_loss_epoch; '+str(val_loss_epoch))
    
-       if epoch%plot_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
-           ax1.set_xlabel('Truth')
-           ax1.set_ylabel('Predictions')
-           ax1.set_title('Validation errors, epoch '+str(epoch))
-           ax1.set_xlim(bottom, top)
-           ax1.set_ylim(bottom, top)
-           ax1.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax1.annotate('Epoch MSE: '+str(np.round(val_loss_epoch_tmp / no_val_samples,5)),
-                         (0.15, 0.9), xycoords='figure fraction')
-           ax1.annotate('Epoch Loss: '+str(val_loss_single_epoch), (0.15, 0.87), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'validation.png',
+       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
+
+           ax_temp.set_xlabel('Truth')
+           ax_temp.set_ylabel('Predictions')
+           ax_temp.set_title('Training errors, epoch '+str(epoch))
+           ax_temp.set_xlim(bottom, top)
+           ax_temp.set_ylim(bottom, top)
+           ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_Temp_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
            plt.close()
 
-       if (epoch%save_freq == 0 and epoch != start_epoch) or epoch == (hyper_params["num_epochs"]+start_epoch-1):
+           ax_U.set_xlabel('Truth')
+           ax_U.set_ylabel('Predictions')
+           ax_U.set_title('Training errors, epoch '+str(epoch))
+           ax_U.set_xlim(bottom, top)
+           ax_U.set_ylim(bottom, top)
+           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_U.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_U_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+           ax_V.set_xlabel('Truth')
+           ax_V.set_ylabel('Predictions')
+           ax_V.set_title('Training errors, epoch '+str(epoch))
+           ax_V.set_xlim(bottom, top)
+           ax_V.set_ylim(bottom, top)
+           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_V.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_V_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+           ax_Eta.set_xlabel('Truth')
+           ax_Eta.set_ylabel('Predictions')
+           ax_Eta.set_title('Training errors, epoch '+str(epoch))
+           ax_Eta.set_xlim(bottom, top)
+           ax_Eta.set_ylim(bottom, top)
+           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_Eta.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           plt.savefig(plot_dir+'/'+model_name+'_Eta_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
+                       bbox_inches = 'tight', pad_inches = 0.1)
+           plt.close()
+
+       if epoch%save_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
+           ### SAVE IT ###
            print('save model \n')
            output_file.write('save model \n')
            pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
@@ -448,8 +538,14 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
                        'model_state_dict': h.state_dict(),
                        'optimizer_state_dict': optimizer.state_dict(),
                        'loss': loss,
+                       'train_loss_epoch': train_loss_epoch,
+                       'train_loss_epoch_Temp': train_loss_epoch_Temp,
+                       'train_loss_epoch_U': train_loss_epoch_U,
+                       'train_loss_epoch_V': train_loss_epoch_V,
+                       'train_loss_epoch_Eta': train_loss_epoch_Eta,
+                       'val_loss_epoch': val_loss_epoch
                        }, pkl_filename)
-   
+  
        toc = time.time()
        print('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
        output_file.write('Finished epoch {} at {:0.4f} seconds'.format(epoch, toc - tic)+'\n')
@@ -459,18 +555,18 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    # Plot training and validation loss 
    fig = plt.figure()
    ax1 = fig.add_subplot(111)
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), train_loss_epoch, color='black', label='Total Training Loss')
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), train_loss_epoch_Temp, color='blue', label='Temperature Training Loss')
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), train_loss_epoch_U, color='red', label='U Training Loss')
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), train_loss_epoch_V, color='orange', label='V Training Loss')
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), train_loss_epoch_Eta, color='purple', label='Eta Training Loss')
-   ax1.plot(range(start_epoch, start_epoch+hyper_params["num_epochs"]), val_loss_epoch, color='grey', label='Validation Loss')
+   ax1.plot(range(0, start_epoch+hyper_params["num_epochs"]), train_loss_epoch, color='black', label='Total Training Loss')
+   ax1.plot(range(0          , start_epoch+hyper_params["num_epochs"]), train_loss_epoch_Temp, color='blue', label='Temperature Training Loss')
+   ax1.plot(range(0          , start_epoch+hyper_params["num_epochs"]), train_loss_epoch_U, color='red', label='U Training Loss')
+   ax1.plot(range(0          , start_epoch+hyper_params["num_epochs"]), train_loss_epoch_V, color='orange', label='V Training Loss')
+   ax1.plot(range(0          , start_epoch+hyper_params["num_epochs"]), train_loss_epoch_Eta, color='purple', label='Eta Training Loss')
+   ax1.plot(range(0          , start_epoch+hyper_params["num_epochs"]), val_loss_epoch, color='grey', label='Validation Loss')
    ax1.set_xlabel('Epochs')
    ax1.set_ylabel('Loss')
    ax1.set_yscale('log')
-   ax1.set_ylim(0.02, 0.3)
+   #ax1.set_ylim(0.02, 0.3)
    ax1.legend()
-   plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch'+'_epoch'+str(start_epoch)+'-'+str(epoch)+'.png',
+   plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
@@ -482,13 +578,19 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    #info_file.write('Weights of the network:\n')
    #info_file.write(str(h[0].weight.data.cpu().numpy()))
   
-def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf):
+def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, existing_losses):
    pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
    checkpoint = torch.load(pkl_filename)
    h.load_state_dict(checkpoint['model_state_dict'])
    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
    epoch = checkpoint['epoch']
    loss = checkpoint['loss']
+   existing_losses['train_loss_epoch'] = checkpoint['train_loss_epoch']
+   existing_losses['train_loss_epoch_Temp'] = checkpoint['train_loss_epoch_Temp']
+   existing_losses['train_loss_epoch_U']    = checkpoint['train_loss_epoch_U']
+   existing_losses['train_loss_epoch_V']    = checkpoint['train_loss_epoch_V']
+   existing_losses['train_loss_epoch_Eta']  = checkpoint['train_loss_epoch_Eta']
+   existing_losses['val_loss_epoch'] = checkpoint['val_loss_epoch']
 
    if tr_inf == 'tr':
       h.train()
@@ -584,7 +686,12 @@ def OutputStats(model_name, data_loader, h, no_epochs):
 
    FirstPass = True
 
+   batch_no = 0
+
+   h.train(False)
+
    for batch_sample in data_loader:
+       print('batch_no ; '+str(batch_no))
 
        input_batch  = batch_sample['input']
        target_batch = batch_sample['output']
@@ -596,10 +703,7 @@ def OutputStats(model_name, data_loader, h, no_epochs):
        else:
            input_batch = Variable(input_batch.float())
            target_batch = Variable(target_batch.float())
-       #print('converted to variable and sent to GPU if using')
        
-       h.train(False)
-
        # get prediction from the model, given the inputs
        predicted = h(input_batch)
   
@@ -612,11 +716,14 @@ def OutputStats(model_name, data_loader, h, no_epochs):
  
        del input_batch
        del target_batch
+       del predicted
        gc.collect()
        torch.cuda.empty_cache()
 
        FirstPass = False
+       batch_no = batch_no + 1
 
+   print('all batches done')
    print(targets.shape)
    print(predictions.shape)
 
@@ -640,31 +747,26 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    nc_X = nc_file.createVariable('X', 'i4', 'X')
 
    nc_TrueTemp   = nc_file.createVariable( 'True_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
-   #nc_TrueSal    = nc_file.createVariable( 'True_Sal'   , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueU      = nc_file.createVariable( 'True_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueV      = nc_file.createVariable( 'True_V'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueEta    = nc_file.createVariable( 'True_Eta'   , 'f4', ('T', 'Y', 'X')      )
 
    nc_PredTemp   = nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
-   #nc_PredSal    = nc_file.createVariable( 'Pred_Sal'   , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_PredU      = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_PredV      = nc_file.createVariable( 'Pred_V'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
    nc_PredEta    = nc_file.createVariable( 'Pred_Eta'   , 'f4', ('T', 'Y', 'X')      )
 
    nc_TempErrors = nc_file.createVariable( 'Temp_Errors', 'f4', ('T', 'Z', 'Y', 'X') )
-   #nc_SalErrors  = nc_file.createVariable( 'Sal_Errors' , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_UErrors    = nc_file.createVariable( 'U_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_VErrors    = nc_file.createVariable( 'V_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_EtaErrors  = nc_file.createVariable( 'Eta_Errors' , 'f4', ('T', 'Y', 'X')      )
 
    nc_TempRMS    = nc_file.createVariable( 'TempRMS'    , 'f4', ('Z', 'Y', 'X')      )
-   #nc_SalRMS     = nc_file.createVariable( 'SalRMS'     , 'f4', ('Z', 'Y', 'X')      )
    nc_U_RMS      = nc_file.createVariable( 'U_RMS'      , 'f4', ('Z', 'Y', 'X')      )
    nc_V_RMS      = nc_file.createVariable( 'V_RMS'      , 'f4', ('Z', 'Y', 'X')      )
    nc_EtaRMS     = nc_file.createVariable( 'EtaRMS'     , 'f4', ('Y', 'X')           )
 
    nc_TempCC     = nc_file.createVariable( 'TempCC'     , 'f4', ('Z', 'Y', 'X')      )
-   #nc_SalCC      = nc_file.createVariable( 'SalCC'      , 'f4', ('Z', 'Y', 'X')      )
    nc_U_CC       = nc_file.createVariable( 'U_CC'       , 'f4', ('Z', 'Y', 'X')      )
    nc_V_CC       = nc_file.createVariable( 'V_CC'       , 'f4', ('Z', 'Y', 'X')      )
    nc_EtaCC      = nc_file.createVariable( 'EtaCC'      , 'f4', ('Y', 'X')           )
@@ -676,25 +778,21 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    nc_X[:] = np.arange(targets.shape[3])
    
    nc_TrueTemp[:,:,:,:] = targets[:,0:no_depth_levels,:,:] 
-   #nc_TrueSal[:,:,:,:]  = targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_TrueU[:,:,:,:]    = targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_TrueV[:,:,:,:]    = targets[:,2*no_depth_levels:3*no_depth_levels,:,:]
    nc_TrueEta[:,:,:]    = targets[:,3*no_depth_levels,:,:]
 
    nc_PredTemp[:,:,:,:] = predictions[:,0:no_depth_levels,:,:]
-   #nc_PredSal[:,:,:,:]  = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_PredU[:,:,:,:]    = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_PredV[:,:,:,:]    = predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
    nc_PredEta[:,:,:]    = predictions[:,3*no_depth_levels,:,:]
 
    nc_TempErrors[:,:,:,:] = predictions[:,0:no_depth_levels,:,:] - targets[:,0:no_depth_levels,:,:]
-   #nc_SalErrors[:,:,:,:]  = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_UErrors[:,:,:,:]    = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
    nc_VErrors[:,:,:,:]    = predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] - targets[:,2*no_depth_levels:3*no_depth_levels,:,:]
    nc_EtaErrors[:,:,:]    = predictions[:,3*no_depth_levels,:,:] - targets[:,3*no_depth_levels,:,:]
 
    nc_TempRMS[:,:,:] = np.sqrt( np.mean( np.square(predictions[:,0:no_depth_levels,:,:] - targets[:,0:no_depth_levels,:,:]), axis=0) )
-   #nc_SalRMS[:,:,:]  = np.sqrt( np.mean( np.square(predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]), axis=0) )
    nc_U_RMS[:,:,:]   = np.sqrt( np.mean( np.square(predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]), axis=0) )
    nc_V_RMS[:,:,:]   = np.sqrt( np.mean( np.square(predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] - targets[:,2*no_depth_levels:3*no_depth_levels,:,:]), axis=0) )
    nc_EtaRMS[:,:]    = np.sqrt( np.mean( np.square(predictions[:,3*no_depth_levels,:,:] - targets[:,3*no_depth_levels,:,:]), axis=0) )
@@ -703,34 +801,26 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    #nc_TempCC[:,:,:] = np.corrcoef( predictions[:,0:no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           targets[:,0:no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_Sal_CC[:,:,:] = np.corrcoef( predictions[:,1*no_depth_levels:2*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
+   #nc_U_CC[:,:,:]   = np.corrcoef( predictions[:,1*no_depth_levels:2*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           targets[:,1*no_depth_levels:2*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_U_CC[:,:,:]   = np.corrcoef( predictions[:,2*no_depth_levels:3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
+   #nc_V_CC[:,:,:]   = np.corrcoef( predictions[:,2*no_depth_levels:3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           targets[:,2*no_depth_levels:3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_V_CC[:,:,:]   = np.corrcoef( predictions[:,3*no_depth_levels:4*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,3*no_depth_levels:4*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_EtaCC[:,:,:]  = np.corrcoef( predictions[:,4*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,4*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
+   #nc_EtaCC[:,:,:]  = np.corrcoef( predictions[:,3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
+   #                           targets[:,3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
    #                           rowvar=False ).reshape((predictions.shape[0],1,predictions.shape[2],predictions.shape[3]))
-   #for x in range(targets.shape[3]):
-   #  for y in range(targets.shape[2]):
-   #     for z in range(no_depth_levels):
    if np.isnan(predictions).any():
       print('predictions contains a NaN')
       print('nans at '+str(np.argwhere(np.isnan(predictions))) )
    if np.isnan(targets).any():
       print('targets contains a NaN')
       print('nans at '+str(np.argwhere(np.isnan(targets))) )
-   #for x in range(3):
-   #  for y in range(3):
-   #     for z in range(2):
-   #        nc_TempCC[z,y,x] = np.corrcoef( predictions[:,                  z,y,x], targets[:,                  z,y,x], rowvar=False )[0,1]
-   #        print(nc_TempCC[z,y,x])
-   #        nc_Sal_CC[z,y,x] = np.corrcoef( predictions[:,1*no_depth_levels+z,y,x], targets[:,1*no_depth_levels+z,y,x], rowvar=False )[0,1]
-   #        nc_U_CC[z,y,x]   = np.corrcoef( predictions[:,2*no_depth_levels+z,y,x], targets[:,2*no_depth_levels+z,y,x], rowvar=False )[0,1]
-   #        nc_V_CC[z,y,x]   = np.corrcoef( predictions[:,3*no_depth_levels+z,y,x], targets[:,3*no_depth_levels+z,y,x], rowvar=False )[0,1]
-   #     nc_EtaCC[y,x]  = np.corrcoef( predictions[:,4*no_depth_levels,y,x], targets[:,4*no_depth_levels,y,x], rowvar=False )[0,1]
+   for x in range(targets.shape[3]):
+     for y in range(targets.shape[2]):
+        for z in range(no_depth_levels):
+           nc_TempCC[z,y,x] = np.corrcoef( predictions[:,                  z,y,x], targets[:,                  z,y,x], rowvar=False )[0,1]
+           nc_U_CC[z,y,x]   = np.corrcoef( predictions[:,1*no_depth_levels+z,y,x], targets[:,1*no_depth_levels+z,y,x], rowvar=False )[0,1]
+           nc_V_CC[z,y,x]   = np.corrcoef( predictions[:,2*no_depth_levels+z,y,x], targets[:,2*no_depth_levels+z,y,x], rowvar=False )[0,1]
+        nc_EtaCC[y,x]  = np.corrcoef( predictions[:,3*no_depth_levels,y,x], targets[:,3*no_depth_levels,y,x], rowvar=False )[0,1]
    

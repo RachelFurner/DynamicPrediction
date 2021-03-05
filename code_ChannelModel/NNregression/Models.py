@@ -67,24 +67,24 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, reproduc
          # downscale
          # ****Note scher uses a kernel size of 6, but no idea how he then manages to keep his x and y dimensions
          # unchanged over the conv layers....***
-         nn.Conv2d(in_channels=no_input_channels, out_channels=256, kernel_size=(7,7), padding=(3,3)),
+         nn.Conv2d(in_channels=no_input_channels, out_channels=64 , kernel_size=(7,7), padding=(3,3)),
          nn.ReLU(True),
          nn.MaxPool2d((2,2)),
-         nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(7,7),padding=(3,3)),
+         nn.Conv2d(in_channels=64 , out_channels=64 , kernel_size=(7,7),padding=(3,3)),
          nn.ReLU(True),
          nn.MaxPool2d((2,2)),
    
-         nn.ConvTranspose2d(in_channels=512, out_channels=1024, kernel_size=(7,7), padding=(3,3)),
+         nn.ConvTranspose2d(in_channels=64 , out_channels=64  , kernel_size=(7,7), padding=(3,3)),
          nn.ReLU(True),
    
          # upscale
-         nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=(7,7), padding=(3,3)),
+         nn.Conv2d(in_channels=64  , out_channels=64 , kernel_size=(7,7), padding=(3,3)),
          nn.ReLU(True),
          nn.Upsample(scale_factor=(2,2)),
-         nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(7,7), padding=(3,3)),
+         nn.Conv2d(in_channels=64 , out_channels=64 , kernel_size=(7,7), padding=(3,3)),
          nn.ReLU(True),
          nn.Upsample(scale_factor=(2,2)),
-         nn.Conv2d(in_channels=256, out_channels=no_target_channels, kernel_size=(7,7), padding=(3,3)),
+         nn.Conv2d(in_channels=64 , out_channels=no_target_channels, kernel_size=(7,7), padding=(3,3)),
          nn.ReLU(True)
           )
       h = h.cuda()
@@ -123,9 +123,9 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, reproduc
 
         def forward(self, x):
            enc1 = self.encoder1(x)
-           print('enc1.shape; '+str(enc1.shape))
+           #print('enc1.shape; '+str(enc1.shape))
            enc2 = self.encoder2(self.pool1(enc1))
-           print('enc2.shape; '+str(enc2.shape))
+           #print('enc2.shape; '+str(enc2.shape))
            #enc3 = self.encoder3(self.pool2(enc2))
            #print('enc3.shape; '+str(enc3.shape))
            #enc4 = self.encoder4(self.pool3(enc3))
@@ -148,21 +148,21 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, reproduc
            #print('dec3.shape  c; '+str(dec3.shape))
 
            bottleneck = self.bottleneck(self.pool2(enc2))
-           print('bottleneck.shape; '+str(bottleneck.shape))
+           #print('bottleneck.shape; '+str(bottleneck.shape))
 
            #dec2 = self.upconv2(dec3)
            dec2 = self.upconv2(bottleneck)
-           print('dec2.shape  a; '+str(dec2.shape))
+           #print('dec2.shape  a; '+str(dec2.shape))
            dec2 = torch.cat((dec2, enc2), dim=1)
-           print('dec2.shape  b; '+str(dec2.shape))
+           #print('dec2.shape  b; '+str(dec2.shape))
            dec2 = self.decoder2(dec2)
-           print('dec2.shape  c; '+str(dec2.shape))
+           #print('dec2.shape  c; '+str(dec2.shape))
            dec1 = self.upconv1(dec2)
-           print('dec1.shape  a; '+str(dec1.shape))
+           #print('dec1.shape  a; '+str(dec1.shape))
            dec1 = torch.cat((dec1, enc1), dim=1)
-           print('dec1.shape  b; '+str(dec1.shape))
+           #print('dec1.shape  b; '+str(dec1.shape))
            dec1 = self.decoder1(dec1)
-           print('dec1.shape  c; '+str(dec1.shape))
+           #print('dec1.shape  c; '+str(dec1.shape))
            return self.conv(dec1)
 
         @staticmethod

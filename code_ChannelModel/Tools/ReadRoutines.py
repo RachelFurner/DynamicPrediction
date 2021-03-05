@@ -55,27 +55,23 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
 
    def __getitem__(self, idx):
 
-       land = 100 # Ignore y cells past 100 as these are land 
+       da_T_in_tmp = self.ds_inputs['THETA'].values[idx,:,:,:] 
+       da_T_in     = 0.5 * (da_T_in_tmp[:,:-1,:]+da_T_in_tmp[:,1:,:]) # average to get onto same grid as V points  
+       da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:,:]
+       da_U_in_tmp = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average x dir onto same grid as T points  
+       da_U_in     = 0.5 * (da_U_in_tmp[:,:-1,:]+da_U_in_tmp[:,1:,:]) # average y dir onto same grid as V points  
+       da_V_in     = self.ds_inputs['VVEL'].values[idx,:,1:-1,:]      # Ignore first and last points as both zero
+       da_Eta_in_tmp = self.ds_inputs['ETAN'].values[idx,0,:,:]
+       da_Eta_in   = 0.5 * (da_Eta_in_tmp[:-1,:]+da_Eta_in_tmp[1:,:]) # average to get onto same grid as V points  
 
-       da_T_in     = self.ds_inputs['THETA'].values[idx,:,:land,:] 
-       #da_S_in     = self.ds_inputs['SALT'].values[idx,:,:land,:] 
-       da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:land,:]
-       da_U_in     = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average to get onto same grid as T points  
-       da_V_in     = self.ds_inputs['VVEL'].values[idx,:,:land,:] # Note land covers the extra point, so no need to average here 
-       da_Eta_in   = self.ds_inputs['ETAN'].values[idx,0,:land,:]
-
-       da_T_out     = self.ds_outputs['THETA'].values[idx,:,:land,:]
-       #da_S_out     = self.ds_outputs['SALT'].values[idx,:,:land,:]
-       da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:land,:]
-       da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
-       da_V_out     = self.ds_outputs['VVEL'].values[idx,:,:land,:]  # Note land covers the extra point, so no need to average here
-       da_Eta_out   = self.ds_outputs['ETAN'].values[idx,0,:land,:]
-
-       #da_mask = self.ds_inputs['Mask'].values[:,:,:]
-       #mask = np.ones((da_T_in.shape[0],da_T_in.shape[1],da_T_in.shape[2]))
-       #print('mask.shape:')
-       #print(mask.shape)
-       #mask[:,100:,:] = 0
+       da_T_out_tmp = self.ds_outputs['THETA'].values[idx,:,:,:]
+       da_T_out     = 0.5 * (da_T_out_tmp[:,:-1,:]+da_T_out_tmp[:,1:,:]) # average to get onto same grid as V points  
+       da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:,:]
+       da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
+       da_U_out     = 0.5 * (da_U_out_tmp[:,:-1,:]+da_U_out_tmp[:,1:,:])  # average y dir onto same grid as V points  
+       da_V_out     = self.ds_outputs['VVEL'].values[idx,:,1:-1,:]        # Ignore first and last points as both zero
+       da_Eta_out_tmp = self.ds_outputs['ETAN'].values[idx,0,:,:]
+       da_Eta_out   = 0.5 * (da_Eta_out_tmp[:-1,:]+da_Eta_out_tmp[1:,:]) # average to get onto same grid as V points  
 
        if np.isnan(da_T_in).any():
           print('da_T_in contains a NaN')
