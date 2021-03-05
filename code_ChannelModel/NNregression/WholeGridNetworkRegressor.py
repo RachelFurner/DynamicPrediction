@@ -60,7 +60,7 @@ torch.cuda.empty_cache()
 tic = time.time()
 #-------------------------------------
 # Manually set variables for this run
-#-------------------------------------
+#--------------------------------------
 TEST = False
 CalculatingMeanStd = True 
 TrainingModel      = True 
@@ -107,7 +107,7 @@ model_name = name_prefix+model_style+'_lr'+str(hyper_params['learning_rate'])
 
 # Overwrite certain variables if testing code and set up test bits
 if TEST:
-   hyper_params['batch_size'] =  4
+   hyper_params['batch_size'] = 16
    hyper_params['num_epochs'] = 1
    subsample_rate = 1000 # Keep datasets small when in testing mode
    model_name = model_name + '_TEST'
@@ -133,6 +133,9 @@ print('Model ; '+model_name+'\n')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using device: '+device+'\n')
 output_file.write('Using device: '+device+'\n')
+
+print('Batch Size: '+str(hyper_params['batch_size'])+'\n')
+output_file.write('Batch Size: '+str(hyper_params['batch_size'])+'\n')
 
 # Set variables to remove randomness and ensure reproducible results
 if reproducible:
