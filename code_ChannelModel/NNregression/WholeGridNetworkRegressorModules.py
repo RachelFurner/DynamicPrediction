@@ -33,6 +33,10 @@ import netCDF4 as nc4
 import time as time
 import gc
 
+import multiprocessing as mp
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 #add this routine for memory profiling
 def sizeof_fmt(num, suffix='B'):
     ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
@@ -127,7 +131,7 @@ def CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, da
    no_channels = input_batch.shape[1]
 
    ## Save to file, so can be used to un-normalise when using model to predict
-   mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/Channel_Whole_Grid_'+model_name+'_MeanStd.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, no_channels)
    
    output_file.write('no_channels ;'+str(no_channels)+'\n')
@@ -140,7 +144,7 @@ def CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, da
 
 
 def ReadMeanStd(model_name, output_file=None):
-   mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/Channel_Whole_Grid_'+model_name+'_MeanStd.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
@@ -178,7 +182,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    first_pass = True
    torch.cuda.empty_cache()
    
-   plot_dir = '../../../Channel_nn_Outputs/PLOTS/'+model_name
+   plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/PLOTS/'
    if not os.path.isdir(plot_dir):
       os.system("mkdir %s" % (plot_dir))
    
@@ -531,7 +535,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            ### SAVE IT ###
            print('save model \n')
            output_file.write('save model \n')
-           pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
+           pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
            #torch.save(h.state_dict(), pkl_filename)
            torch.save({
                        'epoch': epoch,
@@ -570,7 +574,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   info_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_info.txt'
+   info_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_info.txt'
    info_file = open(info_filename, 'w')
    np.set_printoptions(threshold=np.inf)
    info_file.write('hyper_params:    '+str(hyper_params)+'\n')
@@ -579,7 +583,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    #info_file.write(str(h[0].weight.data.cpu().numpy()))
   
 def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, existing_losses):
-   pkl_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
+   pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
    checkpoint = torch.load(pkl_filename)
    h.load_state_dict(checkpoint['model_state_dict'])
    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -624,7 +628,7 @@ def OutputSinglePrediction(model_name, Train_Dataset, h, no_epochs):
    predicted     = rr.RF_DeNormalise(predicted    , data_mean, data_std, data_range)
    
    # Set up netcdf files
-   nc_filename = '../../../Channel_nn_Outputs/STATS/'+model_name+'_'+str(no_epochs)+'epochs_DummyOutput.nc'
+   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_DummyOutput.nc'
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
    no_depth_levels = 38  # Hard coded...perhaps should change...?
@@ -732,7 +736,7 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    predictions = rr.RF_DeNormalise(predictions, data_mean, data_std, data_range)
    
    # Set up netcdf files
-   nc_filename = '../../../Channel_nn_Outputs/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput.nc'
+   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput.nc'
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
    no_depth_levels = 38  # Hard coded...perhaps should change...?
@@ -787,29 +791,28 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    nc_PredV[:,:,:,:]    = predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
    nc_PredEta[:,:,:]    = predictions[:,3*no_depth_levels,:,:]
 
-   nc_TempErrors[:,:,:,:] = predictions[:,0:no_depth_levels,:,:] - targets[:,0:no_depth_levels,:,:]
-   nc_UErrors[:,:,:,:]    = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
-   nc_VErrors[:,:,:,:]    = predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] - targets[:,2*no_depth_levels:3*no_depth_levels,:,:]
-   nc_EtaErrors[:,:,:]    = predictions[:,3*no_depth_levels,:,:] - targets[:,3*no_depth_levels,:,:]
+   nc_TempErrors[:,:,:,:] = ( predictions[:,0:no_depth_levels,:,:]
+                              - targets[:,0:no_depth_levels,:,:] )
+   nc_UErrors[:,:,:,:]    = ( predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
+                              - targets[:,1*no_depth_levels:2*no_depth_levels,:,:] )
+   nc_VErrors[:,:,:,:]    = ( predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] 
+                              - targets[:,2*no_depth_levels:3*no_depth_levels,:,:] )
+   nc_EtaErrors[:,:,:]    = ( predictions[:,3*no_depth_levels,:,:] 
+                              - targets[:,3*no_depth_levels,:,:] )
 
-   nc_TempRMS[:,:,:] = np.sqrt( np.mean( np.square(predictions[:,0:no_depth_levels,:,:] - targets[:,0:no_depth_levels,:,:]), axis=0) )
-   nc_U_RMS[:,:,:]   = np.sqrt( np.mean( np.square(predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]), axis=0) )
-   nc_V_RMS[:,:,:]   = np.sqrt( np.mean( np.square(predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] - targets[:,2*no_depth_levels:3*no_depth_levels,:,:]), axis=0) )
-   nc_EtaRMS[:,:]    = np.sqrt( np.mean( np.square(predictions[:,3*no_depth_levels,:,:] - targets[:,3*no_depth_levels,:,:]), axis=0) )
+   nc_TempRMS[:,:,:] = np.sqrt( np.mean( np.square(
+                                             predictions[:,0:no_depth_levels,:,:]
+                                             - targets[:,0:no_depth_levels,:,:]), axis=0) )
+   nc_U_RMS[:,:,:]   = np.sqrt( np.mean( np.square(
+                                             predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] 
+                                             - targets[:,1*no_depth_levels:2*no_depth_levels,:,:]), axis=0) )
+   nc_V_RMS[:,:,:]   = np.sqrt( np.mean( np.square(
+                                             predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
+                                             - targets[:,2*no_depth_levels:3*no_depth_levels,:,:]), axis=0) )
+   nc_EtaRMS[:,:]    = np.sqrt( np.mean( np.square(
+                                             predictions[:,3*no_depth_levels,:,:]
+                                             - targets[:,3*no_depth_levels,:,:]), axis=0) )
 
-   # Use a loop for corellation coefficients, as get memory errors otherwise...
-   #nc_TempCC[:,:,:] = np.corrcoef( predictions[:,0:no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,0:no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_U_CC[:,:,:]   = np.corrcoef( predictions[:,1*no_depth_levels:2*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,1*no_depth_levels:2*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_V_CC[:,:,:]   = np.corrcoef( predictions[:,2*no_depth_levels:3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,2*no_depth_levels:3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           rowvar=False ).reshape((predictions.shape[0],no_depth_levels,predictions.shape[2],predictions.shape[3]))
-   #nc_EtaCC[:,:,:]  = np.corrcoef( predictions[:,3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           targets[:,3*no_depth_levels,:,:].reshape((predictions.shape[0],-1)), 
-   #                           rowvar=False ).reshape((predictions.shape[0],1,predictions.shape[2],predictions.shape[3]))
    if np.isnan(predictions).any():
       print('predictions contains a NaN')
       print('nans at '+str(np.argwhere(np.isnan(predictions))) )

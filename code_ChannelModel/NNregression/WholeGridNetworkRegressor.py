@@ -38,6 +38,10 @@ import netCDF4 as nc4
 import time as time
 import gc
 
+import multiprocessing as mp
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 #add this routine for memory profiling
 def sizeof_fmt(num, suffix='B'):
     ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
@@ -65,12 +69,12 @@ TEST = False
 CalculatingMeanStd = True 
 TrainingModel      = True 
 LoadSavedModel = False
-saved_epochs = 0 
+saved_epochs =  0 
+Predict = True 
 
-name_prefix = '1MultipleWorker_'
-#name_prefix = ''
+name_prefix = 'ReflPadNS_CircPadEW_'
+#name_prefix = 'NewGrid_'
 
-#model_style = 'ScherStyle'
 model_style = 'UNet'
 
 hyper_params = {
@@ -79,13 +83,13 @@ hyper_params = {
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
     }
-num_workers = 1
+num_workers = 0
 
-#subsample_rate = 5      # number of time steps to skip over when creating training and test data
+subsample_rate = 5      # number of time steps to skip over when creating training and test data
 train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 #subsample_rate = 10000  # Gives a single training sample
-subsample_rate = 50     # number of time steps to skip over when creating training and test data
+#subsample_rate = 500     # number of time steps to skip over when creating training and test data
 #train_end_ratio = 0.5   # Take training samples from 0 to this far through the dataset
 #val_end_ratio = 0.99    # Take validation samples from train_end_ratio to this far through the dataset
 
@@ -97,7 +101,7 @@ save_freq = 10      # Plot scatter plot, and save the model every n epochs (save
 reproducible = True
 seed_value = 12321
 
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
+DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_97x240Domain/runs/100yrs/'
 #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
 #MITGCM_filename = DIR+'daily_ave_50yrs_cutout.nc'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
@@ -112,7 +116,14 @@ if TEST:
    subsample_rate = 1000 # Keep datasets small when in testing mode
    model_name = model_name + '_TEST'
 
-output_filename = '../../../Channel_nn_Outputs/MODELS/'+model_name+'_Output.txt'
+model_dir = '../../../Channel_nn_Outputs/'+model_name
+if not os.path.isdir(model_dir):
+   os.system("mkdir %s" % (model_dir))
+   os.system("mkdir %s" % (model_dir+'/MODELS'))
+   os.system("mkdir %s" % (model_dir+'/PLOTS'))
+   os.system("mkdir %s" % (model_dir+'/STATS'))
+
+output_filename = '../../../Channel_nn_Outputs/'+model_name+'/'+model_name+'_Output.txt'
 output_file = open(output_filename, 'w', buffering=1)
 
 ds       = xr.open_dataset(MITGCM_filename)
@@ -222,13 +233,16 @@ TimeCheck(tic, output_file, 'training model')
 #------------------
 #OutputSinglePrediction(model_name, Train_Dataset, h, saved_epochs+hyper_params['num_epochs'])
 
-if TrainingModel:
-   OutputStats(model_name, train_loader, h, saved_epochs+hyper_params['num_epochs'])
-else:
-   OutputStats(model_name, train_loader, h, saved_epochs)
+if Predict:
+
+   if TrainingModel:
+      OutputStats(model_name, train_loader, h, saved_epochs+hyper_params['num_epochs'])
+   else:
+      OutputStats(model_name, train_loader, h, saved_epochs)
 
 TimeCheck(tic, output_file, 'assessing model')
 
 TimeCheck(tic, output_file, 'script')
 
 output_file.close()
+
