@@ -2,23 +2,19 @@
 Series of scripts used to create and assess linear regressor for prediction of ocean temperature evolution, 
 and to plot output from the MITgcm run used as training data.
 
-
 PlotMITGCM contains scripts to plot he MITgcm data which is used as training and val data.
 Plot_MITGCM_sector.py plots instantaneous fields from the model for various cross sections/birds eye views, and plots time series.
 CalcAvMITgcmFields.py calculates the average trends (i.e. advection and diffusion), and saves these into another netcdf file.
 Plot_AvMITgcmFields.py plots the fields created by CalcAvMITgcmFields.py
 
-
 LinearRegressionModel/TrainLinearRegressionModel.py creates the linear model and does some assesment
 of results over the training and val datasets.
-
 
 AnalysisScripts contains scripts which provide further analysis of the model performance
 Plot_coefficients.py plots the coefficients of the linear model, enabling assessment of which are most heavily weighted.
 CalcAvErrors.py makes a number of one-step predictions, and then averages the error from these to give average
 error fields which are stored in a netcdf file.
 Plot_AvPredFields.py plots the average errors created above, giving cross sections of the spatial patterns of averaged errors.
-
 
 Tools contains a variety of functions called by other scripts within this code set.
 
