@@ -1,7 +1,8 @@
-# Script to plot the coefficients from a linear regression model
-# outputted as an array into an npz file, which is read in here, 
+# Script written by Rachel Furner
+# Plots the coefficients from linear regression model (which were
+# outputted as an array into an npz file, which is read in here) 
 # rearranged and padded with NaNs to form a grid of interactions
-# and then plotted with imshow
+# and then plotted.
 
 import sys
 sys.path.append('../Tools')
@@ -18,20 +19,19 @@ import os
 plot_log = False
 
 run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
-model_type = 'lr'
 
-time_step = '24hrs'
 data_prefix=''
 model_prefix = 'alpha.001_'
 exp_prefix = ''
 
-#-----------
-data_name = cn.create_dataname(run_vars)
-data_name = data_prefix+data_name+'_'+time_step
+#-----------------------------------------------
+# Calc other variables - these shouldn't change
+#-----------------------------------------------
+data_name = data_prefix+cn.create_dataname(run_vars)
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
-rootdir = '../../../'+model_type+'_Outputs/'
+rootdir = '../../../lr_Outputs/'
 
 plotdir = rootdir+'PLOTS/'+model_name+'/COEFFS'
 if not os.path.isdir(plotdir):
@@ -41,8 +41,10 @@ plt.rcParams.update({'font.size': 10})
 plt.rc('font', family='sans serif')
 plt.rc('xtick', labelsize='x-small')
 plt.rc('ytick', labelsize='x-small')
+
 #-----------------------------------------------
 # Create list of tick labels and tick locations
+# This is semi manual - not ideal but it works
 #-----------------------------------------------
 tick_labels = []      # List of names of ticks - labels of each group of variables
 tick_locations = []   # List of locations to put the ticks - these should be the centre of each group.
@@ -226,7 +228,6 @@ if run_vars['lat'] or run_vars['lon'] or run_vars['dep']:
 #--------------------------------
 
 coef_filename = rootdir+'MODELS/'+exp_name+'_coefs.npz'
-#intercept, raw_coeffs = np.load(coef_filename).values()
 coeff_data = np.load(coef_filename)
 intercept  = coeff_data['arr_0']
 raw_coeffs = coeff_data['arr_1']
@@ -236,15 +237,15 @@ raw_coeffs=raw_coeffs.reshape(1,-1)
 print('raw_coeffs.shape')
 print(raw_coeffs.shape)
 
+#-----------------------------------------
+# Do linear model version first - easiest
+#-----------------------------------------
 if run_vars['poly_degree'] is 1:
    # Reshape and pad with NaNs to get as array of polynomial interactions
    # and convert to abs value
-   coeffs = np.empty((2, no_inputs))
+   coeffs = np.empty((1, no_inputs))
    coeffs[:,:] = np.nan     
-   start = 0
-   # force 1st and second row to repeat 1x info, to emphasise this.
    coeffs[0,:] = np.absolute(raw_coeffs[0,:no_inputs])
-   coeffs[1,:] = np.absolute(raw_coeffs[0,:no_inputs])
    
    # Replace points which are exactly zero with NaNs
    coeffs=np.where(coeffs == 0.0, np.nan, coeffs)
@@ -284,7 +285,6 @@ if run_vars['poly_degree'] is 1:
    
    # Create colorbar
    cbar = ax.figure.colorbar(im, ax=ax, shrink=0.6)#, extend='min')
-   #cbar.ax.set_ylabel('coefficient magnitude',rotation=-90, va="bottom")
    cbar.ax.set_ylabel('coefficient magnitude', va="bottom")
    
    # Set tick labels
@@ -308,12 +308,15 @@ if run_vars['poly_degree'] is 1:
    fig.tight_layout()
    plt.savefig(plotdir+'/'+exp_name+'_coeffs.png', bbox_inches = 'tight', pad_inches = 0.1)
    
+   #---------------------------------------
+   # Do Polynomial version... more complex
+   #---------------------------------------
 elif run_vars['poly_degree'] is 2:
    # Reshape and pad with NaNs to get as array of polynomial interactions
    # and convert to abs value
    coeffs = np.empty((no_inputs+2,no_inputs))
    coeffs[:,:] = np.nan     
-   start = 0   # start of data fro each row. Should be one on from diagonal term
+   start = 0   # start of data for each row. Should be one on from diagonal term
    # force second and third row to repeat 1x info, to emphasise this.
    coeffs[0,:] = np.absolute(raw_coeffs[0,:no_inputs])
    coeffs[1,:] = np.absolute(raw_coeffs[0,:no_inputs])
@@ -391,7 +394,7 @@ elif run_vars['poly_degree'] is 2:
    plt.text(0.03, 0.88, '(a)', transform=fig.transFigure)  
 
    fig.tight_layout()
-   plt.savefig(plotdir+'/fig06a.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
+   plt.savefig(plotdir+'/Sup_fig06.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
   
    #---------------------------------
    # Plot averaged for each variable
@@ -429,7 +432,7 @@ elif run_vars['poly_degree'] is 2:
    plt.text(0.03, 0.88, '(a)', transform=fig.transFigure)  
  
    fig.tight_layout()
-   plt.savefig(plotdir+'/fig06a_Av.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
+   plt.savefig(plotdir+'/fig06a.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
   
    #-----------------------
    # Plot individual boxes

@@ -1,23 +1,15 @@
-# Script to calculate errors from a model, and plot these
-# as a histogram, and spatially
+# Script written by Rachel Furner
+# Calculates average trends from various processes across 
+# a dataset of MITgcm output - the trends are outputted by 
+# MITgcm, and the script here reads them in and averages them
 
 import numpy as np
-import matplotlib.pyplot as plt
-
-import sys
-sys.path.append('../Tools')
-import CreateDataName as cn
-import Iterator as it
-import Model_Plotting as rfplt
-import AssessModel as am
-import Network_Classes as nc
 import xarray as xr
-import pickle
 import netCDF4 as nc4
-import torch
 
-plt.rcParams.update({'font.size': 14})
-
+#------------------
+# Set up variables 
+#------------------
 no_points = 500  # in months/days
 skip_rate = 14   # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
@@ -65,7 +57,7 @@ nc_Av_VVELTH  = nc_file.createVariable('Av_VVELTH' , 'f4', ('Z', 'Yp1', 'X'))
 nc_Av_WVELTH  = nc_file.createVariable('Av_WVELTH' , 'f4', ('Z', 'Y', 'X'))
 
 print('fill netcdf file')   
-# Fill Variables
+# Calc averages and add data to netcdf file
 nc_Z[:] = ds['Z'].data
 nc_Y[:] = ds['Y'].data
 nc_X[:] = ds['X'].data

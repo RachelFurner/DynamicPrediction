@@ -1,23 +1,22 @@
-# Modules containing functions to assess models
-# functions include:
+# Script written by Rachel Furner
+# Contains functions to assess data-driven models:
 #     stats: function to create stats comparing two models and output these to a file
 #     plotting: function to create plots comparing truth to predictions
 
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
-
-from sklearn.metrics import classification_report
 import sklearn.metrics as metrics
 
+# Set Plotting variables
 plt.rcParams.update({'font.size': 10})
 plt.rc('font', family='sans serif')
 plt.rc('xtick', labelsize='x-small')
 plt.rc('ytick', labelsize='x-small')
 
-def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name=None):
+# Calculate stats from model truth and predictions and write to txt file
+def get_stats(exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None, exp2=None, pers2=None, name=None):
 
-   # calculate stats
    truth1=truth1.reshape(-1)
    exp1=exp1.reshape(-1)
    exp1_mse = metrics.mean_squared_error(truth1, exp1)
@@ -40,7 +39,7 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
       exp2_corcoef=None
   
    # Print to file
-   outdir = '../../../'+model_type+'_Outputs/'
+   outdir = '../../../lr_Outputs/'
 
    stats_filename = outdir+'STATS/'+exp_name+'_'+name+'.txt'
    stats_file=open(stats_filename,"w")
@@ -65,15 +64,11 @@ def get_stats(model_type, exp_name, name1, truth1, exp1, pers1=None, name2=None,
 
    return(exp1_mse, exp2_mse)   
 
-  
-def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True, top=None, bottom=None, text=None):
  
-   plt.rcParams.update({'font.size': 10})
-   plt.rc('font', family='sans serif')
-   plt.rc('xtick', labelsize='x-small')
-   plt.rc('ytick', labelsize='x-small')
-
-   outdir = '../../../'+model_type+'_Outputs/'
+# Make scatter plot of predictions against truth 
+def plot_scatter(model_name, data1, data2, name='norm', xlabel=None, ylabel=None, exp_cor=True, top=None, bottom=None, text=None):
+ 
+   outdir = '../../../lr_Outputs/'
 
    data1=data1.reshape(-1)
    data2=data2.reshape(-1)
@@ -101,11 +96,10 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
    ax1.scatter(data1, data2, edgecolors=(0, 0, 0), alpha=0.15)
    ax1.set_xlabel(xlabel)
    ax1.set_ylabel(ylabel)
-   #ax1.set_title(name)
    ax1.set_xlim(bottom, top)
    ax1.set_ylim(bottom, top)
 
-   # If we expect the dataset to be correlated calc the cor coefficient, and print this to graph, with 1-2-1 cor line
+   # If we expect the dataset to be correlated calc the cor coefficient, and print this to graph along with 1-2-1 cor line
    if exp_cor == True:
       ax1.plot([bottom, top], [bottom, top], 'k--', lw=1)
       # Calculate the correlation coefficient and mse
@@ -118,7 +112,8 @@ def plot_results(model_type, model_name, data1, data2, name='norm', xlabel=None,
    else:  # Assume we expect points to fit on 0 line, i.e. plotting errors against something
       ax1.plot([bottom, top], [0, 0], 'k--', lw=1)
    
-   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel_filename+'Vs'+ylabel_filename+'_'+name+'.png', bbox_inches = 'tight', pad_inches = 0.1) #  Leave as png, as otherwise far far too large filesize! , format='eps')
+   plt.savefig(outdir+'PLOTS/'+model_name+'/'+model_name+'_scatter_'+xlabel_filename+'Vs'+ylabel_filename+'_'+name+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1) #  Leave as png, far too large filesize if eps!
    plt.close()
  
    return()

@@ -1,42 +1,31 @@
-# Script to define iterator used to forecast for MITGCM sector config domain,
-# using machine learning/stats based models
+# Script written by Rachel Furner
+# Defines iterator used to make predictions for MITGCM sector config domain,
 
 import sys
 sys.path.append('../Tools')
-import CreateDataName as cn
 import ReadRoutines as rr
-
 import numpy as np
-from sklearn.preprocessing import PolynomialFeatures
-from skimage.util import view_as_windows
-
-
-from torch.utils import data
-import torch.nn as nn
-from torch.autograd import Variable
-import torch
-
 
 #-----------------
 # Define iterator
 #-----------------
 
-def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, start=None, model_type='lr', method='AB1', outs=None):
+def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, start=None, method='AB1', outs=None):
 
     if start is None:
        start = 0
 
-    da_T=ds['Ttave'][start:start+num_steps+1,:,:,:].values
-    da_S=ds['Stave'][start:start+num_steps+1,:,:,:].values
-    da_U_temp=ds['uVeltave'][start:start+num_steps+1,:,:,:].values
-    da_V_temp=ds['vVeltave'][start:start+num_steps+1,:,:,:].values
-    da_Kwx=ds['Kwx'].values
-    da_Kwy=ds['Kwy'].values
-    da_Kwz=ds['Kwz'].values
-    da_Eta=ds['ETAtave'][start:start+num_steps+1,:,:].values
-    da_lat=ds['Y'][:].values
-    da_lon=ds['X'][:].values
-    da_depth=ds['Z'][:].values
+    da_T =      ds['Ttave'][start:start+num_steps+1,:,:,:].values
+    da_S =      ds['Stave'][start:start+num_steps+1,:,:,:].values
+    da_U_temp = ds['uVeltave'][start:start+num_steps+1,:,:,:].values
+    da_V_temp = ds['vVeltave'][start:start+num_steps+1,:,:,:].values
+    da_Kwx =    ds['Kwx'][start:start+num_steps+1,:,:,:].values
+    da_Kwy =    ds['Kwy'][start:start+num_steps+1,:,:,:].values
+    da_Kwz =    ds['Kwz'][start:start+num_steps+1,:,:,:].values
+    da_Eta =    ds['ETAtave'][start:start+num_steps+1,:,:].values
+    da_lat =    ds['Y'][:].values
+    da_lon =    ds['X'][:].values
+    da_depth =  ds['Z'][:].values
     # Calc U and V by averaging surrounding points, to get on same grid as other variables
     da_U = (da_U_temp[:,:,:,:-1]+da_U_temp[:,:,:,1:])/2.
     da_V = (da_V_temp[:,:,:-1,:]+da_V_temp[:,:,1:,:])/2.
@@ -47,13 +36,13 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
     y_size = da_T.shape[2]
     z_size = da_T.shape[1]
 
-    # Set up array to hold predictions and fill for spaces we won't predict
+    # Set up array to hold predictions and fill with NaNs
     predictions = np.empty((num_steps+1, z_size, y_size, x_size))
     predictions[:,:,:,:] = np.nan
     outputs = np.empty((num_steps+1, z_size, y_size, x_size))
     outputs[:,:,:,:] = np.nan
 
-    # Set initial conditions to match either initial conditions passed to function, or temp at time 0
+    # Set initial conditions to match either initial conditions passed to function, or temp at start time
     if init is None:
         predictions[0,:,:,:] = da_T[0,:,:,:]
     else:
@@ -61,7 +50,6 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
    
     #Read in mean and std to normalise inputs
     mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
-    #input_mean, input_std, output_mean, output_std = np.load(mean_std_file).values()
     mean_std_data = np.load(mean_std_file)
     input_mean  = mean_std_data['arr_0']
     input_std   = mean_std_data['arr_1']
@@ -111,7 +99,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
 
     # Set upper and lower points for all three regions
     x_lw = [1, 0, x_size-2]
-    x_up = [x_size-2, 1, x_size]   # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
+    x_up = [x_size-2, 1, x_size]     # one higher than the point we want to forecast for, i.e. first point we're not forecasting 
     y_lw = [1, 1, 1]
     y_up = [y_size-3, 15, 15]        # one higher than the point we want to forecast for, i.e. first point we're not forecasting
     z_lw = [1, 1, 1]
@@ -177,7 +165,7 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
     bdy_mask[:31, 15, -1] = 0    # Mask grid point just South of land split for shallow depths                             
     bdy_mask = bdy_mask.astype(int)  
 
-    # combine both to a single mask of all point that we don't forecast
+    # combine both to a single mask of all points that we don't forecast
     mask = np.ones((z_size, y_size, x_size))
     mask[bdy_mask==0] = 0
     mask[land_mask==0] = 0
@@ -278,18 +266,10 @@ def iterator(data_name, run_vars, model, num_steps, ds, density, init=None, star
               print( 'Nan at ' + str( np.argwhere(np.isnan(inputs)) ) )
                     
            # predict and then de-normalise outputs
-           if model_type == 'lr':
-               out_temp = model.predict(inputs)
-               if np.isnan(out_temp).any():
-                  print( 'out_temp array contains a NaN at ' + str( np.argwhere(np.isnan(out_temp)) ) )
-               out_temp = out_temp * output_std + output_mean
-           elif model_type == 'nn':
-               if torch.cuda.is_available():
-                  inputs = Variable(torch.from_numpy(inputs).cuda().float())
-               else:
-                  inputs = Variable(torch.from_numpy(inputs).float())
-               out_temp = model(inputs).cpu().detach().numpy()
-               out_temp = out_temp * output_std + output_mean
+           out_temp = model.predict(inputs)
+           if np.isnan(out_temp).any():
+              print( 'out_temp array contains a NaN at ' + str( np.argwhere(np.isnan(out_temp)) ) )
+           out_temp = out_temp * output_std + output_mean
 
            # reshape out
            out_t[ z_lw[region]:z_up[region], y_lw[region]:y_up[region], x_lw[region]:x_up[region] ] = \

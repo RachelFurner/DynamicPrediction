@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
+# 
+# Script written by Rachel Furner
+# Plots the fields created by CalcAvErrors.py, giving cross sections
+# which show spatial distribution of average errors from linear regressor 
+# predictions
 
 print('import packages')
 import sys
@@ -9,13 +14,7 @@ import Model_Plotting as rfplt
 
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import linear_model
-from sklearn.preprocessing import PolynomialFeatures
-from skimage.util import view_as_windows
-import os
 import xarray as xr
-import pickle
-from netCDF4 import Dataset
 
 plt.rcParams.update({'font.size': 10})
 plt.rc('font', family='sans serif')
@@ -27,10 +26,8 @@ plt.rc('ytick', labelsize='x-small')
 #----------------------------
 point = [ 2, 8, 6]
 
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
-model_type = 'lr'
+run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 
-time_step = '24hrs'
 data_prefix=''
 exp_prefix = ''
 model_prefix = 'alpha.001_'
@@ -38,14 +35,15 @@ model_prefix = 'alpha.001_'
 DIR  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/mnc_test_0002/'
 MITGCM_filename=DIR+'cat_tave.nc'
 
-#-----------
-data_name = cn.create_dataname(run_vars)
-data_name = data_prefix+data_name+'_'+time_step 
+#-----------------------------------------------
+# Calc other variables - these shouldn't change
+#-----------------------------------------------
+data_name = data_prefix + cn.create_dataname(run_vars)
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
-cntrl_name = exp_prefix+model_prefix+data_prefix+'3dLatLonDepUVBolSalEtaDnsPolyDeg2_'+time_step
+cntrl_name = exp_prefix+model_prefix+data_prefix+'3dLatLonDepUVBolSalEtaDnsPolyDeg2'
 
-rootdir = '../../../'+model_type+'_Outputs/'
+rootdir = '../../../lr_Outputs/'
 
 level = point[0]
 y_coord = point[1]

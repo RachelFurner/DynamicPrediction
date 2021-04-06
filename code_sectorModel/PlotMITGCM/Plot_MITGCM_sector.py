@@ -1,25 +1,22 @@
 #!/usr/bin/env python
 # coding: utf-8
+# 
+# Script written by Rachel Furner
+# Plots instantaneous fields from MITgcm dataset, for 
+# various cross sections
 
 print('import packages')
 import sys
 sys.path.append('../Tools')
-import CreateDataName as cn
 import Model_Plotting as SecPlt
-
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import linear_model
-from sklearn.preprocessing import PolynomialFeatures
-from skimage.util import view_as_windows
-import os
 import xarray as xr
-import pickle
 from netCDF4 import Dataset
 
-#------------------------
-# Set plotting variables
-#------------------------
+#---------------
+# Set variables
+#---------------
 plt.rcParams.update({'font.size': 10})
 plt.rc('font', family='sans serif')
 plt.rc('xtick', labelsize='x-small')
@@ -28,12 +25,8 @@ plt.rc('ytick', labelsize='x-small')
 time = 2500
 point = [ 2, 8, 6]
 
-time_step = '24hrs'
-#----------------------
-
 datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/mnc_test_0002/'
 data_filename=datadir + 'cat_tave.nc'
-mon_file = datadir + 'cat_monitor.nc'
 
 rootdir = '../../../MITGCM_Analysis_Sector/'
 
@@ -61,9 +54,9 @@ x_size = da_T.shape[3]
 print('da_T.shape')
 print(da_T.shape)
 
-#----------------------------------
-# Plot diffs between time t and t+1
-#----------------------------------
+#--------------------------------------------------
+# Set up bits to plot diffs between time t and t+1
+#--------------------------------------------------
 lat_arange = [0, 8.36, 15.5, 21.67, 27.25, 32.46, 37.5, 42.54, 47.75, 53.32, 59.5, 66.64, 75.5]
 lon_arange = [0, 4.5, 9.5]
 depth_arange = [0, 7, 15, 21, 28, 37, da_Z.values.shape[0]-1]
@@ -94,10 +87,10 @@ max_value = max( np.nanmax(da_T[0:,:,x_coord]), np.amax(da_T[1:,:,x_coord]),
 diff_min_value = -.001
 diff_max_value = .001
 
+#-------------------
 # Plot depth fields
+#-------------------
 
-#11.75 -> .4 2.5plot .5 2.5plot .5 5plot .4
-#8.25 ->  1. 2.5plot 1.25 2.5plot 1.
 ### Fig 1a ###
 fig = plt.figure( figsize=(2.5, 4.5), dpi=300 )
 ax1 = fig.add_subplot(1, 1, 1)
@@ -125,8 +118,9 @@ ax2.set_yticklabels(np.round(da_Y.values[np.array(lat_arange).astype(int)], deci
 plt.text(-0.1, 0.86, '(b)', transform=fig.transFigure)
 plt.savefig(rootdir+'PLOTS/fig01b.eps', format='eps', bbox_inches = 'tight', pad_inches = 0.1)
 
-
+#-----------------------------
 # Plot x-const cross sections
+#-----------------------------
 
 ### Fig 1c ###
 fig = plt.figure( figsize=(3.6, 2.0), dpi=300 )
@@ -157,7 +151,9 @@ ax6.set_yticklabels(da_Z.values[np.array(depth_arange)].astype(int))
 plt.text(-0.055, 0.86, '(d)', transform=fig.transFigure)
 plt.savefig(rootdir+'PLOTS/fig01d.eps', format='eps', bbox_inches = 'tight', pad_inches = 0.1)
  
-# Plot y-const cross-section
+#-----------------------------
+# Plot y-const cross-sections
+#-----------------------------
 
 ### fig 1e ###
 fig = plt.figure( figsize=(3.6, 2.0), dpi=300 )
@@ -188,8 +184,10 @@ ax4.set_yticklabels(da_Z.values[np.array(depth_arange)].astype(int))
 plt.text(-0.055, 0.86, '(f)', transform=fig.transFigure)
 plt.savefig(rootdir+'PLOTS/fig01f.eps', format='eps', bbox_inches = 'tight', pad_inches = 0.1)
 
+#-----------------
+# Plot Colourbars 
+#-----------------
 
-### colourbars ###
 fig = plt.figure( figsize=(3, .2), dpi=300 )
 cb1axes = fig.add_axes([0.05, 0.05, 0.9, 0.9 ]) 
 cb1=plt.colorbar(im1, ax=ax1, orientation='horizontal', cax=cb1axes)
@@ -200,8 +198,7 @@ fig = plt.figure( figsize=(3, .2), dpi=300 )
 cb2axes = fig.add_axes([0.05, 0.05, 0.9, 0.9 ]) 
 cb2=plt.colorbar(im2, ax=ax2, orientation='horizontal', cax=cb2axes, extend='both')
 cb2.set_label(cbar_diff_label)    
-cb2.formatter.set_powerlimits((2, 2))
-#cb2.ax.yaxis.set_offset_position('above')
+cb2.formatter.set_powerlimits((-2, 2))
 cb2.update_ticks()
 plt.savefig(rootdir+'PLOTS/fig01_cbdiff.eps', format='eps', bbox_inches = 'tight', pad_inches = 0.1)
 

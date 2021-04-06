@@ -1,5 +1,8 @@
-# Script to calculate errors from a model, and plot these
-# as a histogram, and spatially
+# Script written by Rachel Furner
+# Makes a number of one-step predictions for the entire grid, 
+# these are then temporally averaged and saved in a netcdf file,
+# and spatially averaged and a time series of errors evolving is
+# plotted
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,22 +13,17 @@ import CreateDataName as cn
 import Iterator as it
 import Model_Plotting as rfplt
 import AssessModel as am
-import Network_Classes as nc
 import xarray as xr
 import pickle
 import netCDF4 as nc4
-import torch
 
 plt.rcParams.update({'font.size': 14})
 
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':False, 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
 
-model_type = 'lr'
-
-time_step = '24hrs'
 data_prefix=''
 exp_prefix = ''
 
@@ -35,15 +33,14 @@ calc_predictions = True
 no_points = 500  # no days of predictions being calculated
 skip_rate = 14   # Take every skip_rate point in time, so as to avoid looking at heavily correlated points
 
-if time_step == '24hrs':
-   DIR  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/'
-   data_filename=DIR+'mnc_test_0002/cat_tave.nc'
-   density_file = DIR+'DensityData.npy'
-else:
-   print('ERROR!!! No suitable time step given!!')
+DIR  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/'
+data_filename=DIR+'mnc_test_0002/cat_tave.nc'
+density_file = DIR+'DensityData.npy'
 
-#-----------
-data_name = data_prefix+cn.create_dataname(run_vars)+'_'+time_step
+#-----------------------------------------
+# Calc other variables - shouldn't change
+#-----------------------------------------
+data_name = data_prefix+cn.create_dataname(run_vars)
 model_name = model_prefix+data_name
 exp_name = exp_prefix+model_name
 
@@ -54,7 +51,6 @@ print('reading in ds')
 ds = xr.open_dataset(data_filename)
 Temp_truth = ds['Ttave'].data
 Length_Truth = Temp_truth.shape[0]
-print(Length_Truth)
 if (no_points*skip_rate) > (Length_Truth*.7):
     print('Be aware some data is coming from both Training and Val portions of run')
     print('Training set ends at time = '+str(Length_Truth*.7) )
@@ -74,26 +70,18 @@ mask = ds['Mask'].values
 #-------------------
 # Read in the model
 #-------------------
-if model_type == 'lr':
-    pkl_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_pickle.pkl'
-    print(pkl_filename)
-    with open(pkl_filename, 'rb') as file:
-        print('opening '+pkl_filename)
-        model = pickle.load(file)
-elif model_type == 'nn':
-    model = nc.NetworkRegression(inputDim, outputDim, no_layers, no_nodes) 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model.to(device)
-    model_filename = '../../../'+model_type+'_Outputs/MODELS/'+model_name+'_model.pth'
-    model.load_state_dict(torch.load(model_filename))
-    model.eval()
+pkl_filename = '../../../lr_Outputs/MODELS/'+model_name+'_pickle.pkl'
+print(pkl_filename)
+with open(pkl_filename, 'rb') as file:
+    print('opening '+pkl_filename)
+    model = pickle.load(file)
    
 #---------------------
 # Set up netcdf array
 #---------------------
 print('set up netcdf file')
 
-nc_file = nc4.Dataset('../../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
+nc_file = nc4.Dataset('../../../lr_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.nc','w', format='NETCDF4') #'w' stands for write
 # Create Dimensions
 nc_file.createDimension('T', None)
 nc_file.createDimension('Z', ds['Z'].shape[0])
@@ -128,7 +116,7 @@ nc_T[:] = ds['T'].data[1:no_points*skip_rate+1:skip_rate]
 # 'truth' as inputs, rather than iteratively predicting through time
 #--------------------------------------------------------------------------------------
 print('get predictions')
-pred_filename = '../../../'+model_type+'_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
+pred_filename = '../../../lr_Outputs/ITERATED_PREDICTION_ARRAYS/'+exp_name+'_AveragedSinglePredictions.npz'
 
 if calc_predictions:
 
@@ -143,16 +131,15 @@ if calc_predictions:
     for t in range(no_points): 
         print(t)
         predT_temp, predDelT_temp, dummy, dummy, dummy = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t*skip_rate,t*skip_rate+2)),
-                                                                          density[t*skip_rate:t*skip_rate+2,:,:,:], method='AB1', model_type=model_type )
-        #predT_temp, predDelT_temp, dummy, dummy, dummy = it.iterator( data_name, run_vars, model, 1, ds.isel(T=slice(t*skip_rate,t*skip_rate+1)),
-        #                                                                  density[t*skip_rate:t*skip_rate+1,:,:,:], method='AB1' )
+                                                                          density[t*skip_rate:t*skip_rate+2,:,:,:], method='AB1' )
         # Note iterator returns the initial condition plus the number of iterations, so skip time slice 0
         predictedTemp[t,:,:,:] = predT_temp[1,:,:,:]
         predictedDelT[t,:,:,:] = predDelT_temp[1,:,:,:]
 
     #Save as arrays
     np.savez(pred_filename, np.array(predictedTemp), np.array(predictedDelT))
-#predictedTemp, predictedDelT = np.load(pred_filename).values()    
+
+# Load in arrays of predictions
 predicted_data = np.load(pred_filename)
 predictedTemp = predicted_data['arr_0']
 predictedDelT = predicted_data['arr_1']
@@ -178,7 +165,6 @@ Spacial_Av_AbsErrors = np.nanmean(AbsErrors[:,1:-1,1:-3,1:-2], axis=(1,2,3))  # 
 Weighted_Av_AbsError = np.where( Time_Av_DelT_Truth==0., np.nan, Time_Av_AbsErrors/Time_Av_DelT_Truth )
 
 # Calculate Spatial Correlation Coefficients
-
 DelT_cor_coef = np.zeros((DelT_truth.shape[1], DelT_truth.shape[2], DelT_truth.shape[3]))
 for i in range(DelT_truth.shape[1]):
    for j in range(DelT_truth.shape[2]):
@@ -216,5 +202,5 @@ ax2.set_xlabel('No of months')
 
 plt.tight_layout()
 plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
-plt.savefig('../../../'+model_type+'_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error.png', bbox_inches = 'tight', pad_inches = 0.1)
+plt.savefig('../../../lr_Outputs/PLOTS/'+model_name+'/'+exp_name+'_timeseries_Av_Error.png', bbox_inches = 'tight', pad_inches = 0.1)
 

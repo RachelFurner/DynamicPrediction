@@ -1,36 +1,30 @@
 #!/usr/bin/env python
 # coding: utf-8
+# Script written by Rachel Furner
+# Plots avergaged fluxes outputted by MITgcm and averaged in CalcAvMITgcmFields.py
+# creating spatial patterns of average trends.
 
 print('import packages')
 import sys
 sys.path.append('../Tools')
-import CreateDataName as cn
 import Model_Plotting as rfplt
-
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import linear_model
-from sklearn.preprocessing import PolynomialFeatures
-from skimage.util import view_as_windows
-import os
 import xarray as xr
-import pickle
 from netCDF4 import Dataset
-
-plt.rcParams.update({'font.size': 10})
-plt.rc('font', family='sans serif')
-plt.rc('xtick', labelsize='x-small')
-plt.rc('ytick', labelsize='x-small')    
-
 
 #----------------------------
 # Set variables for this run
 #----------------------------
 point = [ 2, 8, 6]
+level = point[0]
+y_coord = point[1]
+x_coord = point[2]
 
 DIR  = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/mnc_test_0002/'
 MITGCM_filename=DIR+'cat_tave.nc'
 
+rootdir = '../../../MITGCM_Analysis_Sector/'
 
 variable_names = ('Av_ADVr_TH', 'Av_ADVy_TH', 'Av_ADVx_TH', 'Av_DFrE_TH', 'Av_DFrI_TH', 'Av_DFyE_TH', 'Av_DFxE_TH')
 
@@ -42,38 +36,28 @@ plotnames = {'Av_ADVr_TH':'Vertical Advective Flux of Pot.Temperature\n',
              'Av_DFyE_TH':'Meridional Diffusive Flux of Pot.Temperature\n',
              'Av_DFxE_TH':'Zonal Diffusive Flux of Pot.Temperature\n'}
 
-text = {'Av_ADVr_TH':'(a)',
+text = {'Av_ADVx_TH':'(a)',
         'Av_ADVy_TH':'(b)',
-        'Av_ADVx_TH':'(c)',
-        'Av_DFrE_TH':'(a)',
-        'Av_DFrI_TH':'(b)',
-        'Av_DFyE_TH':'(c)',
-        'Av_DFxE_TH':'(d)'}
+        'Av_ADVr_TH':'(c)',
+        'Av_DFxE_TH':'(a)',
+        'Av_DFyE_TH':'(b)',
+        'Av_DFrE_TH':'(c)',
+        'Av_DFrI_TH':'(d)'}
 
-#filenames = {'Av_DFrE_TH':'VertDiffExp',
-#             'Av_DFrI_TH':'VertDiffImp',
-#             'Av_DFyE_TH':'MerDiff',
-#             'Av_DFxE_TH':'ZonalDiff',
-#             'Av_ADVr_TH':'VertAdv',
-#             'Av_ADVy_TH':'MerAdv',
-#             'Av_ADVx_TH':'ZonalAdv'}
-
-filenames = {'Av_ADVr_TH':'fig02a',
+filenames = {'Av_ADVx_TH':'fig02a',
              'Av_ADVy_TH':'fig02b',
-             'Av_ADVx_TH':'fig02c',
-             'Av_DFrE_TH':'fig03a',
-             'Av_DFrI_TH':'fig03b',
-             'Av_DFyE_TH':'fig03c',
-             'Av_DFxE_TH':'fig03d'}
-
+             'Av_ADVr_TH':'fig02c',
+             'Av_DFxE_TH':'fig03a',
+             'Av_DFyE_TH':'fig03b',
+             'Av_DFrE_TH':'fig03c',
+             'Av_DFrI_TH':'fig03d'}
 
 cbar_label = 'Flux $(Cm^3 s^{-1})$'
-#-----------
-level = point[0]
-y_coord = point[1]
-x_coord = point[2]
 
-rootdir = '../../../MITGCM_Analysis_Sector/'
+plt.rcParams.update({'font.size': 10})
+plt.rc('font', family='sans serif')
+plt.rc('xtick', labelsize='x-small')
+plt.rc('ytick', labelsize='x-small')    
 
 #------------------------
 print('reading in data')
@@ -83,7 +67,6 @@ ds = xr.open_dataset(data_filename)
 
 for variable in variable_names: 
    Av_field=ds[variable].values
-   #Av_field=ds[variable_name].values+ds[variable2_name].values
    
    #-----------------------
    # Plot x-cross sections

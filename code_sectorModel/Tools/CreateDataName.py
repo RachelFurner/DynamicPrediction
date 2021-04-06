@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Code developed by Rachel Furner to contain modules used in developing stats/nn based versions of GCMs.
-# Routines contained here include:
-# ReadMITGCM - Routine to read in MITGCM data into input and output arrays, split into test and train
-#                        portions of code, and normalise. The arrays are saved, and also passed back on return. 
-# create_dataname - short routine to create part of an experiment name from model type and run variables.
+# Script written by Rachel Furner 
+# contains simple routine to create part of an experiment name from run variables.
 
 def create_dataname(run_vars):
    '''
