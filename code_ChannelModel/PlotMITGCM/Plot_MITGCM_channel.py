@@ -68,7 +68,7 @@ nc_mon = Dataset(mon_file)
 # Plot spatial depth plots
 #--------------------------
 print('plot spatial depth plots')
-fig, ax, im = ChnlPlt.plot_depth_fld(da_T[time,:,:,:], 'Temperature from Model', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(da_T[time,level,:,:], 'Temperature from Model', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)

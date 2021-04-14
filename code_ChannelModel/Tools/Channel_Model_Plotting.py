@@ -19,23 +19,23 @@ plt.rcParams.update({'font.size': 14})
 # Plotting spatial depth fields #
 #################################
 
-def plot_depth_ax(ax, field, level, x_labels, y_labels, depth_labels, min_value=None, max_value=None, cmap=None):
+def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, max_value=None, cmap=None):
 
     # Assumes field is (z, y, x)
     if not min_value:
-       min_value = np.nanmin(field[level,:,:])  # Lowest value
+       min_value = np.nanmin(field[:,:])  # Lowest value
     if not max_value:
-       max_value = np.nanmax(field[level,:,:])   # Highest value
+       max_value = np.nanmax(field[:,:])   # Highest value
 
-    im = ax.pcolormesh(field[level,:,:], vmin=min_value, vmax=max_value, cmap=cmap)
+    im = ax.pcolormesh(field[:,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.set_xlabel('x position (km)')
     ax.set_ylabel('y position (km)')
    
     # Give axis ticks in lat/lon/depth
-    x_arange = np.arange(0,x_labels.size,50)
+    x_arange = [0,40,80,120,159,199,239]  # np.arange(0,x_labels.size,40)
     ax.set_xticks(x_arange)
     ax.set_xticklabels(np.round(x_labels[np.array(x_arange).astype(int)]/1000, decimals=0).astype(int)) 
-    y_arange = np.arange(0,y_labels.size,25) 
+    y_arange = [0,25,50,75,95]    #np.arange(0,y_labels.size,25) 
     ax.set_yticks(y_arange)
     ax.set_yticklabels(np.round(y_labels[np.array(y_arange).astype(int)]/1000, decimals=0).astype(int)) 
  
@@ -44,18 +44,18 @@ def plot_depth_ax(ax, field, level, x_labels, y_labels, depth_labels, min_value=
 def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None): 
     
     # Create a figure
-    fig = plt.figure(figsize=(8,3))  #(24,10))
+    fig = plt.figure(figsize=(8,4))  #(24,10))
     ax = plt.subplot(111)
     if diff:
        if min_value==None:
-          min_value = - max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
-          max_value =   max( abs(np.nanmin(field[level,:,:])), abs(np.nanmax(field[level,:,:])) )
+          min_value = - max( abs(np.nanmin(field[:,:])), abs(np.nanmax(field[:,:])) )
+          max_value =   max( abs(np.nanmin(field[:,:])), abs(np.nanmax(field[:,:])) )
        if cmap==None:
           cmap = 'bwr'
     else:
        if cmap==None:
           cmap = 'viridis'
-    ax, im = plot_depth_ax(ax, field, level, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
+    ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m depth')
 
@@ -72,19 +72,19 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, t
 
 def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_labels, y_labels, depth_labels, title=None):
     
-    flds_min_value = min( np.nanmin(field1[level,:,:]), np.nanmin(field2[level,:,:]) )
-    flds_max_value = max( np.nanmax(field1[level,:,:]), np.amax(field2[level,:,:]) )
+    flds_min_value = min( np.nanmin(field1[:,:]), np.nanmin(field2[:,:]) )
+    flds_max_value = max( np.nanmax(field1[:,:]), np.amax(field2[:,:]) )
 
-    diff_min_value = -max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
-    diff_max_value =  max( abs(np.nanmin(field1[level,:,:]-field2[level,:,:])), abs(np.nanmax(field1[level,:,:]-field2[level,:,:])) )
+    diff_min_value = -max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+    diff_max_value =  max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
  
-    fig = plt.figure(figsize=(8,12))
+    fig = plt.figure(figsize=(8,15))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
-    ax1, im1 = plot_depth_ax(ax1, field1, level, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
-    ax2, im2 = plot_depth_ax(ax2, field2, level, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
-    ax3, im3 = plot_depth_ax(ax3, field1-field2, level, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+    ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
+    ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
+    ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
     ax1.set_title(str(field1_name)+' at '+str(int(depth_labels[level]))+'m depth')
     ax2.set_title(str(field2_name)+' at '+str(int(depth_labels[level]))+'m depth')
@@ -123,10 +123,10 @@ def plot_yconst_crss_sec_ax(ax, field, y, x_labels, y_labels, depth_labels, min_
     ax.set_ylabel('depth level')
    
     # Give axis ticks in lat/lon/depth
-    x_arange = np.arange(0,x_labels.size,50)
+    x_arange = [0,40,80,120,159,199,239]  # np.arange(0,x_labels.size,40)
     ax.set_xticks(x_arange)
     ax.set_xticklabels(np.round(x_labels[np.array(x_arange).astype(int)]/1000, decimals=0 ).astype(int)) 
-    depth_arange = [0, 6, 9, 15, 20, 25, 29, 33, depth_labels.shape[0]-1]
+    depth_arange = [0, 4, 9, 14, 19, 24, 29, 34] 
     ax.set_yticks(depth_arange)
     ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int)) 
  
@@ -135,7 +135,7 @@ def plot_yconst_crss_sec_ax(ax, field, y, x_labels, y_labels, depth_labels, min_
 def plot_yconst_crss_sec(field, field_name, y, x_labels, y_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
     
     # Create a figure
-    fig = plt.figure(figsize=(9,5))
+    fig = plt.figure(figsize=(9,4))
     ax = plt.subplot(111)
     if diff:
        min_value = - max( abs(np.nanmin(field[:,y,:])), abs(np.nanmax(field[:,y,:])) )
@@ -168,7 +168,7 @@ def plot_yconst_crss_sec_diff(field1, field1_name, field2, field2_name, y, x_lab
     diff_min_value = -max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
     diff_max_value =  max( abs(np.nanmin(field1[:,y,:]-field2[:,y,:])), abs(np.nanmax(field1[:,y,:]-field2[:,y,:])) )
  
-    fig = plt.figure(figsize=(9,17))
+    fig = plt.figure(figsize=(9,14))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
@@ -216,10 +216,10 @@ def plot_xconst_crss_sec_ax(ax, field, x, x_labels, y_labels, depth_labels, min_
     ax.set_ylabel('depth levels')
 
     ## Give axis ticks in lat/lon/depth
-    y_arange = np.arange(0,y_labels.size,25)
+    y_arange = [0,25,50,75,95]    #np.arange(0,y_labels.size,25) 
     ax.set_xticks(y_arange)
     ax.set_xticklabels(np.round(y_labels[np.array(y_arange).astype(int)]/1000, decimals=0).astype(int)) 
-    depth_arange = [0, 6, 9, 15, 20, 25, 29, 33, depth_labels.shape[0]-1]
+    depth_arange = [0, 4, 9, 14, 19, 24, 29, 34] 
     ax.set_yticks(depth_arange)
     ax.set_yticklabels(depth_labels[np.array(depth_arange)].astype(int)) 
     
@@ -228,7 +228,7 @@ def plot_xconst_crss_sec_ax(ax, field, x, x_labels, y_labels, depth_labels, min_
 def plot_xconst_crss_sec(field, field_name, x, x_labels, y_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None):
     
     # Create a figure
-    fig = plt.figure(figsize=(9,5))
+    fig = plt.figure(figsize=(9,4))
     ax = plt.subplot(111)
     if diff:
        if min_value == None:
@@ -262,7 +262,7 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, x_lab
     diff_min_value = -max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
     diff_max_value =  max( abs(np.nanmin(field1[:,:,x]-field2[:,:,x])), abs(np.nanmax(field1[:,:,x]-field2[:,:,x])) )
  
-    fig = plt.figure(figsize=(9,17))
+    fig = plt.figure(figsize=(9,14))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)

@@ -14,6 +14,9 @@ from torch.utils import data
 from torchvision import transforms, utils
 import torch
 
+import multiprocessing as mp
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 # Create Dataset, which inherits the data.Dataset class
 class MITGCM_Wholefield_Dataset(data.Dataset):
@@ -41,7 +44,7 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
                                     dynamically active
        """
  
-       self.ds      = xr.open_dataset(MITGCM_filename)
+       self.ds      = xr.open_dataset(MITGCM_filename, lock=False)
        self.start   = int(start_ratio * dataset_end_index)
        self.end     = int(end_ratio * dataset_end_index)
        self.stride  = stride
@@ -55,22 +58,34 @@ class MITGCM_Wholefield_Dataset(data.Dataset):
 
    def __getitem__(self, idx):
 
-       da_T_in_tmp = self.ds_inputs['THETA'].values[idx,:,:,:] 
+       land=97  # T grid point where land starts
+
+       #da_T_in_tmp = self.ds_inputs['THETA'].values[idx,:,:land,:] 
+       da_T_in_tmp = self.ds_inputs['THETA'].isel(T=[idx]).values[0,:,:land,:] 
        da_T_in     = 0.5 * (da_T_in_tmp[:,:-1,:]+da_T_in_tmp[:,1:,:]) # average to get onto same grid as V points  
-       da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:,:]
+       #da_T_out_tmp = self.ds_outputs['THETA'].values[idx,:,:land,:]
+       da_T_out_tmp = self.ds_outputs['THETA'].isel(T=[idx]).values[0,:,:land,:]
+       da_T_out     = 0.5 * (da_T_out_tmp[:,:-1,:]+da_T_out_tmp[:,1:,:]) # average to get onto same grid as V points  
+
+       #da_U_in_tmp = self.ds_inputs['UVEL'].values[idx,:,:land,:]
+       da_U_in_tmp = self.ds_inputs['UVEL'].isel(T=[idx]).values[0,:,:land,:]
        da_U_in_tmp = 0.5 * (da_U_in_tmp[:,:,:-1]+da_U_in_tmp[:,:,1:]) # average x dir onto same grid as T points  
        da_U_in     = 0.5 * (da_U_in_tmp[:,:-1,:]+da_U_in_tmp[:,1:,:]) # average y dir onto same grid as V points  
-       da_V_in     = self.ds_inputs['VVEL'].values[idx,:,1:-1,:]      # Ignore first and last points as both zero
-       da_Eta_in_tmp = self.ds_inputs['ETAN'].values[idx,0,:,:]
-       da_Eta_in   = 0.5 * (da_Eta_in_tmp[:-1,:]+da_Eta_in_tmp[1:,:]) # average to get onto same grid as V points  
-
-       da_T_out_tmp = self.ds_outputs['THETA'].values[idx,:,:,:]
-       da_T_out     = 0.5 * (da_T_out_tmp[:,:-1,:]+da_T_out_tmp[:,1:,:]) # average to get onto same grid as V points  
-       da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:,:]
+       #da_U_out_tmp = self.ds_outputs['UVEL'].values[idx,:,:land,:]
+       da_U_out_tmp = self.ds_outputs['UVEL'].isel(T=[idx]).values[0,:,:land,:]
        da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:-1]+da_U_out_tmp[:,:,1:])  # average to get onto same grid as T points
        da_U_out     = 0.5 * (da_U_out_tmp[:,:-1,:]+da_U_out_tmp[:,1:,:])  # average y dir onto same grid as V points  
-       da_V_out     = self.ds_outputs['VVEL'].values[idx,:,1:-1,:]        # Ignore first and last points as both zero
-       da_Eta_out_tmp = self.ds_outputs['ETAN'].values[idx,0,:,:]
+
+       #da_V_in     = self.ds_inputs['VVEL'].values[idx,:,1:land,:]  # Ignore first point as zero
+       da_V_in     = self.ds_inputs['VVEL'].isel(T=[idx]).values[0,:,1:land,:]  # Ignore first point as zero
+       #da_V_out     = self.ds_outputs['VVEL'].values[idx,:,1:land,:]    # Ignore first point as zero
+       da_V_out     = self.ds_outputs['VVEL'].isel(T=[idx]).values[0,:,1:land,:]    # Ignore first point as zero
+
+       #da_Eta_in_tmp = self.ds_inputs['ETAN'].values[idx,0,:land,:]
+       da_Eta_in_tmp = self.ds_inputs['ETAN'].isel(T=[idx]).values[0,0,:land,:]
+       da_Eta_in   = 0.5 * (da_Eta_in_tmp[:-1,:]+da_Eta_in_tmp[1:,:]) # average to get onto same grid as V points  
+       #da_Eta_out_tmp = self.ds_outputs['ETAN'].values[idx,0,:land,:]
+       da_Eta_out_tmp = self.ds_outputs['ETAN'].isel(T=[idx]).values[0,0,:land,:]
        da_Eta_out   = 0.5 * (da_Eta_out_tmp[:-1,:]+da_Eta_out_tmp[1:,:]) # average to get onto same grid as V points  
 
        if np.isnan(da_T_in).any():

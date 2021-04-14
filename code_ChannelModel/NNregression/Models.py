@@ -76,11 +76,11 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, reproduc
          super().__init__()
        def forward(self, x):
          # apply cyclical padding in x dir
-         tmp = nn.functional.pad(x  ,(3,3,0,0),mode='circular')
-         #tmp = nn.functional.pad(x  ,(3,3,0,0),mode='constant', value=0)
-         # apply other    padding in y dir
-         #out = nn.functional.pad(tmp,(0,0,3,3),mode='constant', value=0)
-         out = nn.functional.pad(tmp,(0,0,3,3),mode='reflect')
+         out = nn.functional.pad(x  ,(3,3,0,0),mode='circular')
+         # apply other padding in y dir
+         #out = nn.functional.pad(out,(0,0,3,3),mode='constant', value=0)
+         out = nn.functional.pad(out,(0,0,3,3),mode='reflect')
+         #out = nn.functional.pad(out,(0,0,3,3),mode='replicate')
          return out
 
      # based on code at https://github.com/mateuszbuda/brain-segmentation-pytorch/blob/master/unet.py
@@ -161,11 +161,9 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, reproduc
            )
 
 
-     unet = UNet()
-     x    = torch.randn(1, 115, 100, 240)
-     h = UNet()#.cuda()
-     h = h.cuda()   
-     unet(x)#.shape
+     h = UNet()
+     if torch.cuda.is_available():
+         h = h.cuda()
       
      optimizer = torch.optim.Adam( h.parameters(), lr=lr )
 

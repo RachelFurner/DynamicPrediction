@@ -66,20 +66,22 @@ tic = time.time()
 # Manually set variables for this run
 #--------------------------------------
 TEST = False
-CalculatingMeanStd = True 
-TrainingModel      = True 
-LoadSavedModel = False
-saved_epochs =  0 
-Predict = True 
+CalculatingMeanStd = False
+TrainingModel      = False
+LoadSavedModel = True  
+saved_epochs = 99   
+Assess = True 
+Iterate = True 
 
-name_prefix = 'ReflPadNS_CircPadEW_'
-#name_prefix = 'NewGrid_'
+name_prefix = 'ConsPadNS_CircPadEW_'
 
 model_style = 'UNet'
 
+MeanStd_prefix = ''
+
 hyper_params = {
     "batch_size": 32,
-    "num_epochs": 100, # amount of new epochs to train, so added to any already saved.
+    "num_epochs": 10, # amount of new epochs to train, so added to any already saved.
     "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
     "criterion": torch.nn.MSELoss(),
     }
@@ -89,12 +91,16 @@ subsample_rate = 5      # number of time steps to skip over when creating traini
 train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
 val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
 #subsample_rate = 10000  # Gives a single training sample
-#subsample_rate = 500     # number of time steps to skip over when creating training and test data
+#subsample_rate = 5000     # number of time steps to skip over when creating training and test data
 #train_end_ratio = 0.5   # Take training samples from 0 to this far through the dataset
 #val_end_ratio = 0.99    # Take validation samples from train_end_ratio to this far through the dataset
 
-plot_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+plot_freq = 2      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
 save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+
+for_len = 30*1   # How long to iteratively predict for
+start = 5        #
+
 #-----------------------------------------------------------------------------
 # Set additional variables etc, these lines should not change between runs...
 #-----------------------------------------------------------------------------
@@ -103,7 +109,6 @@ seed_value = 12321
 
 DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_97x240Domain/runs/100yrs/'
 #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
-#MITGCM_filename = DIR+'daily_ave_50yrs_cutout.nc'
 MITGCM_filename = DIR+'daily_ave_50yrs.nc'
 dataset_end_index = 50*360  # Look at 50 yrs of data
 
@@ -122,6 +127,7 @@ if not os.path.isdir(model_dir):
    os.system("mkdir %s" % (model_dir+'/MODELS'))
    os.system("mkdir %s" % (model_dir+'/PLOTS'))
    os.system("mkdir %s" % (model_dir+'/STATS'))
+   os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
 
 output_filename = '../../../Channel_nn_Outputs/'+model_name+'/'+model_name+'_Output.txt'
 output_file = open(output_filename, 'w', buffering=1)
@@ -148,6 +154,16 @@ output_file.write('Using device: '+device+'\n')
 print('Batch Size: '+str(hyper_params['batch_size'])+'\n')
 output_file.write('Batch Size: '+str(hyper_params['batch_size'])+'\n')
 
+
+if TrainingModel:
+   if LoadSavedModel: 
+      total_epochs = saved_epochs+hyper_params['num_epochs']
+   else:
+      total_epochs = hyper_params['num_epochs']-1
+else:
+   total_epochs = saved_epochs
+
+
 # Set variables to remove randomness and ensure reproducible results
 if reproducible:
    os.environ['PYTHONHASHSEED'] = str(seed_value)
@@ -165,9 +181,9 @@ TimeCheck(tic, output_file, 'setting variables')
 # Calulate, or read in mean and std
 #-----------------------------------
 if CalculatingMeanStd:
-   no_channels = CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], output_file)
+   no_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], output_file)
 
-data_mean, data_std, data_range, no_channels = ReadMeanStd(model_name, output_file = output_file)
+data_mean, data_std, data_range, no_channels = ReadMeanStd(MeanStd_prefix, output_file = output_file)
 
 TimeCheck(tic, output_file, 'getting mean & std')
 
@@ -179,8 +195,7 @@ Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ra
                                               transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
 Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, 
                                               transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-#Train_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index )
-#Val_Dataset   = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index )
+
 train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True, num_workers=num_workers )
 val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, num_workers=num_workers )
 
@@ -231,18 +246,25 @@ TimeCheck(tic, output_file, 'training model')
 #------------------
 # Assess the model 
 #------------------
-#OutputSinglePrediction(model_name, Train_Dataset, h, saved_epochs+hyper_params['num_epochs'])
+if Assess:
 
-if Predict:
-
-   if TrainingModel:
-      OutputStats(model_name, train_loader, h, saved_epochs+hyper_params['num_epochs'])
-   else:
-      OutputStats(model_name, train_loader, h, saved_epochs)
+   OutputStats(model_name, MeanStd_prefix, MITGCM_filename, train_loader, h, total_epochs)
 
 TimeCheck(tic, output_file, 'assessing model')
+
+#---------------------
+# Iteratively predict 
+#---------------------
+Iterate_Dataset = rr.MITGCM_Wholefield_Dataset( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, 
+                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+
+if Iterate:
+   IterativelyPredict(model_name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs) 
+
+TimeCheck(tic, output_file, 'iteratively forecasting')
 
 TimeCheck(tic, output_file, 'script')
 
 output_file.close()
+
 

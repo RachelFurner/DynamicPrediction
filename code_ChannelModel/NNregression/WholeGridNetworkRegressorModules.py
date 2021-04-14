@@ -52,7 +52,7 @@ def TimeCheck(tic, output_file, task):
    print('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
    output_file.write('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
-def CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, batch_size, output_file):
+def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, batch_size, output_file):
 
    no_depth_levels = 38 ## Note this is hard coded!!
 
@@ -131,7 +131,7 @@ def CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, da
    no_channels = input_batch.shape[1]
 
    ## Save to file, so can be used to un-normalise when using model to predict
-   mean_std_file = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_MeanStd.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, no_channels)
    
    output_file.write('no_channels ;'+str(no_channels)+'\n')
@@ -143,8 +143,8 @@ def CalcMeanStd(model_name, MITGCM_filename, train_end_ratio, subsample_rate, da
    return no_channels
 
 
-def ReadMeanStd(model_name, output_file=None):
-   mean_std_file = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_MeanStd.npz'
+def ReadMeanStd(MeanStd_prefix, output_file=None):
+   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
@@ -328,10 +328,13 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
 
            del input_batch
            del target_batch
+           del predicted
            first_pass = False
            #print('batch complete')
            batch_no = batch_no + 1
- 
+
+       del batch_sample 
+
        tr_loss_single_epoch = train_loss_epoch_tmp / no_tr_samples
        print('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
        output_file.write('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
@@ -352,7 +355,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
 
            ax_temp.set_xlabel('Truth')
            ax_temp.set_ylabel('Predictions')
-           ax_temp.set_title('Training errors, epoch '+str(epoch))
+           ax_temp.set_title('Training errors, Temperature, epoch '+str(epoch))
            ax_temp.set_xlim(bottom, top)
            ax_temp.set_ylim(bottom, top)
            ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
@@ -363,7 +366,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
 
            ax_U.set_xlabel('Truth')
            ax_U.set_ylabel('Predictions')
-           ax_U.set_title('Training errors, epoch '+str(epoch))
+           ax_U.set_title('Training errors, U vel, epoch '+str(epoch))
            ax_U.set_xlim(bottom, top)
            ax_U.set_ylim(bottom, top)
            ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
@@ -374,7 +377,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
 
            ax_V.set_xlabel('Truth')
            ax_V.set_ylabel('Predictions')
-           ax_V.set_title('Training errors, epoch '+str(epoch))
+           ax_V.set_title('Training errors, V vel, epoch '+str(epoch))
            ax_V.set_xlim(bottom, top)
            ax_V.set_ylim(bottom, top)
            ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
@@ -385,7 +388,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
 
            ax_Eta.set_xlabel('Truth')
            ax_Eta.set_ylabel('Predictions')
-           ax_Eta.set_title('Training errors, epoch '+str(epoch))
+           ax_Eta.set_title('Training errors, Eta, epoch '+str(epoch))
            ax_Eta.set_xlim(bottom, top)
            ax_Eta.set_ylim(bottom, top)
            ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
@@ -400,8 +403,8 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
        batch_no = 0
        
        if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-           fig_temp = plt.figure(figsize=(9,9))
-           ax_temp  = fig_temp.add_subplot(111)
+           fig_Temp = plt.figure(figsize=(9,9))
+           ax_Temp  = fig_Temp.add_subplot(111)
            fig_U    = plt.figure(figsize=(9,9))
            ax_U     = fig_U.add_subplot(111)
            fig_V    = plt.figure(figsize=(9,9))
@@ -447,7 +450,7 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
               if batch_no == 0:
                  target_batch_subsamp = target_batch[0,:,::2,::2].cpu().detach().numpy()
                  predicted_subsamp = predicted[0,:,::2,::2].cpu().detach().numpy()
-                 ax_temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
+                 ax_Temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
                                  predicted_subsamp[:no_depth_levels,:,:],
                                  edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
                  ax_U.scatter(target_batch_subsamp[no_depth_levels:2*no_depth_levels,:,:],
@@ -465,6 +468,8 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            batch_no = batch_no + 1
            del input_batch
            del target_batch
+           del predicted
+           del val_loss
            gc.collect()
            torch.cuda.empty_cache()
            #print('batch complete')
@@ -475,6 +480,8 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            #print('')
            #print('variables deleted')
    
+       del batch_sample 
+
        val_loss_single_epoch = val_loss_epoch_tmp / no_val_samples
        print('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
        output_file.write('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
@@ -487,13 +494,13 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
    
        if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
 
-           ax_temp.set_xlabel('Truth')
-           ax_temp.set_ylabel('Predictions')
-           ax_temp.set_title('Training errors, epoch '+str(epoch))
-           ax_temp.set_xlim(bottom, top)
-           ax_temp.set_ylim(bottom, top)
-           ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax_temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           ax_Temp.set_xlabel('Truth')
+           ax_Temp.set_ylabel('Predictions')
+           ax_Temp.set_title('Training errors, epoch '+str(epoch))
+           ax_Temp.set_xlim(bottom, top)
+           ax_Temp.set_ylim(bottom, top)
+           ax_Temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+           ax_Temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
            plt.savefig(plot_dir+'/'+model_name+'_Temp_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
            plt.close()
@@ -503,35 +510,45 @@ def TrainModel(model_name, output_file, tic, TEST, no_tr_samples, no_val_samples
            ax_U.set_title('Training errors, epoch '+str(epoch))
            ax_U.set_xlim(bottom, top)
            ax_U.set_ylim(bottom, top)
-           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
            ax_U.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
            plt.savefig(plot_dir+'/'+model_name+'_U_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
            plt.close()
 
+           print('RF a')
            ax_V.set_xlabel('Truth')
+           print('RF b')
            ax_V.set_ylabel('Predictions')
+           print('RF c')
            ax_V.set_title('Training errors, epoch '+str(epoch))
+           print('RF d')
            ax_V.set_xlim(bottom, top)
+           print('RF e')
            ax_V.set_ylim(bottom, top)
-           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           print('RF f')
+           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+           print('RF g')
            ax_V.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
+           print('RF h')
            plt.savefig(plot_dir+'/'+model_name+'_V_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
+           print('RF i')
            plt.close()
+           print('RF j')
 
            ax_Eta.set_xlabel('Truth')
            ax_Eta.set_ylabel('Predictions')
            ax_Eta.set_title('Training errors, epoch '+str(epoch))
            ax_Eta.set_xlim(bottom, top)
            ax_Eta.set_ylim(bottom, top)
-           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
+           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
            ax_Eta.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
            plt.savefig(plot_dir+'/'+model_name+'_Eta_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
                        bbox_inches = 'tight', pad_inches = 0.1)
            plt.close()
 
-       if epoch%save_freq == 0 or epoch == (hyper_params["num_epochs"]+start_epoch-1):
+       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == (hyper_params["num_epochs"]+start_epoch-1):
            ### SAVE IT ###
            print('save model \n')
            output_file.write('save model \n')
@@ -601,11 +618,11 @@ def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, existing_losses):
    elif tr_inf == 'inf':
       h.eval()
 
-def OutputSinglePrediction(model_name, Train_Dataset, h, no_epochs):
+def OutputSinglePrediction(model_name, MeanStd_prefix, Train_Dataset, h, no_epochs):
    #-----------------------------------------------------------------------------------------
    # Output the predictions for a single input into a netcdf file to check it looks sensible
    #-----------------------------------------------------------------------------------------
-   data_mean, data_std, data_range, no_channels = ReadMeanStd(model_name)
+   data_mean, data_std, data_range, no_channels = ReadMeanStd(MeanStd_prefix)
    
    #Make predictions for a single sample
    sample = Train_Dataset.__getitem__(5)
@@ -675,7 +692,7 @@ def OutputSinglePrediction(model_name, Train_Dataset, h, no_epochs):
    nc_EtaErrors[:,:]  = predicted[0,3*no_depth_levels,:,:] - target_sample[0,3*no_depth_levels,:,:]
    
     
-def OutputStats(model_name, data_loader, h, no_epochs):
+def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs):
    #-------------------------------------------------------------
    # Output the rms and correlation coefficients over a dataset
    #-------------------------------------------------------------
@@ -684,9 +701,16 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    #     (if this is not possible, cause of memory, need to add RMS errors as 
    #     we go, and the variables needed to calculate the correlation coeff)
    #  3. Calculate the RMS and correlation coefficient of the prediction and target arrays
-   #  4. Store the RMS and correlation coeffs in netcdf file
+   #  4. Store the RMS and correlation coeffs in netcdf file, along with ~ 50 samples
+   #     (saving all samples takes up loads of space and has little benefit)
 
-   data_mean, data_std, data_range, no_channels = ReadMeanStd(model_name)
+   data_mean, data_std, data_range, no_channels = ReadMeanStd(MeanStd_prefix)
+
+   # Read in grid data from MITgcm file
+   mitgcm_ds = xr.open_dataset(mitgcm_filename)
+   da_X = mitgcm_ds['X']
+   da_Y = mitgcm_ds['Yp1']
+   da_Z = mitgcm_ds['diag_levels'] 
 
    FirstPass = True
 
@@ -740,10 +764,12 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
    no_depth_levels = 38  # Hard coded...perhaps should change...?
-   nc_file.createDimension('T', targets.shape[0])
-   nc_file.createDimension('Z', no_depth_levels)
-   nc_file.createDimension('Y', targets.shape[2])
-   nc_file.createDimension('X', targets.shape[3])
+   no_samples      = min(50, targets.shape[0]) 
+   y_dim_used = 96   # point at which land starts - i.e. y dim of used-grid
+   nc_file.createDimension('T', no_samples)
+   nc_file.createDimension('Z', da_Z.values.shape[0])
+   nc_file.createDimension('Y', y_dim_used)  #da_Y.values.shape[0])
+   nc_file.createDimension('X', da_X.values.shape[0])
    # Create variables
    nc_T = nc_file.createVariable('T', 'i4', 'T')
    nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
@@ -776,29 +802,29 @@ def OutputStats(model_name, data_loader, h, no_epochs):
    nc_EtaCC      = nc_file.createVariable( 'EtaCC'      , 'f4', ('Y', 'X')           )
 
    # Fill variables
-   nc_T[:] = np.arange(targets.shape[0])
-   nc_Z[:] = np.arange(no_depth_levels)
-   nc_Y[:] = np.arange(targets.shape[2])
-   nc_X[:] = np.arange(targets.shape[3])
-   
-   nc_TrueTemp[:,:,:,:] = targets[:,0:no_depth_levels,:,:] 
-   nc_TrueU[:,:,:,:]    = targets[:,1*no_depth_levels:2*no_depth_levels,:,:]
-   nc_TrueV[:,:,:,:]    = targets[:,2*no_depth_levels:3*no_depth_levels,:,:]
-   nc_TrueEta[:,:,:]    = targets[:,3*no_depth_levels,:,:]
+   nc_T[:] = np.arange(no_samples)
+   nc_Z[:] = da_Z.values
+   nc_Y[:] = da_Y.values[:y_dim_used]
+   nc_X[:] = da_X.values
 
-   nc_PredTemp[:,:,:,:] = predictions[:,0:no_depth_levels,:,:]
-   nc_PredU[:,:,:,:]    = predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
-   nc_PredV[:,:,:,:]    = predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
-   nc_PredEta[:,:,:]    = predictions[:,3*no_depth_levels,:,:]
+   nc_TrueTemp[:,:,:,:] = targets[:no_samples,0:no_depth_levels,:,:] 
+   nc_TrueU[:,:,:,:]    = targets[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
+   nc_TrueV[:,:,:,:]    = targets[:no_samples,2*no_depth_levels:3*no_depth_levels,:,:]
+   nc_TrueEta[:,:,:]    = targets[:no_samples,3*no_depth_levels,:,:]
 
-   nc_TempErrors[:,:,:,:] = ( predictions[:,0:no_depth_levels,:,:]
-                              - targets[:,0:no_depth_levels,:,:] )
-   nc_UErrors[:,:,:,:]    = ( predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
-                              - targets[:,1*no_depth_levels:2*no_depth_levels,:,:] )
-   nc_VErrors[:,:,:,:]    = ( predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] 
-                              - targets[:,2*no_depth_levels:3*no_depth_levels,:,:] )
-   nc_EtaErrors[:,:,:]    = ( predictions[:,3*no_depth_levels,:,:] 
-                              - targets[:,3*no_depth_levels,:,:] )
+   nc_PredTemp[:,:,:,:] = predictions[:no_samples,0:no_depth_levels,:,:]
+   nc_PredU[:,:,:,:]    = predictions[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
+   nc_PredV[:,:,:,:]    = predictions[:no_samples,2*no_depth_levels:3*no_depth_levels,:,:]
+   nc_PredEta[:,:,:]    = predictions[:no_samples,3*no_depth_levels,:,:]
+ 
+   nc_TempErrors[:,:,:,:] = ( predictions[:no_samples,0:no_depth_levels,:,:]
+                              - targets[:no_samples,0:no_depth_levels,:,:] )
+   nc_UErrors[:,:,:,:]    = ( predictions[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
+                              - targets[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:] )
+   nc_VErrors[:,:,:,:]    = ( predictions[:no_samples,2*no_depth_levels:3*no_depth_levels,:,:] 
+                              - targets[:no_samples,2*no_depth_levels:3*no_depth_levels,:,:] )
+   nc_EtaErrors[:,:,:]    = ( predictions[:no_samples,3*no_depth_levels,:,:] 
+                              - targets[:no_samples,3*no_depth_levels,:,:] )
 
    nc_TempRMS[:,:,:] = np.sqrt( np.mean( np.square(
                                              predictions[:,0:no_depth_levels,:,:]
@@ -827,3 +853,104 @@ def OutputStats(model_name, data_loader, h, no_epochs):
            nc_V_CC[z,y,x]   = np.corrcoef( predictions[:,2*no_depth_levels+z,y,x], targets[:,2*no_depth_levels+z,y,x], rowvar=False )[0,1]
         nc_EtaCC[y,x]  = np.corrcoef( predictions[:,3*no_depth_levels,y,x], targets[:,3*no_depth_levels,y,x], rowvar=False )[0,1]
    
+def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs):
+   #-------------------------------------------------------------
+
+   data_mean, data_std, data_range, no_channels = ReadMeanStd(MeanStd_prefix)
+
+   # Read in grid data from MITgcm file
+   mitgcm_ds = xr.open_dataset(mitgcm_filename)
+   da_X = mitgcm_ds['X']
+   da_Y = mitgcm_ds['Yp1']
+   da_Z = mitgcm_ds['diag_levels'] 
+
+   h.train(False)
+   if torch.cuda.is_available():
+       h = h.cuda()
+
+   # Read in first sample from MITgcm dataset and save as first entry in both arrays
+   input_sample = Iterate_Dataset.__getitem__(start)['input'][:,:,:].unsqueeze(0).numpy()
+   iterated_predictions = input_sample
+   MITgcm_data = input_sample
+
+   # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
+   for time in range(for_len):
+      print(time)
+
+      if torch.cuda.is_available():
+         predicted = h( Variable(torch.from_numpy(input_sample).cuda().float()) ).cpu().detach().numpy()
+      else:
+         predicted = h( Variable(torch.from_numpy(input_sample).float()) ).detach().numpy()
+
+      iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
+      MITgcm_data = np.concatenate( ( MITgcm_data, 
+                                         Iterate_Dataset.__getitem__(start+time+1)['input'][:,:,:].unsqueeze(0).numpy() ), axis=0 )
+
+      input_sample = predicted   # Set outputs as new inputs for next prediction
+      del predicted
+      gc.collect()
+      torch.cuda.empty_cache()
+     
+   print('iterated_predictions.shape') 
+   print(iterated_predictions.shape) 
+   print('MITgcm_data.shape') 
+   print(MITgcm_data.shape) 
+   # Denormalise 
+   iterated_predictions = rr.RF_DeNormalise(iterated_predictions, data_mean, data_std, data_range)
+   MITgcm_data          = rr.RF_DeNormalise(MITgcm_data,          data_mean, data_std, data_range)
+
+   # Set up netcdf files
+   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_Forecast.nc'
+   nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
+   # Create Dimensions
+   no_depth_levels = 38  # Hard coded...perhaps should change...?
+   y_dim_used = 96   # point at which land starts - i.e. y dim of used-grid
+   nc_file.createDimension('T', MITgcm_data.shape[0])
+   nc_file.createDimension('Z', da_Z.values.shape[0])
+   nc_file.createDimension('Y', y_dim_used)
+   nc_file.createDimension('X', da_X.values.shape[0])
+   # Create variables
+   nc_T = nc_file.createVariable('T', 'i4', 'T')
+   nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
+   nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
+   nc_X = nc_file.createVariable('X', 'i4', 'X')
+
+   nc_TrueTemp   = nc_file.createVariable( 'True_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueU      = nc_file.createVariable( 'True_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueV      = nc_file.createVariable( 'True_V'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueEta    = nc_file.createVariable( 'True_Eta'   , 'f4', ('T', 'Y', 'X')      )
+
+   nc_PredTemp   = nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredU      = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredV      = nc_file.createVariable( 'Pred_V'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
+   nc_PredEta    = nc_file.createVariable( 'Pred_Eta'   , 'f4', ('T', 'Y', 'X')      )
+
+   nc_TempErrors = nc_file.createVariable( 'Temp_Errors', 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_UErrors    = nc_file.createVariable( 'U_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_VErrors    = nc_file.createVariable( 'V_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_EtaErrors  = nc_file.createVariable( 'Eta_Errors' , 'f4', ('T', 'Y', 'X')      )
+
+   # Fill variables
+   nc_T[:] = np.arange(iterated_predictions.shape[0])
+   nc_Z[:] = da_Z.values
+   nc_Y[:] = da_Y.values[:y_dim_used]
+   nc_X[:] = da_X.values
+  
+   nc_TrueTemp[:,:,:,:] = MITgcm_data[:,0:no_depth_levels,:,:] 
+   nc_TrueU[:,:,:,:]    = MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
+   nc_TrueV[:,:,:,:]    = MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
+   nc_TrueEta[:,:,:]    = MITgcm_data[:,3*no_depth_levels,:,:]
+
+   nc_PredTemp[:,:,:,:] = iterated_predictions[:,0:no_depth_levels,:,:]
+   nc_PredU[:,:,:,:]    = iterated_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
+   nc_PredV[:,:,:,:]    = iterated_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
+   nc_PredEta[:,:,:]    = iterated_predictions[:,3*no_depth_levels,:,:]
+
+   nc_TempErrors[:,:,:,:] = ( iterated_predictions[:,0:no_depth_levels,:,:]
+                              - MITgcm_data[:,0:no_depth_levels,:,:] )
+   nc_UErrors[:,:,:,:]    = ( iterated_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
+                              - MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:] )
+   nc_VErrors[:,:,:,:]    = ( iterated_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] 
+                              - MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:] )
+   nc_EtaErrors[:,:,:]    = ( iterated_predictions[:,3*no_depth_levels,:,:] 
+                              - MITgcm_data[:,3*no_depth_levels,:,:] )
