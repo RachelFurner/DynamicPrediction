@@ -19,7 +19,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-dir_name_prefix = 'ConsPadNS_CircPadEW_'
+dir_name_prefix = 'ReflPadNS_CircPadEW_'
 model_name_prefix = dir_name_prefix
 model_style = 'UNet'
 learning_rate = '0.0001'
@@ -39,27 +39,26 @@ x_coord = point[2]
 #------------------------
 print('reading in data')
 #------------------------
-if plot_stats:
-   stats_data_filename=rootdir+'/STATS/'+model_name+'_StatsOutput.nc'
-   stats_ds = xr.open_dataset(stats_data_filename)
-   da_Temp_RMS = stats_ds['TempRMS']
-   da_U_RMS    = stats_ds['U_RMS']
-   da_V_RMS    = stats_ds['V_RMS']
-   da_Eta_RMS  = stats_ds['EtaRMS']
-   da_Temp_CC  = stats_ds['TempCC']
-   da_U_CC     = stats_ds['U_CC']
-   da_V_CC     = stats_ds['V_CC']
-   da_Eta_CC   = stats_ds['EtaCC']
-   da_X = stats_ds['X']
-   da_Y = stats_ds['Y']
-   da_Z = stats_ds['Z']
+stats_data_filename=rootdir+'/STATS/'+model_name+'_StatsOutput.nc'
+stats_ds = xr.open_dataset(stats_data_filename)
+da_Temp_RMS = stats_ds['TempRMS']
+da_U_RMS    = stats_ds['U_RMS']
+da_V_RMS    = stats_ds['V_RMS']
+da_Eta_RMS  = stats_ds['EtaRMS']
+da_Temp_CC  = stats_ds['TempCC']
+da_U_CC     = stats_ds['U_CC']
+da_V_CC     = stats_ds['V_CC']
+da_Eta_CC   = stats_ds['EtaCC']
+da_X = stats_ds['X']
+da_Y = stats_ds['Y']
+da_Z = stats_ds['Z']
 
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
 fig, ax, im = ChnPlt.plot_depth_fld(da_Temp_RMS.values[level,:,:], 'Temperature RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=None, max_value=None)
+                                   title=None, min_value=0.0, max_value=0.15)
 plt.savefig(rootdir+'/PLOTS/'+model_name+'_Temp_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = ChnPlt.plot_depth_fld(da_U_RMS.values[level,:,:], 'U Vel RMS Errors', level,

@@ -41,7 +41,8 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, m
  
     return(ax, im)
 
-def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, title=None, min_value=None, max_value=None, diff=False, cmap=None): 
+def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, 
+                   title=None, min_value=None, max_value=None, diff=False, cmap=None): 
     
     # Create a figure
     fig = plt.figure(figsize=(8,4))  #(24,10))
@@ -49,6 +50,7 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, t
     if diff:
        if min_value==None:
           min_value = - max( abs(np.nanmin(field[:,:])), abs(np.nanmax(field[:,:])) )
+       if max_value==None:
           max_value =   max( abs(np.nanmin(field[:,:])), abs(np.nanmax(field[:,:])) )
        if cmap==None:
           cmap = 'bwr'
@@ -70,20 +72,25 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, t
 
     return(fig, ax, im)
 
-def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_labels, y_labels, depth_labels, title=None):
-    
-    flds_min_value = min( np.nanmin(field1[:,:]), np.nanmin(field2[:,:]) )
-    flds_max_value = max( np.nanmax(field1[:,:]), np.amax(field2[:,:]) )
+def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_labels, y_labels, depth_labels, 
+                        title=None, flds_min_value=None, flds_max_value=None, diff_min_value=None, diff_max_value=None):
 
-    diff_min_value = -max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
-    diff_max_value =  max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+    if flds_min_value == None: 
+       flds_min_value = min( np.nanmin(field1[:,:]), np.nanmin(field2[:,:]) )
+    if flds_max_value == None: 
+       flds_max_value = max( np.nanmax(field1[:,:]), np.amax(field2[:,:]) )
+
+    if diff_min_value == None: 
+       diff_min_value = -max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+    if diff_max_value == None: 
+       diff_max_value =  max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
  
     fig = plt.figure(figsize=(8,15))
     ax1 = plt.subplot(311)
     ax2 = plt.subplot(312)
     ax3 = plt.subplot(313)
-    ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
-    ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value)
+    ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap='viridis')
+    ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap='viridis')
     ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
     ax1.set_title(str(field1_name)+' at '+str(int(depth_labels[level]))+'m depth')
@@ -291,7 +298,7 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, x_lab
 # Plot time series at specific points #
 #######################################
 
-def plt_timeseries_ax(ax, point, length, datasets, ylim=None, time_step=None):
+def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
 
    my_legend=[]
    for name, dataset in datasets.items():
@@ -331,79 +338,79 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, time_step=None):
       my_legend.append(name)
    ax.legend(my_legend)
    ax.set_ylabel('Temperature')
-   if time_step == '24hrs':
-      ax.set_xlabel('No of days')
-      ax.set_title(str(int(length/30))+' months')
-   else:
-      ax.set_xlabel('No of months')
-      ax.set_title(str(int(length/12))+' years')
+   ax.set_xlabel('No of days')
+   ax.set_title(str(int(length/30))+' months')
    if ylim:
       ax.set_ylim(ylim)
  
    return(ax)
 
-def plt_timeseries(point, length, datasets, ylim=None, time_step=None):
+def plt_timeseries(point, length, datasets, ylim=None):
    
    fig = plt.figure(figsize=(15 ,3))
    ax=plt.subplot(111)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length, point[0], point[1], point[2]])+1
+      if len(point) == 2:
+         bottom = min(next(iter(datasets.values()))[:length, point[0], point[1]])-1
+         top    = max(next(iter(datasets.values()))[:length, point[0], point[1]])+1
+      if len(point) == 3:
+         bottom = min(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])-1
+         top    = max(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
 
    return(fig)
 
-def plt_2_timeseries(point, length1, length2, datasets, ylim=None, time_step=None):
+def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
    
    fig = plt.figure(figsize=(15 ,7))
 
    ax=plt.subplot(211)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length1, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length1, point[0], point[1], point[2]])+1
+      bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
+      top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
 
    ax=plt.subplot(212)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length2, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length2, point[0], point[1], point[2]])+1
+      bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
+      top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
 
    return(fig)
 
-def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None, time_step=None):
+def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
    
    fig = plt.figure(figsize=(15 ,11))
 
    ax=plt.subplot(311)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length1, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length1, point[0], point[1], point[2]])+1
+      bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
+      top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
 
    ax=plt.subplot(312)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length2, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length2, point[0], point[1], point[2]])+1
+      bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
+      top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
 
    ax=plt.subplot(313)
    if ylim == None:
-      bottom = min(datasets['MITGCM'][:length3, point[0], point[1], point[2]])-1
-      top    = max(datasets['MITGCM'][:length3, point[0], point[1], point[2]])+1
+      bottom = min(datasets['True Temp'][:length3, point[0], point[1], point[2]])-1
+      top    = max(datasets['True Temp'][:length3, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim, time_step=time_step)
+   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
