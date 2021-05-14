@@ -298,7 +298,7 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, x_lab
 # Plot time series at specific points #
 #######################################
 
-def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
+def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None):
 
    my_legend=[]
    for name, dataset in datasets.items():
@@ -337,7 +337,8 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
 
       my_legend.append(name)
    ax.legend(my_legend)
-   ax.set_ylabel('Temperature')
+   if y_label:
+      ax.set_ylabel(y_label)
    ax.set_xlabel('No of days')
    ax.set_title(str(int(length/30))+' months')
    if ylim:
@@ -345,9 +346,9 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None):
  
    return(ax)
 
-def plt_timeseries(point, length, datasets, ylim=None):
+def plt_timeseries(point, length, datasets, ylim=None, y_label=None):
    
-   fig = plt.figure(figsize=(15 ,3))
+   fig = plt.figure(figsize=(20 ,2))
    ax=plt.subplot(111)
    if ylim == None:
       if len(point) == 2:
@@ -357,14 +358,14 @@ def plt_timeseries(point, length, datasets, ylim=None):
          bottom = min(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])-1
          top    = max(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, y_label=y_label)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
 
    return(fig)
 
-def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
+def plt_2_timeseries(point, length1, length2, datasets, ylim=None, y_label=None):
    
    fig = plt.figure(figsize=(15 ,7))
 
@@ -373,21 +374,21 @@ def plt_2_timeseries(point, length1, length2, datasets, ylim=None):
       bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label)
 
    ax=plt.subplot(212)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
 
    return(fig)
 
-def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
+def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None, y_label=None):
    
    fig = plt.figure(figsize=(15 ,11))
 
@@ -396,21 +397,21 @@ def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None):
       bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label)
 
    ax=plt.subplot(312)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label)
 
    ax=plt.subplot(313)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length3, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length3, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim)
+   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim, y_label=y_label)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)

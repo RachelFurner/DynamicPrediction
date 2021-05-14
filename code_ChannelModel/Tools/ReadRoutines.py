@@ -15,8 +15,8 @@ from torchvision import transforms, utils
 import torch
 
 import multiprocessing as mp
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+#import torch.multiprocessing
+#torch.multiprocessing.set_sharing_strategy('file_system')
 
 import time as time
 import sys
@@ -38,7 +38,7 @@ class MITGCM_Dataset_2d(data.Dataset):
          worth assessing impact of this at some stage
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, dataset_end_index, land, tic, timing_file, output_file, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, dataset_end_index, land, tic, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -56,8 +56,6 @@ class MITGCM_Dataset_2d(data.Dataset):
        self.transform = transform
        self.land = land
        self.tic  = tic 
-       self.timing_file = timing_file 
-       self.out_file = output_file 
        
        self.ds_inputs  = self.ds.isel(T=slice(self.start, self.end, self.stride))
        self.ds_outputs = self.ds.isel(T=slice(self.start+1, self.end+1, self.stride))
@@ -147,23 +145,29 @@ class MITGCM_Dataset_2d(data.Dataset):
           da_Eta_out_tmp= self.ds_outputs['ETAN'].isel(T=[idx]).values[0,0,:land,:]
           da_Eta_out    = 0.5 * (da_Eta_out_tmp[:-1,:]+da_Eta_out_tmp[1:,:]) # average to get onto same grid as V points  
 
-       #TimeCheck(self.tic, self.timing_file, 'Read in data')
+          # manually set masks for now - later look to output from MITgcm and read in. 
+          # Here mask is zero everywhere
+          T_mask              = np.zeros(( z_dim, y_dim, x_dim ))
+          U_mask              = np.zeros(( z_dim, y_dim, x_dim ))
+          V_mask              = np.zeros(( z_dim, y_dim, x_dim ))
+          Eta_mask            = np.zeros(( y_dim, x_dim ))
+   
+       #TimeCheck(self.tic, 'Read in data')
 
-       if self.land == 'IncLand':
-          # Mask the data
-          da_T_in  = np.where(T_mask==1, -999, da_T_in)
-          da_T_out = np.where(T_mask==1, -999, da_T_out)
+       # Mask the data
+       da_T_in  = np.where(T_mask==1, 0, da_T_in)
+       da_T_out = np.where(T_mask==1, 0, da_T_out)
       
-          da_U_in  = np.where(U_mask==1, -999, da_U_in)
-          da_U_out = np.where(U_mask==1, -999, da_U_out)
+       da_U_in  = np.where(U_mask==1, 0, da_U_in)
+       da_U_out = np.where(U_mask==1, 0, da_U_out)
       
-          da_V_in  = np.where(V_mask==1, -999, da_V_in)
-          da_V_out = np.where(V_mask==1, -999, da_V_out)
+       da_V_in  = np.where(V_mask==1, 0, da_V_in)
+       da_V_out = np.where(V_mask==1, 0, da_V_out)
       
-          da_Eta_in  = np.where(Eta_mask==1, -999, da_Eta_in)
-          da_Eta_out = np.where(Eta_mask==1, -999, da_Eta_out)
+       da_Eta_in  = np.where(Eta_mask==1, 0, da_Eta_in)
+       da_Eta_out = np.where(Eta_mask==1, 0, da_Eta_out)
 
-          #TimeCheck(self.tic, self.timing_file, 'masked data')
+       #TimeCheck(self.tic, 'masked data')
 
        sample_input  = np.zeros(( 0, da_T_in.shape[1],  da_T_in.shape[2]  ))  # shape: (no channels, y, x)
        sample_output = np.zeros(( 0, da_T_out.shape[1], da_T_out.shape[2]  ))  # shape: (no channels, y, x)
@@ -180,29 +184,28 @@ class MITGCM_Dataset_2d(data.Dataset):
        sample_input  = np.concatenate((sample_input , da_Eta_in[:, :].reshape(1,da_Eta_in.shape[0],da_Eta_in.shape[1])),axis=0)              
        sample_output = np.concatenate((sample_output, da_Eta_out[:, :].reshape(1,da_Eta_out.shape[0],da_Eta_out.shape[1])),axis=0)              
 
-       #TimeCheck(self.tic, self.timing_file, 'Catted data')
+       #TimeCheck(self.tic, 'Catted data')
 
-       if self.land == 'IncLand':
-          # Cat masks onto inputs but not outputs
-          sample_input  = np.concatenate((sample_input , T_mask[:, :, :]),axis=0) 
+       # Cat masks onto inputs but not outputs
+       sample_input  = np.concatenate((sample_input , T_mask[:, :, :]),axis=0) 
 
-          sample_input  = np.concatenate((sample_input , U_mask[:, :, :]),axis=0) 
+       sample_input  = np.concatenate((sample_input , U_mask[:, :, :]),axis=0) 
  
-          sample_input  = np.concatenate((sample_input , V_mask[:, :, :]),axis=0) 
+       sample_input  = np.concatenate((sample_input , V_mask[:, :, :]),axis=0) 
  
-          sample_input  = np.concatenate((sample_input , Eta_mask[:, :].reshape(1,da_Eta_mask.shape[0],da_T_in.shape[1])),axis=0) 
+       sample_input  = np.concatenate((sample_input , Eta_mask[:, :].reshape(1,Eta_mask.shape[0],Eta_mask.shape[1])),axis=0) 
 
-          #TimeCheck(self.tic, self.timing_file, 'Catted masks on')
+       #TimeCheck(self.tic, 'Catted masks on')
  
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
  
        sample = {'input':sample_input, 'output':sample_output}
-       #TimeCheck(self.tic, self.timing_file, 'converted to torch tensor and stored as sample')
+       #TimeCheck(self.tic, 'converted to torch tensor and stored as sample')
        
        if self.transform:
           sample = self.transform(sample)
-          #TimeCheck(self.tic, self.timing_file, 'Normalised data')
+          #TimeCheck(self.tic, 'Normalised data')
  
        return sample
 
@@ -218,7 +221,7 @@ class MITGCM_Dataset_3d(data.Dataset):
          This is a problem for Eta which is only 2d... for now just filled out to a 3-d field, but this isn't ideal...
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, dataset_end_index, land, tic, timing_file, output_file, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, dataset_end_index, land, tic, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -236,8 +239,6 @@ class MITGCM_Dataset_3d(data.Dataset):
        self.transform = transform
        self.land = land
        self.tic  = tic 
-       self.timing_file = timing_file 
-       self.out_file = output_file 
        
        self.ds_inputs  = self.ds.isel(T=slice(self.start, self.end, self.stride))
        self.ds_outputs = self.ds.isel(T=slice(self.start+1, self.end+1, self.stride))
@@ -335,17 +336,17 @@ class MITGCM_Dataset_3d(data.Dataset):
           da_Eta_out    = 0.5 * (da_Eta_out_tmp[:-1,:]+da_Eta_out_tmp[1:,:]) # average to get onto same grid as V points  
 
        # Mask the data
-       da_T_in  = np.where(T_mask==1, -999, da_T_in)
-       da_T_out = np.where(T_mask==1, -999, da_T_out)
+       da_T_in  = np.where(T_mask==1, 0, da_T_in)
+       da_T_out = np.where(T_mask==1, 0, da_T_out)
       
-       da_U_in  = np.where(U_mask==1, -999, da_U_in)
-       da_U_out = np.where(U_mask==1, -999, da_U_out)
+       da_U_in  = np.where(U_mask==1, 0, da_U_in)
+       da_U_out = np.where(U_mask==1, 0, da_U_out)
       
-       da_V_in  = np.where(V_mask==1, -999, da_V_in)
-       da_V_out = np.where(V_mask==1, -999, da_V_out)
+       da_V_in  = np.where(V_mask==1, 0, da_V_in)
+       da_V_out = np.where(V_mask==1, 0, da_V_out)
       
-       da_Eta_in  = np.where(Eta_mask==1, -999, da_Eta_in)
-       da_Eta_out = np.where(Eta_mask==1, -999, da_Eta_out)
+       da_Eta_in  = np.where(Eta_mask==1, 0, da_Eta_in)
+       da_Eta_out = np.where(Eta_mask==1, 0, da_Eta_out)
 
        sample_input  = np.zeros(( 0, da_T_in.shape[0], da_T_in.shape[1],  da_T_in.shape[2]  ))  # shape: (no channels, z, y, x)
        sample_output = np.zeros(( 0, da_T_in.shape[0], da_T_out.shape[1], da_T_out.shape[2]  ))  # shape: (no channels, z, y, x)

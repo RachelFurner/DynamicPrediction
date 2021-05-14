@@ -19,16 +19,17 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name_prefix = 'ReplPadNS_CircPadEW_'
+dir_name_prefix = 'ExcLand_None_2d_'
 model_name_prefix = dir_name_prefix
-model_style = 'UNet'
+#model_style = 'UNet'
+model_style = 'UNet_transp'
 learning_rate = '0.0001'
-epochs = '99'
+epochs = '199'
 for_len = 6*30
 animation_start = 0
-animation_end = 50
+animation_end = 6*30
 
-plot_timeseries = False
+plot_timeseries = True 
 make_animation_plots = True
 
 #-----------
@@ -67,22 +68,21 @@ da_Z = iter_ds['Z']
 # Plot timeseries at a point
 #----------------------------
 if plot_timeseries:
-   fig = ChnPlt.plt_timeseries( point, da_pred_Temp.shape[0], {'True Temp':da_true_Temp.values, 'Pred Temp':da_pred_Temp.values } )
-   plt.savefig(rootdir+'/PLOTS/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'+str(for_len)+'.png',
-               bbox_inches = 'tight', pad_inches = 0.1)
+   fig = ChnPlt.plt_timeseries( point, da_pred_Temp.shape[0], {'True Temp':da_true_Temp.values, 'Pred Temp':da_pred_Temp.values }, y_label='Temperature ('+u'\xb0'+'C)' )
+   plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
+               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( point, da_pred_U.shape[0], {'True U':da_true_U.values, 'Pred U':da_pred_U.values } )
-   plt.savefig(rootdir+'/PLOTS/'+model_name+'_U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'+str(for_len)+'.png',
-               bbox_inches = 'tight', pad_inches = 0.1)
+   fig = ChnPlt.plt_timeseries( point, da_pred_U.shape[0], {'True U':da_true_U.values, 'Pred U':da_pred_U.values }, y_label='U Vel $(m s^{-1})$' )
+   plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
+               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( point, da_pred_V.shape[0], {'True V':da_true_V.values, 'Pred V':da_pred_V.values } )
-   plt.savefig(rootdir+'/PLOTS/'+model_name+'_V_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'+str(for_len)+'.png',
-               bbox_inches = 'tight', pad_inches = 0.1)
+   fig = ChnPlt.plt_timeseries( point, da_pred_V.shape[0], {'True V':da_true_V.values, 'Pred V':da_pred_V.values }, y_label='V Vel $(m s^{-1})$')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
+               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( point[1:], da_pred_Eta.shape[0], {'True Eta':da_true_Eta.values, 'Pred Eta':da_pred_Eta.values } )
-   plt.savefig(rootdir+'/PLOTS/'+model_name+'_Eta_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+'_'+str(for_len)+'.png',
-               bbox_inches = 'tight', pad_inches = 0.1)
-
+   fig = ChnPlt.plt_timeseries( point[1:], da_pred_Eta.shape[0], {'True Eta':da_true_Eta.values, 'Pred Eta':da_pred_Eta.values }, y_label='SSH $(m)$')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Eta_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
+               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-------------------------------
 # Plot spatial plots to animate

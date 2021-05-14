@@ -8,8 +8,6 @@
 # The data is subsampled in time to give quasi-independence
 
 #from comet_ml import Experiment
-print('starting script')
-
 import sys
 sys.path.append('../Tools')
 import ReadRoutines as rr
@@ -32,269 +30,259 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch
 from torchvision import transforms, utils
+import torch.autograd.profiler as profiler
 
 import netCDF4 as nc4
 
 import time as time
 import gc
 
+import argparse
+import logging
+
 import multiprocessing as mp
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+#import torch.multiprocessing
+#torch.multiprocessing.set_sharing_strategy('file_system')
 
-#add this routine for memory profiling
-def sizeof_fmt(num, suffix='B'):
-    ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f %s%s" % (num, 'Yi', suffix)
+import GPUtil
 
-print('packages imported')
-print('matplotlib backend is: ')
-print(matplotlib.get_backend())
-print("os.environ['DISPLAY']: ")
-print(os.environ['DISPLAY'])
-print('torch.__version__ :')
-print(torch.__version__)
-#
+def parse_args():
+    a = argparse.ArgumentParser()
 
-torch.cuda.empty_cache()
-tic = time.time()
-#-------------------------------------
-# Manually set variables for this run
-#--------------------------------------
-TEST = False
-TrainingModel  = True 
-LoadSavedModel = False 
-saved_epochs = 0 
-Assess = False
-Iterate = False
+    a.add_argument("-n", "--name", default="")
+    a.add_argument("-te", "--test", default=False, type=bool)
+    a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool)
+    a.add_argument("-tr", "--trainmodel", default=True, type=bool)
+    a.add_argument("-lo", "--loadmodel", default=False, type=bool)
+    a.add_argument("-se", "--savedepochs", default=0, type=int)
+    a.add_argument("-a", "--assess", default=True, type=bool)
+    a.add_argument("-i", "--iterate", default=True, type=bool)
 
-name_prefix = 'Timing'
+    a.add_argument("-d", "--dim", default='2d', type=str)
+    a.add_argument("-la", "--land", default='ExcLand', type=str)
+    a.add_argument("-p", "--padding", default='None', type=str)
+    a.add_argument("-m", "--modelstyle", default='UNet2d', type=str)
 
-MeanStd_prefix = ''
-CalculatingMeanStd = False  
+    a.add_argument("-w", "--numworkers", default=4, type=int)
+    a.add_argument("-b", "--batchsize", default=32, type=int)
+    a.add_argument("-e", "--epochs", default=200, type=int)
+    a.add_argument("-lr", "--learningrate", default=0.0001, type=float)
 
-dimension = '2d'        # '2d' or '3d', over what dim are we dealing with conv layers etc
-land = 'ExcLand'        # IncLand or ExcLand
-padding_type = 'Repl'   # 'Repl', 'Refl', or 'Cons'
-model_style = dimension+'_UNet'
+    a.add_argument("-s", "--seed", default=30475, type=int)
+    a.add_argument("-v", "--verbose", default=True, type=bool)
 
-hyper_params = {
-    "batch_size": 32,
-    "num_epochs": 1, # amount of new epochs to train, so added to any already saved.
-    "learning_rate": 0.0001,  # might need further tuning, but note loss increases on first pass with 0.001
-    "criterion": torch.nn.MSELoss(),
-    }
-num_workers = 0
+    return a.parse_args()
 
-subsample_rate = 5      # number of time steps to skip over when creating training and test data
-train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
-val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
-#subsample_rate = 10000  # Gives a single training sample
-#subsample_rate = 5000     # number of time steps to skip over when creating training and test data
-#train_end_ratio = 0.5   # Take training samples from 0 to this far through the dataset
-#val_end_ratio = 0.99    # Take validation samples from train_end_ratio to this far through the dataset
+if __name__ == "__main__":
+    
+    mp.set_start_method('spawn')
 
-plot_freq = 25     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
-save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+    args = parse_args()
+    
+    logging.debug('packages imported')
+    logging.info('matplotlib backend is: ')
+    logging.info(matplotlib.get_backend())
+    logging.info("os.environ['DISPLAY']: ")
+    logging.info(os.environ['DISPLAY'])
+    logging.info('torch.__version__ :')
+    logging.info(torch.__version__)
+    #
+    tic = time.time()
+    #-------------------------------------
+    # Manually set variables for this run
+    #--------------------------------------
+    if args.verbose:
+       logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    else:
+       logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    hyper_params = {
+        "batch_size": args.batchsize,
+        "num_epochs": args.epochs, # amount of new epochs to train, so added to any already saved.
+        "learning_rate": args.learningrate,  # might need further tuning, but note loss increases on first pass with 0.001
+        "criterion": torch.nn.MSELoss(),
+        }
+    
+    subsample_rate = 5      # number of time steps to skip over when creating training and test data
+    train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
+    val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
+    
+    plot_freq = 25     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+    save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+    
+    for_len = 30*6   # How long to iteratively predict for
+    start = 5        #
+    
+    os.environ['PYTHONHASHSEED'] = str(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    if args.test: 
+       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
+    else:
+       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
+    MeanStd_prefix = args.land+'_'+args.dim
+    
+    # Overwrite certain variables if testing code and set up test bits
+    if args.test:
+       hyper_params['batch_size'] = 2
+       hyper_params['num_epochs'] = 5
+       subsample_rate = 500 # Keep datasets small when in testing mode
+    
+    model_dir = '../../../Channel_nn_Outputs/'+model_name
+    if not os.path.isdir(model_dir):
+       os.system("mkdir %s" % (model_dir))
+       os.system("mkdir %s" % (model_dir+'/MODELS'))
+       os.system("mkdir %s" % (model_dir+'/PLOTS'))
+       os.system("mkdir %s" % (model_dir+'/STATS'))
+       os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
+       os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
+    
+    if args.trainmodel:
+       if args.loadmodel: 
+          start_epoch = saved_epochs+1
+          total_epochs = saved_epochs+hyper_params['num_epochs']
+       else:
+          start_epoch = 0
+          total_epochs = hyper_params['num_epochs']-1
+    else:
+       start_epoch = saved_epochs
+       total_epochs = saved_epochs
+    
+    if args.land == 'IncLand':
+       y_dim_used = 104
+    elif args.land == 'ExcLand':
+       y_dim_used = 96
+    else:
+       raise RuntimeError('ERROR, Whats going on with args.land?!')
+    
+    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_97x240Domain/runs/100yrs/'
+    #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
+    MITGCM_filename = DIR+'daily_ave_50yrs.nc'
+    dataset_end_index = 50*360  # Look at 50 yrs of data
+    
+    ds       = xr.open_dataset(MITGCM_filename)
+    tr_start = 0
+    tr_end   = int(train_end_ratio * dataset_end_index)
+    val_end  = int(val_end_ratio * dataset_end_index)
+    x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
+    y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
+    
+    no_tr_samples = int(tr_end/subsample_rate)+1
+    no_val_samples = int((val_end - tr_end)/subsample_rate)+1
+    ds.close()
 
-for_len = 30*6   # How long to iteratively predict for
-start = 5        #
-
-reproducible = True
-seed_value = 30475  # 12321
-
-#-----------------------------------------------------------------------------
-# Set additional variables etc, these lines should not change between runs...
-#-----------------------------------------------------------------------------
-# Set variables to remove randomness and ensure reproducible results
-if reproducible:
-   os.environ['PYTHONHASHSEED'] = str(seed_value)
-   np.random.seed(seed_value)
-   torch.manual_seed(seed_value)
-   torch.cuda.manual_seed(seed_value)
-   torch.cuda.manual_seed_all(seed_value)
-   torch.backends.cudnn.enabled = False
-   torch.backends.cudnn.deterministic = True
-   torch.backends.cudnn.benchmark = False
-
-model_name = name_prefix+'_'+land+'_'+padding_type+'_'+model_style+'_lr'+str(hyper_params['learning_rate'])
-MeanStd_prefix = MeanStd_prefix+land+'_'+dimension+'_'
-
-# Overwrite certain variables if testing code and set up test bits
-if TEST:
-   hyper_params['batch_size'] = 32
-   hyper_params['num_epochs'] = 5
-   subsample_rate = 1000 # Keep datasets small when in testing mode
-   model_name = model_name + '_TEST'
-
-model_dir = '../../../Channel_nn_Outputs/'+model_name
-if not os.path.isdir(model_dir):
-   os.system("mkdir %s" % (model_dir))
-   os.system("mkdir %s" % (model_dir+'/MODELS'))
-   os.system("mkdir %s" % (model_dir+'/PLOTS'))
-   os.system("mkdir %s" % (model_dir+'/STATS'))
-   os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
-   os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
-
-if TrainingModel:
-   if LoadSavedModel: 
-      start_epoch = saved_epochs+1
-      total_epochs = saved_epochs+hyper_params['num_epochs']
-   else:
-      start_epoch = 0
-      total_epochs = hyper_params['num_epochs']-1
-else:
-   start_epoch = saved_epochs
-   total_epochs = saved_epochs
-
-output_filename = '../../../Channel_nn_Outputs/'+model_name+'/'+model_name+'_Output_epochs'+str(start_epoch)+'to'+str(total_epochs)+'.txt'
-output_file = open(output_filename, 'w', buffering=1)
-timing_filename = '../../../Channel_nn_Outputs/'+model_name+'/'+model_name+'_Timing.txt'
-timing_file = open(timing_filename, 'w', buffering=1)
-
-if land == 'IncLand':
-   y_dim_used = 104
-elif land == 'ExcLand':
-   y_dim_used = 96
-else:
-   print('ERROR, Whats going on with land?!')
-
-DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_97x240Domain/runs/100yrs/'
-#DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
-MITGCM_filename = DIR+'daily_ave_50yrs.nc'
-dataset_end_index = 50*360  # Look at 50 yrs of data
-
-ds       = xr.open_dataset(MITGCM_filename)
-tr_start = 0
-tr_end   = int(train_end_ratio * dataset_end_index)
-val_end  = int(val_end_ratio * dataset_end_index)
-x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
-y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
-
-no_tr_samples = int(tr_end/subsample_rate)+1
-no_val_samples = int((val_end - tr_end)/subsample_rate)+1
-print('no_training_samples ; '+str(no_tr_samples)+'\n')
-print('no_validation_samples ; '+str(no_val_samples)+'\n')
-output_file.write('no_training_samples ; '+str(no_tr_samples)+'\n')
-output_file.write('no_validation_samples ; '+str(no_val_samples)+'\n')
-print('Model ; '+model_name+'\n')
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print('Using device: '+device+'\n')
-output_file.write('Using device: '+device+'\n')
-
-print('Batch Size: '+str(hyper_params['batch_size'])+'\n')
-output_file.write('Batch Size: '+str(hyper_params['batch_size'])+'\n')
-
-TimeCheck(tic, timing_file, 'setting variables')
-
-#-----------------------------------
-# Calulate, or read in mean and std
-#-----------------------------------
-if CalculatingMeanStd:
-   no_in_channels, no_out_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], output_file, land, dimension, tic)
-
-data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix, output_file = output_file)
-#### OVERWRITE FOR NOW... MUST UPDATE MEAN FILE!!####
-if land == 'ExcLand':
-  no_in_channels = no_out_channels
-
-TimeCheck(tic, timing_file, 'getting mean & std')
-
-#-------------------------------------------------------------------------------------
-# Create training and valdiation Datsets and dataloaders with normalisation
-#-------------------------------------------------------------------------------------
-# Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
-if dimension == '2d':
-   Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, land, tic, timing_file,
-                                         output_file, transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-   Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, land, tic, timing_file,
-                                         output_file, transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-elif dimension == '3d':
-   Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, land, tic, timing_file,
-                                              output_file, transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-   Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, land, tic, timing_file,
-                                              output_file, transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-else:
-   print("ERROR!!! what's happening with dimensions?!")
-
-train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True, num_workers=num_workers )
-val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, num_workers=num_workers )
-
-TimeCheck(tic, timing_file, 'reading training & validation data')
-
-#--------------
-# Set up model
-#--------------
-h, optimizer = CreateModel(model_style, no_in_channels, no_out_channels, hyper_params["learning_rate"], reproducible, seed_value, padding_type)
-
-TimeCheck(tic, timing_file, 'setting up model')
-
-#------------------
-# Train or load the model:
-#------------------
-#print('')
-#for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
-#                         key= lambda x: -x[1])[:10]:
-#    print("{:>30}: {:>8}".format(name, sizeof_fmt(size)))
-#print('')
-
-if LoadSavedModel:
-   existing_losses= { 'train_loss_epoch' : [],
-                      'train_loss_epoch_Temp' : [],
-                      'train_loss_epoch_U' : [],
-                      'train_loss_epoch_V' : [],
-                      'train_loss_epoch_Eta' : [],
-                      'val_loss_epoch' : [] }
-   if TrainingModel:
-      LoadModel(model_name, h, optimizer, saved_epochs, 'tr', existing_losses)
-      TrainModel(model_name, output_file, tic, timing_file, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
-                 train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, existing_losses,
-                 start_epoch=start_epoch)
-   else:
-      LoadModel(model_name, h, optimizer, saved_epochs, 'inf', existing_losses)
-elif TrainingModel:  # Training mode BUT NOT loading model!
-   existing_losses= { 'train_loss_epoch' : [],
-                      'train_loss_epoch_Temp' : [],
-                      'train_loss_epoch_U' : [],
-                      'train_loss_epoch_V' : [],
-                      'train_loss_epoch_Eta' : [],
-                      'val_loss_epoch' : [] }
-   TrainModel(model_name, output_file, tic, timing_file, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq,
-              train_loader, val_loader, h, optimizer, hyper_params, reproducible, seed_value, existing_losses)
-
-TimeCheck(tic, timing_file, 'setting up model')
-
-#------------------
-# Assess the model 
-#------------------
-if Assess:
-
-   OutputStats(model_name, MeanStd_prefix, MITGCM_filename, train_loader, h, total_epochs, y_dim_used)
-
-TimeCheck(tic, timing_file, 'assessing model')
-
-#---------------------
-# Iteratively predict 
-#---------------------
-if dimension == '2d':
-   Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, land, tic, timing_file, output_file, 
-                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-elif dimension == '3d':
-   Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, land, tic, timing_file, output_file,
-                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-
-if Iterate:
-   IterativelyPredict(model_name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs, y_dim_used) 
-
-TimeCheck(tic, timing_file, 'iteratively forecasting')
-
-TimeCheck(tic, timing_file, 'script')
-
-output_file.close()
-
-
+    logging.info('no_training_samples ; '+str(no_tr_samples)+'\n')
+    logging.info('no_validation_samples ; '+str(no_val_samples)+'\n')
+    logging.info('Model ; '+model_name+'\n')
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logging.info('Using device: '+device+'\n')
+    
+    logging.info('Batch Size: '+str(hyper_params['batch_size'])+'\n')
+    
+    TimeCheck(tic, 'setting variables')
+    
+    #-----------------------------------
+    # Calulate, or read in mean and std
+    #-----------------------------------
+    if args.calculatemeanstd:
+       no_in_channels, no_out_channels = CalcMeanStd(MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], arg, tic)
+    
+    data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix)
+    
+    TimeCheck(tic, 'getting mean & std')
+    GPUtil.showUtilization()
+    
+    #-------------------------------------------------------------------------------------
+    # Create training and valdiation Datsets and dataloaders with normalisation
+    #-------------------------------------------------------------------------------------
+    # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
+    if args.dim == '2d':
+       Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+                                             transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+       Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+                                             transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+    elif args.dim == '3d':
+       Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+       Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+    else:
+       raise RuntimeError("ERROR!!! what's happening with dimensions?!")
+    
+    train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True, num_workers=args.numworkers )
+    val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, num_workers=args.numworkers )
+    
+    TimeCheck(tic, 'reading training & validation data')
+    GPUtil.showUtilization()
+    
+    #--------------
+    # Set up model
+    #--------------
+    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"], args.seed, args.padding)
+    
+    TimeCheck(tic, 'setting up model')
+    GPUtil.showUtilization()
+    
+    #------------------
+    # Train or load the model:
+    #------------------
+    
+    if args.loadmodel:
+       existing_losses= { 'train_loss_epoch' : [],
+                          'train_loss_epoch_Temp' : [],
+                          'train_loss_epoch_U' : [],
+                          'train_loss_epoch_V' : [],
+                          'train_loss_epoch_Eta' : [],
+                          'val_loss_epoch' : [] }
+       if args.trainmodel:
+          LoadModel(model_name, h, optimizer, args.saved_epochs, 'tr', existing_losses)
+          TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, plot_freq, save_freq,
+                     train_loader, val_loader, h, optimizer, hyper_params, args.seed, existing_losses,
+                     start_epoch=start_epoch)
+       else:
+          LoadModel(model_name, h, optimizer, saved_epochs, 'inf', existing_losses)
+    elif args.trainmodel:  # Training mode BUT NOT loading model!
+       existing_losses= { 'train_loss_epoch' : [],
+                          'train_loss_epoch_Temp' : [],
+                          'train_loss_epoch_U' : [],
+                          'train_loss_epoch_V' : [],
+                          'train_loss_epoch_Eta' : [],
+                          'val_loss_epoch' : [] }
+       TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, plot_freq, save_freq,
+                  train_loader, val_loader, h, optimizer, hyper_params, args.seed, existing_losses)
+    
+    TimeCheck(tic, 'loading/training model')
+    GPUtil.showUtilization()
+    
+    #------------------
+    # Assess the model 
+    #------------------
+    if args.assess:
+    
+       OutputStats(model_name, MeanStd_prefix, MITGCM_filename, train_loader, h, total_epochs, y_dim_used, args.dim)
+    
+    TimeCheck(tic, 'assessing model')
+    
+    #---------------------
+    # Iteratively predict 
+    #---------------------
+    if args.dim == '2d':
+       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.land, tic, 
+                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+    elif args.dim == '3d':
+       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.land, tic, 
+                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
+    
+    if args.iterate:
+       IterativelyPredict(model_name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs, y_dim_used, args.land, args.dim) 
+    
+    TimeCheck(tic, 'iteratively forecasting')
+    
+    TimeCheck(tic, 'script')
