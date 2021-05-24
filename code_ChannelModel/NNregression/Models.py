@@ -37,8 +37,9 @@ class CustomPad2d(nn.Module):
       # apply other padding in y dir
       if self.padding_type == 'Cons':
          out = nn.functional.pad(out,(0,0,3,3),mode='constant', value=0)
-      elif self.padding_type == 'Refl':
-         out = nn.functional.pad(out,(0,0,3,3),mode='reflect')
+      # Reflect not possible in 3d....
+      #elif self.padding_type == 'Refl':
+      #   out = nn.functional.pad(out,(0,0,3,3),mode='reflect')
       elif self.padding_type == 'Repl':
          out = nn.functional.pad(out,(0,0,3,3),mode='replicate')
       else:
@@ -61,11 +62,11 @@ class CustomPad3d(nn.Module):
       # apply cyclical padding in x dir
       out = nn.functional.pad(x  ,(1,1,0,0,0,0),mode='circular')
       # apply other padding in y dir
-      if padding_type == 'Cons':
+      if self.padding_type == 'Cons':
          out = nn.functional.pad(out,(0,0,1,1,1,1),mode='constant', value=0)
-      elif padding_type == 'Refl':
+      elif self.padding_type == 'Refl':
          out = nn.functional.pad(out,(0,0,1,1,1,1),mode='reflect')
-      elif padding_type == 'Repl':
+      elif self.padding_type == 'Repl':
          out = nn.functional.pad(out,(0,0,1,1,1,1),mode='replicate')
       else:
          raise RuntimeError('ERROR - NO Padding style given!!!')

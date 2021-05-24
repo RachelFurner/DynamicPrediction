@@ -49,27 +49,26 @@ import GPUtil
 def parse_args():
     a = argparse.ArgumentParser()
 
-    a.add_argument("-n", "--name", default="")
-    a.add_argument("-te", "--test", default=False, type=bool)
-    a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool)
-    a.add_argument("-tr", "--trainmodel", default=True, type=bool)
-    a.add_argument("-lo", "--loadmodel", default=False, type=bool)
-    a.add_argument("-se", "--savedepochs", default=0, type=int)
-    a.add_argument("-a", "--assess", default=True, type=bool)
-    a.add_argument("-i", "--iterate", default=True, type=bool)
+    a.add_argument("-n", "--name", default="", action='store')
+    a.add_argument("-te", "--test", default=False, type=bool, action='store')
+    a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool, action='store')
+    a.add_argument("-tr", "--trainmodel", default=True, type=bool, action='store')
+    a.add_argument("-lo", "--loadmodel", default=False, type=bool, action='store')
+    a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
+    a.add_argument("-a", "--assess", default=True, type=bool, action='store')
+    a.add_argument("-i", "--iterate", default=True, type=bool, action='store')
 
-    a.add_argument("-d", "--dim", default='2d', type=str)
-    a.add_argument("-la", "--land", default='ExcLand', type=str)
-    a.add_argument("-p", "--padding", default='None', type=str)
-    a.add_argument("-m", "--modelstyle", default='UNet2d', type=str)
+    a.add_argument("-d", "--dim", default='2d', type=str, action='store')
+    a.add_argument("-la", "--land", default='ExcLand', type=str, action='store')
+    a.add_argument("-p", "--padding", default='None', type=str, action='store')
+    a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
 
-    a.add_argument("-w", "--numworkers", default=4, type=int)
-    a.add_argument("-b", "--batchsize", default=32, type=int)
-    a.add_argument("-e", "--epochs", default=200, type=int)
-    a.add_argument("-lr", "--learningrate", default=0.0001, type=float)
+    a.add_argument("-w", "--numworkers", default=4, type=int, action='store')
+    a.add_argument("-b", "--batchsize", default=32, type=int, action='store')
+    a.add_argument("-e", "--epochs", default=200, type=int, action='store')
+    a.add_argument("-lr", "--learningrate", default=0.0001, type=float, action='store')
 
-    a.add_argument("-s", "--seed", default=30475, type=int)
-    a.add_argument("-v", "--verbose", default=True, type=bool)
+    a.add_argument("-s", "--seed", default=30475, type=int, action='store')
 
     return a.parse_args()
 
@@ -78,23 +77,21 @@ if __name__ == "__main__":
     mp.set_start_method('spawn')
 
     args = parse_args()
+  
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') 
+
+    logging.info('packages imported')
+    logging.info('matplotlib backend: '+str(matplotlib.get_backend()) )
+    logging.info("os.environ['DISPLAY']: "+str(os.environ['DISPLAY']))
+    logging.info('torch.__version__ : '+str(torch.__version__))
     
-    logging.debug('packages imported')
-    logging.info('matplotlib backend is: ')
-    logging.info(matplotlib.get_backend())
-    logging.info("os.environ['DISPLAY']: ")
-    logging.info(os.environ['DISPLAY'])
-    logging.info('torch.__version__ :')
-    logging.info(torch.__version__)
-    #
     tic = time.time()
     #-------------------------------------
     # Manually set variables for this run
     #--------------------------------------
-    if args.verbose:
-       logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-    else:
-       logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    logging.info('args')
+    logging.info(args)
     
     hyper_params = {
         "batch_size": args.batchsize,
@@ -125,12 +122,12 @@ if __name__ == "__main__":
     if args.test: 
        model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
     else:
-       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
+       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])
     MeanStd_prefix = args.land+'_'+args.dim
     
     # Overwrite certain variables if testing code and set up test bits
     if args.test:
-       hyper_params['batch_size'] = 2
+       hyper_params['batch_size'] = 32
        hyper_params['num_epochs'] = 5
        subsample_rate = 500 # Keep datasets small when in testing mode
     
@@ -145,14 +142,14 @@ if __name__ == "__main__":
     
     if args.trainmodel:
        if args.loadmodel: 
-          start_epoch = saved_epochs+1
-          total_epochs = saved_epochs+hyper_params['num_epochs']
+          start_epoch = args.savedepochs+1
+          total_epochs = args.savedepochs+hyper_params['num_epochs']
        else:
           start_epoch = 0
           total_epochs = hyper_params['num_epochs']-1
     else:
-       start_epoch = saved_epochs
-       total_epochs = saved_epochs
+       start_epoch = args.savedepochs
+       total_epochs = args.savedepochs
     
     if args.land == 'IncLand':
        y_dim_used = 104
@@ -187,17 +184,18 @@ if __name__ == "__main__":
     logging.info('Batch Size: '+str(hyper_params['batch_size'])+'\n')
     
     TimeCheck(tic, 'setting variables')
+    logging.info( GPUtil.showUtilization() )
     
     #-----------------------------------
     # Calulate, or read in mean and std
     #-----------------------------------
     if args.calculatemeanstd:
-       no_in_channels, no_out_channels = CalcMeanStd(MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], arg, tic)
+       no_in_channels, no_out_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], args.land, args.dim, tic)
     
     data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix)
     
     TimeCheck(tic, 'getting mean & std')
-    GPUtil.showUtilization()
+    logging.info( GPUtil.showUtilization() )
     
     #-------------------------------------------------------------------------------------
     # Create training and valdiation Datsets and dataloaders with normalisation
@@ -220,7 +218,7 @@ if __name__ == "__main__":
     val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, num_workers=args.numworkers )
     
     TimeCheck(tic, 'reading training & validation data')
-    GPUtil.showUtilization()
+    logging.info( GPUtil.showUtilization() )
     
     #--------------
     # Set up model
@@ -228,38 +226,36 @@ if __name__ == "__main__":
     h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"], args.seed, args.padding)
     
     TimeCheck(tic, 'setting up model')
-    GPUtil.showUtilization()
+    logging.info( GPUtil.showUtilization() )
     
     #------------------
     # Train or load the model:
     #------------------
+    # define dictionary to store losses at each epoch
+    losses = {'train'     : [],
+              'train_Temp': [],
+              'train_U'   : [],
+              'train_V'   : [],
+              'train_Eta' : [],
+              'val'       : [] }
     
     if args.loadmodel:
-       existing_losses= { 'train_loss_epoch' : [],
-                          'train_loss_epoch_Temp' : [],
-                          'train_loss_epoch_U' : [],
-                          'train_loss_epoch_V' : [],
-                          'train_loss_epoch_Eta' : [],
-                          'val_loss_epoch' : [] }
        if args.trainmodel:
-          LoadModel(model_name, h, optimizer, args.saved_epochs, 'tr', existing_losses)
-          TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, plot_freq, save_freq,
-                     train_loader, val_loader, h, optimizer, hyper_params, args.seed, existing_losses,
-                     start_epoch=start_epoch)
+          LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses)
+          losses, plotting_data, hist_data = TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, 
+                                                        plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params,
+                                                        args.seed, losses, start_epoch=start_epoch)
+          plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, hist_data)
        else:
-          LoadModel(model_name, h, optimizer, saved_epochs, 'inf', existing_losses)
+          LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses)
     elif args.trainmodel:  # Training mode BUT NOT loading model!
-       existing_losses= { 'train_loss_epoch' : [],
-                          'train_loss_epoch_Temp' : [],
-                          'train_loss_epoch_U' : [],
-                          'train_loss_epoch_V' : [],
-                          'train_loss_epoch_Eta' : [],
-                          'val_loss_epoch' : [] }
-       TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, plot_freq, save_freq,
-                  train_loader, val_loader, h, optimizer, hyper_params, args.seed, existing_losses)
+       losses, plotting_data, hist_data = TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, plot_freq,
+                                                     save_freq, train_loader, val_loader, h, optimizer, hyper_params, args.seed,
+                                                     losses)
+       plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, hist_data)
     
     TimeCheck(tic, 'loading/training model')
-    GPUtil.showUtilization()
+    logging.info( GPUtil.showUtilization() )
     
     #------------------
     # Assess the model 
@@ -269,6 +265,7 @@ if __name__ == "__main__":
        OutputStats(model_name, MeanStd_prefix, MITGCM_filename, train_loader, h, total_epochs, y_dim_used, args.dim)
     
     TimeCheck(tic, 'assessing model')
+    logging.info( GPUtil.showUtilization() )
     
     #---------------------
     # Iteratively predict 
@@ -284,5 +281,8 @@ if __name__ == "__main__":
        IterativelyPredict(model_name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs, y_dim_used, args.land, args.dim) 
     
     TimeCheck(tic, 'iteratively forecasting')
+    logging.info( GPUtil.showUtilization() )
     
     TimeCheck(tic, 'script')
+    logging.info( GPUtil.showUtilization() )
+

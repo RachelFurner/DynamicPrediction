@@ -54,7 +54,7 @@ def sizeof_fmt(num, suffix='B'):
 
 def TimeCheck(tic, task):
    toc = time.time()
-   logging.debug('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
+   logging.info('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index,
                 batch_size, land, dimension, tic):
@@ -211,8 +211,8 @@ def ReadMeanStd(MeanStd_prefix):
 
    return(inputs_mean, inputs_std, inputs_range, no_in_channels, no_out_channels)
 
-
-def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params, seed_value, existing_losses, start_epoch=0):
+def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader,
+               val_loader, h, optimizer, hyper_params, seed_value, losses, start_epoch=0):
 
    no_depth_levels = 38  # Hard coded...perhaps should change...?
    # Set variables to remove randomness and ensure reproducible results
@@ -225,72 +225,69 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
    torch.backends.cudnn.deterministic = True
    torch.backends.cudnn.benchmark = False
 
-   train_loss_epoch = existing_losses['train_loss_epoch']
-   train_loss_epoch_Temp = existing_losses['train_loss_epoch_Temp']
-   train_loss_epoch_U    = existing_losses['train_loss_epoch_U']
-   train_loss_epoch_V    = existing_losses['train_loss_epoch_V']
-   train_loss_epoch_Eta  = existing_losses['train_loss_epoch_Eta']
-   val_loss_epoch = existing_losses['val_loss_epoch']
+   # define dictionary to store data to plot sccatter graphs 
+   plotting_data = {'targets_train'     : [],
+                    'predictions_train' : [],
+                    'targets_val'       : [],
+                    'predictions_val'   : []}
 
-   first_pass = True
-   
-   plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/PLOTS/'
-   if not os.path.isdir(plot_dir):
-      os.system("mkdir %s" % (plot_dir))
-   
-   #TimeCheck(tic, 'set up training vars')
-   logging.debug('###### TRAINING MODEL ######')
+   current_best_loss = 0.001
+
+   logging.info('###### TRAINING MODEL ######')
    for epoch in range(start_epoch,hyper_params["num_epochs"]+start_epoch):
    
-       logging.debug('epoch ; '+str(epoch))
+       #logging.info('epoch ; '+str(epoch))
+       print('epoch ; '+str(epoch))
        GPUtil.showUtilization() 
+
        # Training
    
-       train_loss_epoch_tmp = 0.0
-       train_loss_epoch_Temp_tmp = 0.
-       train_loss_epoch_U_tmp = 0.
-       train_loss_epoch_V_tmp = 0.
-       train_loss_epoch_Eta_tmp = 0.
-   
-       
-       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-           fig_temp = plt.figure(figsize=(9,9))
-           ax_temp  = fig_temp.add_subplot(111)
-           fig_U    = plt.figure(figsize=(9,9))
-           ax_U     = fig_U.add_subplot(111)
-           fig_V    = plt.figure(figsize=(9,9))
-           ax_V     = fig_V.add_subplot(111)
-           fig_Eta  = plt.figure(figsize=(9,9))
-           ax_Eta   = fig_Eta.add_subplot(111)
-           bottom = 0.
-           top = 0.
+       losses['train'].append(0.)
+       losses['train_Temp'].append(0.)
+       losses['train_U'].append(0.)
+       losses['train_V'].append(0.)
+       losses['train_Eta'].append(0.)
+       losses['val'].append(0.)
 
        batch_no = 0
        for batch_sample in train_loader:
 
+           #logging.info('batch_no ;'+str(batch_no))
+           print('batch_no ;'+str(batch_no))
+           GPUtil.showUtilization() 
+
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Read inputs"):
                  input_batch  = batch_sample['input']
-           target_batch = batch_sample['output']
+                 target_batch = batch_sample['output']
            # Converting inputs and labels to Variable and send to GPU if available
            if torch.cuda.is_available():
-               input_batch = Variable(input_batch.cuda().float())
-               target_batch = Variable(target_batch.cuda().float())
+              input_batch = Variable(input_batch.cuda().float())
+              target_batch = Variable(target_batch.cuda().float())
            else:
-               input_batch = Variable(inputs.float())
-               target_batch = Variable(targets.float())
+              input_batch = Variable(inputs.float())
+              target_batch = Variable(targets.float())
+           #logging.info('Read in samples and sent to GPU')
+           print('Read in samples and sent to GPU')
+           GPUtil.showUtilization() 
            
            h.train(True)
    
            # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
            optimizer.zero_grad()
+           #logging.info('Set train to true, and cleared ptimizer grad')
+           print('Set train to true, and cleared ptimizer grad')
+           GPUtil.showUtilization() 
        
            # get prediction from the model, given the inputs
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Make predictions"):
                  predicted = h(input_batch)
+           #logging.info('Made predicitons')
+           print('Made predicitons')
+           GPUtil.showUtilization() 
    
-           if TEST and first_pass:
+           if epoch==start_epoch and batch_no == 0:
               logging.info('For test run check if output is correct shape, the following two shapes should match!\n')
               logging.info('target_batch.shape for training data: '+str(target_batch.shape)+'\n')
               logging.info('predicted.shape for training data: '+str(predicted.shape)+'\n')
@@ -299,18 +296,27 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Calc Loss"):
                  loss = hyper_params["criterion"](predicted, target_batch)
+           #logging.info('Calculated Loss')
+           print('Calculated Loss')
+           GPUtil.showUtilization() 
            
            # get gradients w.r.t to parameters
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Back Prop"):
                  loss.backward()
+           #logging.info('Calculated gradients')
+           print('Calculated gradients')
+           GPUtil.showUtilization() 
         
            # update parameters
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("optimizer step"):
                  optimizer.step()
+           #logging.info('stepped optimiser')
+           print('stepped optimiser')
+           GPUtil.showUtilization() 
    
-           if TEST and first_pass:  # Recalculate loss post optimizer step to ensure its decreased
+           if TEST and epoch == start_epoch and batch_no == 0:  # Recalculate loss post optimizer step to ensure its decreased
               h.train(False)
               post_opt_predicted = h(input_batch)
               post_opt_loss = hyper_params["criterion"](post_opt_predicted, target_batch)
@@ -318,179 +324,95 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
               logging.info('loss pre optimization: ' + str(loss.item()) )
               logging.info('loss post optimization: ' + str(post_opt_loss.item()) )
           
+           # Update loss values
+           losses['train'][-1] = losses['train'][-1] + loss.item()*input_batch.shape[0]
            if dimension == '2d': 
-              train_loss_epoch_tmp += loss.item()*input_batch.shape[0]
-              train_loss_epoch_Temp_tmp += hyper_params["criterion"](predicted[:,:no_depth_levels,:,:],
-                                                                  target_batch[:,:no_depth_levels,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_U_tmp += hyper_params["criterion"](predicted[:,no_depth_levels:2*no_depth_levels,:,:],
-                                                               target_batch[:,no_depth_levels:2*no_depth_levels,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_V_tmp += hyper_params["criterion"](predicted[:,2*no_depth_levels:3*no_depth_levels,:,:],
-                                                               target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_Eta_tmp += hyper_params["criterion"](predicted[:,3*no_depth_levels,:,:],
-                                                                 target_batch[:,3*no_depth_levels,:,:]).item() * input_batch.shape[0]
+              losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
+                                         hyper_params["criterion"]( predicted[:,:no_depth_levels,:,:],
+                                         target_batch[:,:no_depth_levels,:,:] ).item() * input_batch.shape[0]
+              losses['train_U'][-1] = losses['train_U'][-1] + \
+                                         hyper_params["criterion"]( predicted[:,no_depth_levels:2*no_depth_levels,:,:],
+                                         target_batch[:,no_depth_levels:2*no_depth_levels,:,:] ).item() * input_batch.shape[0]
+              losses['train_V'][-1] = losses['train_V'][-1] + \
+                                         hyper_params["criterion"]( predicted[:,2*no_depth_levels:3*no_depth_levels,:,:],
+                                         target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
+              losses['train_Eta'][-1] = losses['train_Eta'][-1] + \
+                                         hyper_params["criterion"]( predicted[:,3*no_depth_levels,:,:],
+                                         target_batch[:,3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
            elif dimension == '3d': 
-              train_loss_epoch_tmp += loss.item()*input_batch.shape[0]
-              train_loss_epoch_Temp_tmp += hyper_params["criterion"](predicted[:,0,:,:,:],
-                                                                  target_batch[:,0,:,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_U_tmp += hyper_params["criterion"](predicted[:,1,:,:,:],
-                                                               target_batch[:,1,:,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_V_tmp += hyper_params["criterion"](predicted[:,2,:,:,:],
-                                                               target_batch[:,2,:,:,:]).item() * input_batch.shape[0]
-              train_loss_epoch_Eta_tmp += hyper_params["criterion"](predicted[:,3,0,:,:],
-                                                                 target_batch[:,3,0,:,:]).item() * input_batch.shape[0]
-           #TimeCheck(tic, 'Added loss to list for plotting')
+              losses['train_Temp'][-1] = losses['train_Temp'][-1] + hyper_params["criterion"]    \
+                                             ( predicted[:,0,:,:,:], target_batch[:,0,:,:,:] ).item() * input_batch.shape[0]
+              losses['train_U'][-1] = losses['train_U'][-1] + hyper_params["criterion"]          \
+                                             ( predicted[:,1,:,:,:], target_batch[:,1,:,:,:] ).item() * input_batch.shape[0]
+              losses['train_V'][-1] = losses['train_V'][-1] + hyper_params["criterion"]          \
+                                             ( predicted[:,2,:,:,:], target_batch[:,2,:,:,:] ).item() * input_batch.shape[0]
+              losses['train_Eta'][-1] = losses['train_Eta'][-1] + hyper_params["criterion"]      \
+                                             ( predicted[:,3,0,:,:], target_batch[:,3,0,:,:] ).item() * input_batch.shape[0]
+           #logging.info('updated stored loss values for plotting later')
+           print('updated stored loss values for plotting later')
+           GPUtil.showUtilization() 
    
-           if TEST: 
-              logging.info('train_loss_epoch_tmp; '+str(train_loss_epoch_tmp))
-   
-           if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-              if batch_no == 0:
-                 if dimension == '2d':
-                    target_batch_subsamp = target_batch[0,:,::2,::2].cpu().detach().numpy()
-                    predicted_subsamp = predicted[0,:,::2,::2].cpu().detach().numpy()
-                    ax_temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
-                                    predicted_subsamp[:no_depth_levels,:,:],
-                                    edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-                    ax_U.scatter(target_batch_subsamp[no_depth_levels:2*no_depth_levels,:,:],
-                                 predicted_subsamp[no_depth_levels:2*no_depth_levels,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-                    ax_V.scatter(target_batch_subsamp[2*no_depth_levels:3*no_depth_levels,:,:], 
-                                 predicted_subsamp[2*no_depth_levels:3*no_depth_levels,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-                    ax_Eta.scatter(target_batch_subsamp[3*no_depth_levels,:,:], 
-                                   predicted_subsamp[3*no_depth_levels,:,:],
-                                   edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-                    bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
-                    top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
-                 elif dimension == '3d':
-                    target_batch_subsamp = target_batch[0,:,:,::2,::2].cpu().detach().numpy()
-                    predicted_subsamp = predicted[0,:,:,::2,::2].cpu().detach().numpy()
-                    ax_temp.scatter(target_batch_subsamp[0,:,:,:],
-                                    predicted_subsamp[0,:,:,:],
-                                    edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-                    ax_U.scatter(target_batch_subsamp[1,:,:,:],
-                                 predicted_subsamp[1,:,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-                    ax_V.scatter(target_batch_subsamp[2,:,:,:], 
-                                 predicted_subsamp[2,:,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-                    ax_Eta.scatter(target_batch_subsamp[3,0,:,:], 
-                                   predicted_subsamp[3,0,:,:],
-                                   edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-                    bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
-                    top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
-   
-              GPUtil.showUtilization() 
-
-           if first_pass:
-              # Plot histogram of data, for bug fixing and checking...
-              no_bins = 50
+           if ( epoch%plot_freq == 0  or epoch == hyper_params["num_epochs"]+start_epoch-1 ) and epoch != start_epoch and batch_no == 0:
+              # Save details to plot later
               if dimension == '2d':
-                 for no_var in range(4):
-                    if no_var < 3:
-                       data = input_batch[:,no_var*no_depth_levels:(no_var+1)*no_depth_levels,:,:].cpu().reshape(-1)
-                    else:
-                       data = input_batch[:,no_var*no_depth_levels,:,:].cpu().reshape(-1)
-                    fig2 = plt.figure(figsize=(10, 8))
-                    plt.hist(data, bins = no_bins)
-                    plt.savefig(plot_dir+'/'+model_name+'_histogram_var'+str(no_var)+'_batch'+str(batch_no)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-                    plt.close()
+
+                 # reshape to give each variable its own dimension
+                 tmp_target     = np.zeros(( 4, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ))
+                 tmp_prediction = np.zeros(( 4, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ))
+                 for i in range(3):
+                    tmp_target[i,:,:,:]  = target_batch[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy()
+                    tmp_prediction[i,:,:,:] = predicted[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy()
+                 tmp_target[3,:,:,:] = np.broadcast_to( target_batch[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy(),
+                                                        (1, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ) )
+                 tmp_prediction[3,:,:,:] = np.broadcast_to( predicted[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy(),
+                                                        (1, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ) )
+
+                 plotting_data['targets_train'].append( tmp_target )
+                 plotting_data['predictions_train'].append( tmp_prediction )
+
+              elif dimension == '3d':
+                 plotting_data['targets_train'].append( target_batch[0,:,:,:,:].cpu().detach().numpy() )
+                 plotting_data['predictions_train'].append( predicted[0,:,:,:,:].cpu().detach().numpy() )
+           #logging.info('Saved data for scatter plots later')
+           print('Saved data for scatter plots later')
+           GPUtil.showUtilization() 
+   
+           if epoch == start_epoch and batch_no == 0:
+              # Save info to plot histogram of data
+              hist_data=[]
+              if dimension == '2d':
+                 for no_var in range(3):
+                    hist_data.append( input_batch[:,no_var*no_depth_levels:(no_var+1)*no_depth_levels,:,:].cpu().reshape(-1) )
+                 hist_data.append( input_batch[:,3*no_depth_levels,:,:].cpu().reshape(-1) )
               elif dimension == '3d':
                  for no_var in range(4):
-                    if no_var < 3:
-                       data = input_batch[:,no_var,:,:,:].cpu().reshape(-1)
-                    else:
-                       data = input_batch[:,no_var,0,:,:].cpu().reshape(-1)
-                    fig2 = plt.figure(figsize=(10, 8))
-                    plt.hist(data, bins = no_bins)
-                    plt.savefig(plot_dir+'/'+model_name+'_histogram_var'+str(no_var)+'_batch'+str(batch_no)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-                    plt.close()
-                 #TimeCheck(tic, 'plotted data histogram (first pass only)')
-
+                    hist_data.append( input_batch[:,no_var,:,:,:].cpu().reshape(-1) )
+                 hist_data.append( input_batch[:,3,0,:,:].cpu().reshape(-1) )
+           #logging.info('Saved data for histograms')
+           print('Saved data for histograms')
            GPUtil.showUtilization() 
+
            first_pass = False
-           logging.debug('Batch number '+str(batch_no)+' ')
-           TimeCheck(tic,'finished batch training')
+           #logging.info('Batch number '+str(batch_no)+' ')
+           #TimeCheck(tic,'finished batch training')
+           #GPUtil.showUtilization() 
            batch_no = batch_no + 1
 
-       tr_loss_single_epoch = train_loss_epoch_tmp / no_tr_samples
-       logging.info('epoch {}, training loss {}'.format( epoch, tr_loss_single_epoch )+'\n')
-       train_loss_epoch.append( tr_loss_single_epoch )
-       train_loss_epoch_Temp.append( train_loss_epoch_Temp_tmp / no_tr_samples )
-       train_loss_epoch_U.append( train_loss_epoch_U_tmp / no_tr_samples )
-       train_loss_epoch_V.append( train_loss_epoch_V_tmp / no_tr_samples )
-       train_loss_epoch_Eta.append( train_loss_epoch_Eta_tmp / no_tr_samples )
+       losses['train'][-1] = losses['train'][-1] / no_tr_samples
+       losses['train_Temp'][-1] = losses['train_Temp'][-1] / no_tr_samples
+       losses['train_U'][-1] = losses['train_U'][-1] / no_tr_samples
+       losses['train_V'][-1] = losses['train_V'][-1] / no_tr_samples
+       losses['train_Eta'][-1] = losses['train_Eta'][-1] / no_tr_samples
   
-       if TEST: 
-          logging.info('IN TEST!!!')
-          logging.info('tr_loss_single_epoch; '+str(tr_loss_single_epoch))
-          logging.info('train_loss_epoch; '+str(train_loss_epoch))
-   
-       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-
-           ax_temp.set_xlabel('Truth')
-           ax_temp.set_ylabel('Predictions')
-           ax_temp.set_title('Training errors, Temperature, epoch '+str(epoch))
-           ax_temp.set_xlim(bottom, top)
-           ax_temp.set_ylim(bottom, top)
-           ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax_temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_Temp_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_U.set_xlabel('Truth')
-           ax_U.set_ylabel('Predictions')
-           ax_U.set_title('Training errors, U vel, epoch '+str(epoch))
-           ax_U.set_xlim(bottom, top)
-           ax_U.set_ylim(bottom, top)
-           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax_U.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_U_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_V.set_xlabel('Truth')
-           ax_V.set_ylabel('Predictions')
-           ax_V.set_title('Training errors, V vel, epoch '+str(epoch))
-           ax_V.set_xlim(bottom, top)
-           ax_V.set_ylim(bottom, top)
-           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax_V.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_V_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_Eta.set_xlabel('Truth')
-           ax_Eta.set_ylabel('Predictions')
-           ax_Eta.set_title('Training errors, Eta, epoch '+str(epoch))
-           ax_Eta.set_xlim(bottom, top)
-           ax_Eta.set_ylim(bottom, top)
-           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='blue')
-           ax_Eta.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_Eta_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-   
-       TimeCheck(tic, 'finished epoch training')
+       logging.info('epoch {}, training loss {}'.format(epoch, losses['train'][-1])+'\n')
+       #TimeCheck(tic, 'finished epoch training')
+       print(tic, 'finished epoch training')
+       logging.info(GPUtil.showUtilization() )
 
        # Validation
    
-       val_loss_epoch_tmp = 0.0
        batch_no = 0
        
-       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-           fig_Temp = plt.figure(figsize=(9,9))
-           ax_Temp  = fig_Temp.add_subplot(111)
-           fig_U    = plt.figure(figsize=(9,9))
-           ax_U     = fig_U.add_subplot(111)
-           fig_V    = plt.figure(figsize=(9,9))
-           ax_V     = fig_V.add_subplot(111)
-           fig_Eta  = plt.figure(figsize=(9,9))
-           ax_Eta   = fig_Eta.add_subplot(111)
-           bottom = 0.
-           top = 0.
-   
        for batch_sample in val_loader:
    
            input_batch  = batch_sample['input']
@@ -503,183 +425,189 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
            else:
                input_batch = Variable(input_batch.float())
                target_batch = Variable(target_batch.float())
-           #TimeCheck(tic, 'read in batch and converted to GPU')
            
            h.train(False)
    
            # get prediction from the model, given the inputs
            predicted = h(input_batch)
-           #TimeCheck(tic, 'prediction made')
        
            # get loss for the predicted output
            val_loss = hyper_params["criterion"](predicted, target_batch)
    
-           val_loss_epoch_tmp += val_loss.item()*input_batch.shape[0]
-           #TimeCheck(tic, 'loss calculated')
+           losses['val'][-1] = losses['val'][-1] + val_loss.item()*input_batch.shape[0]
    
-           if TEST: 
-              logging.info('val_loss_epoch_tmp; '+str(val_loss_epoch_tmp))
-  
-           if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-              if batch_no == 0:
-                 if dimension =='2d':
-                    target_batch_subsamp = target_batch[0,:,::2,::2].cpu().detach().numpy()
-                    predicted_subsamp = predicted[0,:,::2,::2].cpu().detach().numpy()
-                    ax_Temp.scatter(target_batch_subsamp[:no_depth_levels,:,:],
-                                    predicted_subsamp[:no_depth_levels,:,:],
-                                    edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-                    ax_U.scatter(target_batch_subsamp[no_depth_levels:2*no_depth_levels,:,:],
-                                 predicted_subsamp[no_depth_levels:2*no_depth_levels,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-                    ax_V.scatter(target_batch_subsamp[2*no_depth_levels:3*no_depth_levels,:,:], 
-                                 predicted_subsamp[2*no_depth_levels:3*no_depth_levels,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-                    ax_Eta.scatter(target_batch_subsamp[3*no_depth_levels,:,:], 
-                                   predicted_subsamp[3*no_depth_levels,:,:],
-                                   edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-                    bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
-                    top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
-                 elif dimension =='3d':
-                    target_batch_subsamp = target_batch[0,:,:,::2,::2].cpu().detach().numpy()
-                    predicted_subsamp = predicted[0,:,:,::2,::2].cpu().detach().numpy()
-                    ax_Temp.scatter(target_batch_subsamp[0,:,:,:],
-                                    predicted_subsamp[0,:,:,:],
-                                    edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
-                    ax_U.scatter(target_batch_subsamp[1,:,:,:],
-                                 predicted_subsamp[1,:,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
-                    ax_V.scatter(target_batch_subsamp[2,:,:,:], 
-                                 predicted_subsamp[2,:,:,:],
-                                 edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
-                    ax_Eta.scatter(target_batch_subsamp[3,0,:,:], 
-                                   predicted_subsamp[3,0,:,:],
-                                   edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
-                    bottom = min(np.amin(predicted_subsamp), np.amin(target_batch_subsamp), bottom)
-                    top    = max(np.amax(predicted_subsamp), np.amax(target_batch_subsamp), top)  
+           if ( epoch%plot_freq == 0 or epoch == hyper_params["num_epochs"]+start_epoch-1 ) and epoch != start_epoch and batch_no == 0:
+              # Save details to plot later
+              if dimension == '2d':
+
+                 # reshape to give each variable its own dimension
+                 tmp_target     = np.zeros(( 4, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ))
+                 tmp_prediction = np.zeros(( 4, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ))
+                 for i in range(3):
+                    tmp_target[i,:,:,:]  = target_batch[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy()
+                    tmp_prediction[i,:,:,:] = predicted[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy()
+                 tmp_target[3,:,:,:] = np.broadcast_to( target_batch[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy(),
+                                                        (1, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ) )
+                 tmp_prediction[3,:,:,:] = np.broadcast_to( predicted[0,i*no_depth_levels:(i+1)*no_depth_levels,:,:].cpu().detach().numpy(),
+                                                        (1, no_depth_levels, target_batch.shape[2], target_batch.shape[3] ) )
+
+                 plotting_data['targets_val'].append( tmp_target )
+                 plotting_data['predictions_val'].append( tmp_prediction )
+
+              elif dimension == '3d':
+                 
+                 plotting_data['targets_val'].append( target_batch[0,:,:,:].cpu().detach().numpy() )
+                 plotting_data['predictions_val'].append( predicted[0,:,:,:].cpu().detach().numpy() )
    
            batch_no = batch_no + 1
-           logging.debug('batch number '+str(batch_no)+' ')
-           TimeCheck(tic, 'batch complete')
+           #logging.info('batch number '+str(batch_no)+' ')
+           #TimeCheck(tic, 'batch complete')
+           #GPUtil.showUtilization() 
    
-       val_loss_single_epoch = val_loss_epoch_tmp / no_val_samples
-       logging.info('epoch {}, validation loss {}'.format(epoch, val_loss_single_epoch)+'\n')
-       val_loss_epoch.append(val_loss_single_epoch)
+       logging.info('epoch {}, validation loss {}'.format(epoch, losses['val'][-1])+'\n')
+       losses['val'][-1] = losses['val'][-1] / no_val_samples
    
-       if TEST: 
-          logging.info('val_loss_single_epoch; '+str(val_loss_single_epoch))
-          logging.info('val_loss_epoch; '+str(val_loss_epoch))
-   
-       if ( epoch%plot_freq == 0 and epoch !=0 ) or epoch == hyper_params["num_epochs"]+start_epoch-1 :
-
-           ax_Temp.set_xlabel('Truth')
-           ax_Temp.set_ylabel('Predictions')
-           ax_Temp.set_title('Training errors, epoch '+str(epoch))
-           ax_Temp.set_xlim(bottom, top)
-           ax_Temp.set_ylim(bottom, top)
-           ax_Temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
-           ax_Temp.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_Temp_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_U.set_xlabel('Truth')
-           ax_U.set_ylabel('Predictions')
-           ax_U.set_title('Training errors, epoch '+str(epoch))
-           ax_U.set_xlim(bottom, top)
-           ax_U.set_ylim(bottom, top)
-           ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
-           ax_U.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_U_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_V.set_xlabel('Truth')
-           ax_V.set_ylabel('Predictions')
-           ax_V.set_title('Training errors, epoch '+str(epoch))
-           ax_V.set_xlim(bottom, top)
-           ax_V.set_ylim(bottom, top)
-           ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
-           ax_V.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_V_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           ax_Eta.set_xlabel('Truth')
-           ax_Eta.set_ylabel('Predictions')
-           ax_Eta.set_title('Training errors, epoch '+str(epoch))
-           ax_Eta.set_xlim(bottom, top)
-           ax_Eta.set_ylim(bottom, top)
-           ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
-           ax_Eta.annotate('Epoch Loss: '+str(tr_loss_single_epoch), (0.15, 0.9), xycoords='figure fraction')
-           plt.savefig(plot_dir+'/'+model_name+'_Eta_scatter_epoch'+str(epoch).rjust(3,'0')+'val.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-           # Plot training and validation loss 
-           fig = plt.figure()
-           ax1 = fig.add_subplot(111)
-           ax1.plot(range(0, start_epoch+epoch+1), train_loss_epoch, color='black', label='Total Training Loss')
-           ax1.plot(range(0, start_epoch+epoch+1), train_loss_epoch_Temp, color='blue', label='Temperature Training Loss')
-           ax1.plot(range(0, start_epoch+epoch+1), train_loss_epoch_U, color='red', label='U Training Loss')
-           ax1.plot(range(0, start_epoch+epoch+1), train_loss_epoch_V, color='orange', label='V Training Loss')
-           ax1.plot(range(0, start_epoch+epoch+1), train_loss_epoch_Eta, color='purple', label='Eta Training Loss')
-           ax1.plot(range(0, start_epoch+epoch+1), val_loss_epoch, color='grey', label='Validation Loss')
-           ax1.set_xlabel('Epochs')
-           ax1.set_ylabel('Loss')
-           ax1.set_yscale('log')
-           #ax1.set_ylim(0.02, 0.3)
-           ax1.legend()
-           plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch_epoch'+str(start_epoch+epoch)+'.png',
-                       bbox_inches = 'tight', pad_inches = 0.1)
-           plt.close()
-
-       if ( epoch%save_freq == 0 and epoch !=0 ) or epoch == (hyper_params["num_epochs"]+start_epoch-1):
+       if losses['val'][-1] < current_best_loss :
            ### SAVE IT ###
-           logging.debug('save model \n')
-           pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
-           #torch.save(h.state_dict(), pkl_filename)
+           logging.info('save model \n')
+           os.remove('../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch*_SavedBESTModel.pt')
+           pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedBESTModel.pt'
            torch.save({
                        'epoch': epoch,
                        'model_state_dict': h.state_dict(),
                        'optimizer_state_dict': optimizer.state_dict(),
                        'loss': loss,
-                       'train_loss_epoch': train_loss_epoch,
-                       'train_loss_epoch_Temp': train_loss_epoch_Temp,
-                       'train_loss_epoch_U': train_loss_epoch_U,
-                       'train_loss_epoch_V': train_loss_epoch_V,
-                       'train_loss_epoch_Eta': train_loss_epoch_Eta,
-                       'val_loss_epoch': val_loss_epoch
+                       'losses': losses,
+                       }, pkl_filename)
+           current_best_loss = losses['val'][-1]
+  
+       if ( epoch%save_freq == 0 or epoch == hyper_params["num_epochs"]+start_epoch-1 ) and epoch != start_epoch :
+           ### SAVE IT ###
+           logging.info('save model \n')
+           pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
+           torch.save({
+                       'epoch': epoch,
+                       'model_state_dict': h.state_dict(),
+                       'optimizer_state_dict': optimizer.state_dict(),
+                       'loss': loss,
+                       'losses': losses,
                        }, pkl_filename)
   
        TimeCheck(tic, 'Epoch finished')
+       GPUtil.showUtilization() 
    
-   info_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_info.txt'
-   info_file = open(info_filename, 'w')
-   np.set_printoptions(threshold=np.inf)
-   info_file.write('hyper_params:    '+str(hyper_params)+'\n')
-   info_file.write('\n')
+   logging.info('hyper_params:    '+str(hyper_params)+'\n')
  
    logging.info(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20)) 
  
-def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, existing_losses):
+   logging.info('End of train model')
+   return(losses, plotting_data, hist_data)
+
+def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses):
    pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
    checkpoint = torch.load(pkl_filename)
    h.load_state_dict(checkpoint['model_state_dict'])
    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
    epoch = checkpoint['epoch']
    loss = checkpoint['loss']
-   existing_losses['train_loss_epoch'] = checkpoint['train_loss_epoch']
-   existing_losses['train_loss_epoch_Temp'] = checkpoint['train_loss_epoch_Temp']
-   existing_losses['train_loss_epoch_U']    = checkpoint['train_loss_epoch_U']
-   existing_losses['train_loss_epoch_V']    = checkpoint['train_loss_epoch_V']
-   existing_losses['train_loss_epoch_Eta']  = checkpoint['train_loss_epoch_Eta']
-   existing_losses['val_loss_epoch'] = checkpoint['val_loss_epoch']
+   losses = checkpoint['losses']
 
    if tr_inf == 'tr':
       h.train()
    elif tr_inf == 'inf':
       h.eval()
 
+
+def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, hist_data):
+   plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/PLOTS/'
+   if not os.path.isdir(plot_dir):
+      os.system("mkdir %s" % (plot_dir))
+ 
+   ## Plot training loss over time
+   fig = plt.figure()
+   ax1 = fig.add_subplot(111)
+   ax1.plot(range(0, len(losses['train'])), losses['train'],       color='black',  label='Training Loss')
+   ax1.plot(range(0, len(losses['train'])), losses['train_Temp'],  color='blue',   label='Temperature Training Loss')
+   ax1.plot(range(0, len(losses['train'])), losses['train_U'],     color='red',    label='U Training Loss')
+   ax1.plot(range(0, len(losses['train'])), losses['train_V'],     color='orange', label='V Training Loss')
+   ax1.plot(range(0, len(losses['train'])), losses['train_Eta'],   color='purple', label='Eta Training Loss')
+   ax1.plot(range(0, len(losses['train'])), losses['val'],         color='grey',   label='Validation Loss')
+   ax1.set_xlabel('Epochs')
+   ax1.set_ylabel('Loss')
+   ax1.set_yscale('log')
+   ax1.legend()
+   plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch_epoch'+str(total_epochs)+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
+ 
+   ## Plot scatter plots of errors after various epochs
+ 
+   for plot_no in range(len(plotting_data['targets_train'])):
+
+      epoch = min(start_epoch + (plot_no+1)*plot_freq, total_epochs)
+
+      fig_train = plt.figure(figsize=(9,9))
+      ax_temp  = fig_train.add_subplot(221)
+      ax_U     = fig_train.add_subplot(222)
+      ax_V     = fig_train.add_subplot(223)
+      ax_Eta   = fig_train.add_subplot(224)
+
+      ax_temp.scatter(plotting_data['targets_train'][plot_no][0,:,:,:],
+                      plotting_data['predictions_train'][plot_no][0,:,:,:],
+                      edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
+      ax_U.scatter(plotting_data['targets_train'][plot_no][1,:,:,:],
+                   plotting_data['predictions_train'][plot_no][1,:,:,:],
+                   edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
+      ax_V.scatter(plotting_data['targets_train'][plot_no][2,:,:,:], 
+                   plotting_data['predictions_train'][plot_no][2,:,:,:],
+                   edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
+      ax_Eta.scatter(plotting_data['targets_train'][plot_no][3,0,:,:], 
+                     plotting_data['predictions_train'][plot_no][3,0,:,:],
+                     edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
+      bottom = min( np.amin(plotting_data['targets_train'][plot_no]), np.amin(plotting_data['predictions_train'][plot_no]) )
+      top    = max( np.amax(plotting_data['targets_train'][plot_no]), np.amax(plotting_data['predictions_train'][plot_no]) )  
+   
+      ax_temp.set_xlabel('Truth')
+      ax_temp.set_ylabel('Predictions')
+      ax_temp.set_title('Training errors, Temperature, epoch '+str(epoch))
+      ax_temp.set_xlim(bottom, top)
+      ax_temp.set_ylim(bottom, top)
+      ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+
+      ax_U.set_xlabel('Truth')
+      ax_U.set_ylabel('Predictions')
+      ax_U.set_title('Training errors, U velocity, epoch '+str(epoch))
+      ax_U.set_xlim(bottom, top)
+      ax_U.set_ylim(bottom, top)
+      ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+
+      ax_V.set_xlabel('Truth')
+      ax_V.set_ylabel('Predictions')
+      ax_V.set_title('Training errors, V velocity, epoch '+str(epoch))
+      ax_V.set_xlim(bottom, top)
+      ax_V.set_ylim(bottom, top)
+      ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+
+      ax_Eta.set_xlabel('Truth')
+      ax_Eta.set_ylabel('Predictions')
+      ax_Eta.set_title('Training errors, Sea Surface Height, epoch '+str(epoch))
+      ax_Eta.set_xlim(bottom, top)
+      ax_Eta.set_ylim(bottom, top)
+      ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+
+      plt.savefig(plot_dir+'/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'training.png',
+                  bbox_inches = 'tight', pad_inches = 0.1)
+      plt.close()
+
+      # plotting histograms of data	§
+      no_bins = 50
+      labels = ['Temp', 'U_vel', 'V_vel', 'Eta']
+      for no_var in range(4):
+          fig_hist = plt.figure(figsize=(10, 8))
+          plt.hist(hist_data[no_var], bins = no_bins)
+          plt.savefig(plot_dir+'/'+model_name+'_histogram_'+str(labels[no_var])+'.png', 
+                      bbox_inches = 'tight', pad_inches = 0.1)
+          plt.close()
 
 def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension):
    #-------------------------------------------------------------
@@ -706,40 +634,40 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    batch_no = 0
 
    h.train(False)
-
-   for batch_sample in data_loader:
-
-       input_batch  = batch_sample['input']
-       target_batch = batch_sample['output']
+   with torch.no_grad():
+      for batch_sample in data_loader:
    
-       # Converting inputs and labels to Variable and send to GPU if available
-       if torch.cuda.is_available():
-           input_batch = Variable(input_batch.cuda().float())
-           target_batch = Variable(target_batch.cuda().float())
-       else:
-           input_batch = Variable(input_batch.float())
-           target_batch = Variable(target_batch.float())
+          input_batch  = batch_sample['input']
+          target_batch = batch_sample['output']
+      
+          # Converting inputs and labels to Variable and send to GPU if available
+          if torch.cuda.is_available():
+              input_batch = Variable(input_batch.cuda().float())
+              target_batch = Variable(target_batch.cuda().float())
+          else:
+              input_batch = Variable(input_batch.float())
+              target_batch = Variable(target_batch.float())
+          
+          # get prediction from the model, given the inputs
+          predicted = h(input_batch)
+     
+          if FirstPass:
+             targets     = target_batch.cpu().detach().numpy()
+             predictions = predicted.cpu().detach().numpy() 
+          else:
+             targets     = np.concatenate( ( targets, target_batch.cpu().detach().numpy() ), axis=0)
+             predictions = np.concatenate( ( predictions, predicted.cpu().detach().numpy() ), axis=0)
        
-       # get prediction from the model, given the inputs
-       predicted = h(input_batch)
-  
-       if FirstPass:
-          targets     = target_batch.cpu().detach().numpy()
-          predictions = predicted.cpu().detach().numpy() 
-       else:
-          targets     = np.concatenate( ( targets, target_batch.cpu().detach().numpy() ), axis=0)
-          predictions = np.concatenate( ( predictions, predicted.cpu().detach().numpy() ), axis=0)
-    
-       FirstPass = False
-       batch_no = batch_no + 1
+          FirstPass = False
+          batch_no = batch_no + 1
 
    if dimension == '2d': 
       Mask_channels = input_batch[0,no_out_channels:,:,:].cpu().detach().numpy()
    elif dimension == '3d': 
       Mask_channels = input_batch[0,no_out_channels:,:,:,:].cpu().detach().numpy()
 
-   logging.debug(targets.shape)
-   logging.debug(predictions.shape)
+   logging.info(targets.shape)
+   logging.info(predictions.shape)
 
    # Denormalise
    targets = rr.RF_DeNormalise(targets, data_mean, data_std, data_range, no_out_channels)
@@ -844,10 +772,14 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       for x in range(targets.shape[3]):
         for y in range(targets.shape[2]):
            for z in range(no_depth_levels):
-              nc_TempCC[z,y,x] = np.corrcoef( predictions[:,                  z,y,x], targets[:,                  z,y,x], rowvar=False )[0,1]
-              nc_U_CC[z,y,x]   = np.corrcoef( predictions[:,1*no_depth_levels+z,y,x], targets[:,1*no_depth_levels+z,y,x], rowvar=False )[0,1]
-              nc_V_CC[z,y,x]   = np.corrcoef( predictions[:,2*no_depth_levels+z,y,x], targets[:,2*no_depth_levels+z,y,x], rowvar=False )[0,1]
-           nc_EtaCC[y,x]  = np.corrcoef( predictions[:,3*no_depth_levels,y,x], targets[:,3*no_depth_levels,y,x], rowvar=False )[0,1]
+              nc_TempCC[z,y,x] = np.corrcoef( predictions[:,                  z,y,x], 
+                                                  targets[:,                  z,y,x], rowvar=False )[0,1]
+              nc_U_CC[z,y,x]   = np.corrcoef( predictions[:,1*no_depth_levels+z,y,x],
+                                                  targets[:,1*no_depth_levels+z,y,x], rowvar=False )[0,1]
+              nc_V_CC[z,y,x]   = np.corrcoef( predictions[:,2*no_depth_levels+z,y,x], 
+                                                  targets[:,2*no_depth_levels+z,y,x], rowvar=False )[0,1]
+           nc_EtaCC[y,x]  = np.corrcoef( predictions[:,3*no_depth_levels,y,x],
+                                             targets[:,3*no_depth_levels,y,x], rowvar=False )[0,1]
    
    elif dimension=='3d':
       nc_TrueTemp[:,:,:,:] = targets[:no_samples,0,:,:,:] 
@@ -935,34 +867,37 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    logging.info(MITgcm_data.shape) 
 
    # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
-   for time in range(for_len):
+   with torch.no_grad():
+      for time in range(for_len):
 
-      if torch.cuda.is_available():
-         predicted = h( Variable(torch.from_numpy(input_sample).cuda().float()) ).cpu().detach().numpy()
-      else:
-         predicted = h( Variable(torch.from_numpy(input_sample).float()) ).detach().numpy()
+         if torch.cuda.is_available():
+            predicted = h( Variable(torch.from_numpy(input_sample).cuda().float()) ).cpu().detach().numpy()
+         else:
+            predicted = h( Variable(torch.from_numpy(input_sample).float()) ).detach().numpy()
 
-      iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
-      if dimension == '2d':
-         MITgcm_data = np.concatenate( ( MITgcm_data, 
-                                        Iterate_Dataset.__getitem__(start+time+1)['input'][:no_out_channels,:,:].unsqueeze(0).numpy() ), axis=0 )
-      elif dimension == '3d':
-         MITgcm_data = np.concatenate( ( MITgcm_data, 
-                                        Iterate_Dataset.__getitem__(start+time+1)['input'][:no_out_channels,:,:,:].unsqueeze(0).numpy() ), axis=0 )
+         iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
+         if dimension == '2d':
+            MITgcm_data = np.concatenate( ( MITgcm_data, 
+                           Iterate_Dataset.__getitem__(start+time+1)['input'][:no_out_channels,:,:].unsqueeze(0).numpy() ), axis=0 )
+         elif dimension == '3d':
+            MITgcm_data = np.concatenate( ( MITgcm_data, 
+                           Iterate_Dataset.__getitem__(start+time+1)['input'][:no_out_channels,:,:,:].unsqueeze(0).numpy() ), axis=0 )
 
-      # Cat mask channels (which are const) to the output ready for inputs for next predictions
-      input_sample = np.concatenate( (predicted, Mask_channels), axis = 1 )
-      # Remask land on outputs ready for next iteration - NEED TO TEST!
-      if dimension == '2d':
-         for i in range(3): 
-            input_sample[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:] = \
-                np.where(Mask_channels[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:]==1, 0, input_sample[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:])
-         input_sample[:,3*no_depth_levels,:,:] = np.where(Mask_channels[:,3*no_depth_levels,:,:]==1, 0, input_sample[:,3*no_depth_levels,:,:])
-      elif dimension == '3d':
-         input_sample[:,0,:,:,:] = np.where(Mask_channels[:,0,:,:,:]==1, 0, input_sample[:,0,:,:,:])
-         input_sample[:,1,:,:,:] = np.where(Mask_channels[:,1,:,:,:]==1, 0, input_sample[:,1,:,:,:])
-         input_sample[:,2,:,:,:] = np.where(Mask_channels[:,2,:,:,:]==1, 0, input_sample[:,2,:,:,:])
-         input_sample[:,3,:,:,:] = np.where(Mask_channels[:,3,:,:,:]==1, 0, input_sample[:,3,:,:,:])
+         # Cat mask channels (which are const) to the output ready for inputs for next predictions
+         input_sample = np.concatenate( (predicted, Mask_channels), axis = 1 )
+         # Remask land on outputs ready for next iteration - NEED TO TEST!
+         if dimension == '2d':
+            for i in range(3): 
+               input_sample[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:] = \
+                   np.where(Mask_channels[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:]==1, 
+                            0, input_sample[:,i*no_depth_levels:(i+1)*no_depth_levels,:,:])
+            input_sample[:,3*no_depth_levels,:,:] = np.where(Mask_channels[:,3*no_depth_levels,:,:]==1, 
+                                                             0, input_sample[:,3*no_depth_levels,:,:])
+         elif dimension == '3d':
+            input_sample[:,0,:,:,:] = np.where(Mask_channels[:,0,:,:,:]==1, 0, input_sample[:,0,:,:,:])
+            input_sample[:,1,:,:,:] = np.where(Mask_channels[:,1,:,:,:]==1, 0, input_sample[:,1,:,:,:])
+            input_sample[:,2,:,:,:] = np.where(Mask_channels[:,2,:,:,:]==1, 0, input_sample[:,2,:,:,:])
+            input_sample[:,3,:,:,:] = np.where(Mask_channels[:,3,:,:,:]==1, 0, input_sample[:,3,:,:,:])
 
    logging.info('iterated_predictions.shape') 
    logging.info(iterated_predictions.shape) 
