@@ -15,6 +15,7 @@ import ReadRoutines as rr
 
 import numpy as np
 import os
+import glob
 import xarray as xr
 import pickle
 
@@ -214,6 +215,8 @@ def ReadMeanStd(MeanStd_prefix):
 def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader,
                val_loader, h, optimizer, hyper_params, seed_value, losses, start_epoch=0):
 
+   device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
    no_depth_levels = 38  # Hard coded...perhaps should change...?
    # Set variables to remove randomness and ensure reproducible results
    os.environ['PYTHONHASHSEED'] = str(seed_value)
@@ -231,13 +234,13 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
                     'targets_val'       : [],
                     'predictions_val'   : []}
 
-   current_best_loss = 0.001
+   current_best_loss = 0.0001
 
    logging.info('###### TRAINING MODEL ######')
    for epoch in range(start_epoch,hyper_params["num_epochs"]+start_epoch):
    
        #logging.info('epoch ; '+str(epoch))
-       print('epoch ; '+str(epoch))
+       print('start of epoch ; '+str(epoch))
        GPUtil.showUtilization() 
 
        # Training
@@ -253,39 +256,34 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
        for batch_sample in train_loader:
 
            #logging.info('batch_no ;'+str(batch_no))
-           print('batch_no ;'+str(batch_no))
-           GPUtil.showUtilization() 
+           #print('batch_no ;'+str(batch_no))
+           #GPUtil.showUtilization() 
 
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Read inputs"):
                  input_batch  = batch_sample['input']
                  target_batch = batch_sample['output']
-           # Converting inputs and labels to Variable and send to GPU if available
-           if torch.cuda.is_available():
-              input_batch = Variable(input_batch.cuda().float())
-              target_batch = Variable(target_batch.cuda().float())
-           else:
-              input_batch = Variable(inputs.float())
-              target_batch = Variable(targets.float())
+           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
+           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
            #logging.info('Read in samples and sent to GPU')
-           print('Read in samples and sent to GPU')
-           GPUtil.showUtilization() 
+           #print('Read in samples and sent to GPU')
+           #GPUtil.showUtilization() 
            
            h.train(True)
    
            # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
            optimizer.zero_grad()
            #logging.info('Set train to true, and cleared ptimizer grad')
-           print('Set train to true, and cleared ptimizer grad')
-           GPUtil.showUtilization() 
+           #print('Set train to true, and cleared ptimizer grad')
+           #GPUtil.showUtilization() 
        
            # get prediction from the model, given the inputs
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Make predictions"):
                  predicted = h(input_batch)
            #logging.info('Made predicitons')
-           print('Made predicitons')
-           GPUtil.showUtilization() 
+           #print('Made predicitons')
+           #GPUtil.showUtilization() 
    
            if epoch==start_epoch and batch_no == 0:
               logging.info('For test run check if output is correct shape, the following two shapes should match!\n')
@@ -297,24 +295,24 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
               with profiler.record_function("Calc Loss"):
                  loss = hyper_params["criterion"](predicted, target_batch)
            #logging.info('Calculated Loss')
-           print('Calculated Loss')
-           GPUtil.showUtilization() 
+           #print('Calculated Loss')
+           #GPUtil.showUtilization() 
            
            # get gradients w.r.t to parameters
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("Back Prop"):
                  loss.backward()
            #logging.info('Calculated gradients')
-           print('Calculated gradients')
-           GPUtil.showUtilization() 
+           #print('Calculated gradients')
+           #GPUtil.showUtilization() 
         
            # update parameters
            with profiler.profile(record_shapes=True, profile_memory=True) as prof:
               with profiler.record_function("optimizer step"):
                  optimizer.step()
            #logging.info('stepped optimiser')
-           print('stepped optimiser')
-           GPUtil.showUtilization() 
+           #print('stepped optimiser')
+           #GPUtil.showUtilization() 
    
            if TEST and epoch == start_epoch and batch_no == 0:  # Recalculate loss post optimizer step to ensure its decreased
               h.train(False)
@@ -349,8 +347,8 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
               losses['train_Eta'][-1] = losses['train_Eta'][-1] + hyper_params["criterion"]      \
                                              ( predicted[:,3,0,:,:], target_batch[:,3,0,:,:] ).item() * input_batch.shape[0]
            #logging.info('updated stored loss values for plotting later')
-           print('updated stored loss values for plotting later')
-           GPUtil.showUtilization() 
+           #print('updated stored loss values for plotting later')
+           #GPUtil.showUtilization() 
    
            if ( epoch%plot_freq == 0  or epoch == hyper_params["num_epochs"]+start_epoch-1 ) and epoch != start_epoch and batch_no == 0:
               # Save details to plot later
@@ -374,8 +372,8 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
                  plotting_data['targets_train'].append( target_batch[0,:,:,:,:].cpu().detach().numpy() )
                  plotting_data['predictions_train'].append( predicted[0,:,:,:,:].cpu().detach().numpy() )
            #logging.info('Saved data for scatter plots later')
-           print('Saved data for scatter plots later')
-           GPUtil.showUtilization() 
+           #print('Saved data for scatter plots later')
+           #GPUtil.showUtilization() 
    
            if epoch == start_epoch and batch_no == 0:
               # Save info to plot histogram of data
@@ -389,13 +387,21 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
                     hist_data.append( input_batch[:,no_var,:,:,:].cpu().reshape(-1) )
                  hist_data.append( input_batch[:,3,0,:,:].cpu().reshape(-1) )
            #logging.info('Saved data for histograms')
-           print('Saved data for histograms')
-           GPUtil.showUtilization() 
+           #print('Saved data for histograms')
+           #GPUtil.showUtilization() 
 
            first_pass = False
            #logging.info('Batch number '+str(batch_no)+' ')
            #TimeCheck(tic,'finished batch training')
            #GPUtil.showUtilization() 
+
+           del batch_sample
+           del input_batch
+           del target_batch
+           del predicted
+           gc.collect()
+           torch.cuda.empty_cache()
+
            batch_no = batch_no + 1
 
        losses['train'][-1] = losses['train'][-1] / no_tr_samples
@@ -406,8 +412,8 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
   
        logging.info('epoch {}, training loss {}'.format(epoch, losses['train'][-1])+'\n')
        #TimeCheck(tic, 'finished epoch training')
-       print(tic, 'finished epoch training')
-       logging.info(GPUtil.showUtilization() )
+       print('end of training epoch ; '+str(epoch))
+       GPUtil.showUtilization() 
 
        # Validation
    
@@ -418,13 +424,9 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
            input_batch  = batch_sample['input']
            target_batch = batch_sample['output']
        
-           # Converting inputs and labels to Variable and send to GPU if available
-           if torch.cuda.is_available():
-               input_batch = Variable(input_batch.cuda().float())
-               target_batch = Variable(target_batch.cuda().float())
-           else:
-               input_batch = Variable(input_batch.float())
-               target_batch = Variable(target_batch.float())
+           # Send inputs and labels to GPU if available
+           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
+           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
            
            h.train(False)
    
@@ -459,6 +461,14 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
                  plotting_data['targets_val'].append( target_batch[0,:,:,:].cpu().detach().numpy() )
                  plotting_data['predictions_val'].append( predicted[0,:,:,:].cpu().detach().numpy() )
    
+           del batch_sample
+           del input_batch
+           del target_batch
+           del predicted
+           del val_loss
+           gc.collect()
+           torch.cuda.empty_cache()
+
            batch_no = batch_no + 1
            #logging.info('batch number '+str(batch_no)+' ')
            #TimeCheck(tic, 'batch complete')
@@ -470,7 +480,8 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
        if losses['val'][-1] < current_best_loss :
            ### SAVE IT ###
            logging.info('save model \n')
-           os.remove('../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch*_SavedBESTModel.pt')
+           for model_file in glob.glob('../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch*_SavedBESTModel.pt'):
+              os.remove(model_file)
            pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedBESTModel.pt'
            torch.save({
                        'epoch': epoch,
@@ -494,6 +505,7 @@ def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, 
                        }, pkl_filename)
   
        TimeCheck(tic, 'Epoch finished')
+       print('end of epoch ; '+str(epoch))
        GPUtil.showUtilization() 
    
    logging.info('hyper_params:    '+str(hyper_params)+'\n')
@@ -621,6 +633,8 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    #  4. Store the RMS and correlation coeffs in netcdf file, along with ~ 50 samples
    #     (saving all samples takes up loads of space and has little benefit)
 
+   device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
    data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix)
 
    # Read in grid data from MITgcm file
@@ -639,15 +653,9 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    
           input_batch  = batch_sample['input']
           target_batch = batch_sample['output']
+          input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
+          target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
       
-          # Converting inputs and labels to Variable and send to GPU if available
-          if torch.cuda.is_available():
-              input_batch = Variable(input_batch.cuda().float())
-              target_batch = Variable(target_batch.cuda().float())
-          else:
-              input_batch = Variable(input_batch.float())
-              target_batch = Variable(target_batch.float())
-          
           # get prediction from the model, given the inputs
           predicted = h(input_batch)
      
@@ -657,7 +665,13 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
           else:
              targets     = np.concatenate( ( targets, target_batch.cpu().detach().numpy() ), axis=0)
              predictions = np.concatenate( ( predictions, predicted.cpu().detach().numpy() ), axis=0)
-       
+
+          del input_batch
+          del target_batch
+          del predicted
+          gc.collect()
+          torch.cuda.empty_cache()
+ 
           FirstPass = False
           batch_no = batch_no + 1
 
@@ -836,6 +850,8 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs, y_dim_used, land, dimension):
    #-------------------------------------------------------------
 
+   device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
    data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix)
 
    no_depth_levels = 38  # Hard coded...perhaps should change...?
@@ -870,12 +886,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    with torch.no_grad():
       for time in range(for_len):
 
-         if torch.cuda.is_available():
-            predicted = h( Variable(torch.from_numpy(input_sample).cuda().float()) ).cpu().detach().numpy()
-         else:
-            predicted = h( Variable(torch.from_numpy(input_sample).float()) ).detach().numpy()
+         predicted = h( torch.from_numpy(input_sample).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
 
          iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
+
          if dimension == '2d':
             MITgcm_data = np.concatenate( ( MITgcm_data, 
                            Iterate_Dataset.__getitem__(start+time+1)['input'][:no_out_channels,:,:].unsqueeze(0).numpy() ), axis=0 )
@@ -885,6 +899,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
 
          # Cat mask channels (which are const) to the output ready for inputs for next predictions
          input_sample = np.concatenate( (predicted, Mask_channels), axis = 1 )
+
          # Remask land on outputs ready for next iteration - NEED TO TEST!
          if dimension == '2d':
             for i in range(3): 
@@ -898,6 +913,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
             input_sample[:,1,:,:,:] = np.where(Mask_channels[:,1,:,:,:]==1, 0, input_sample[:,1,:,:,:])
             input_sample[:,2,:,:,:] = np.where(Mask_channels[:,2,:,:,:]==1, 0, input_sample[:,2,:,:,:])
             input_sample[:,3,:,:,:] = np.where(Mask_channels[:,3,:,:,:]==1, 0, input_sample[:,3,:,:,:])
+
+         del predicted
+         gc.collect()
+         torch.cuda.empty_cache()
 
    logging.info('iterated_predictions.shape') 
    logging.info(iterated_predictions.shape) 

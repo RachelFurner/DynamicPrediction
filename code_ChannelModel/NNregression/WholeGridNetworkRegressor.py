@@ -52,18 +52,18 @@ def parse_args():
     a.add_argument("-n", "--name", default="", action='store')
     a.add_argument("-te", "--test", default=False, type=bool, action='store')
     a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool, action='store')
-    a.add_argument("-tr", "--trainmodel", default=True, type=bool, action='store')
+    a.add_argument("-tr", "--trainmodel", default=False, type=bool, action='store')
     a.add_argument("-lo", "--loadmodel", default=False, type=bool, action='store')
     a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
-    a.add_argument("-a", "--assess", default=True, type=bool, action='store')
-    a.add_argument("-i", "--iterate", default=True, type=bool, action='store')
+    a.add_argument("-a", "--assess", default=False, type=bool, action='store')
+    a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
 
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='ExcLand', type=str, action='store')
     a.add_argument("-p", "--padding", default='None', type=str, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
 
-    a.add_argument("-w", "--numworkers", default=4, type=int, action='store')
+    a.add_argument("-w", "--numworkers", default=8, type=int, action='store')
     a.add_argument("-b", "--batchsize", default=32, type=int, action='store')
     a.add_argument("-e", "--epochs", default=200, type=int, action='store')
     a.add_argument("-lr", "--learningrate", default=0.0001, type=float, action='store')
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
     
     plot_freq = 25     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
-    save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
+    save_freq = 25      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
     for_len = 30*6   # How long to iteratively predict for
     start = 5        #
@@ -120,16 +120,15 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
     
     if args.test: 
-       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
+       model_name = args.name+args.land+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
     else:
        model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])
     MeanStd_prefix = args.land+'_'+args.dim
     
     # Overwrite certain variables if testing code and set up test bits
     if args.test:
-       hyper_params['batch_size'] = 32
        hyper_params['num_epochs'] = 5
-       subsample_rate = 500 # Keep datasets small when in testing mode
+       subsample_rate = 50 # Keep datasets small when in testing mode
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
@@ -150,7 +149,7 @@ if __name__ == "__main__":
     else:
        start_epoch = args.savedepochs
        total_epochs = args.savedepochs
-    
+   
     if args.land == 'IncLand':
        y_dim_used = 104
     elif args.land == 'ExcLand':
@@ -214,8 +213,10 @@ if __name__ == "__main__":
     else:
        raise RuntimeError("ERROR!!! what's happening with dimensions?!")
     
-    train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True, num_workers=args.numworkers )
-    val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, num_workers=args.numworkers )
+    train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True,
+                                               num_workers=args.numworkers, pin_memory=True )
+    val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, 
+                                               num_workers=args.numworkers, pin_memory=True )
     
     TimeCheck(tic, 'reading training & validation data')
     logging.info( GPUtil.showUtilization() )
@@ -223,8 +224,8 @@ if __name__ == "__main__":
     #--------------
     # Set up model
     #--------------
-    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"], args.seed, args.padding)
-    
+    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"], args.seed, args.padding, x_dim, y_dim_used)
+   
     TimeCheck(tic, 'setting up model')
     logging.info( GPUtil.showUtilization() )
     
