@@ -11,7 +11,7 @@
 
 import sys
 sys.path.append('../Tools')
-import ReadRoutines as rr
+import Dev_ReadRoutines as rr
 
 import numpy as np
 import os
@@ -58,12 +58,12 @@ def TimeCheck(tic, task):
    logging.info('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index,
-                batch_size, land, dimension, tic):
+                batch_size, hist_len, land, dimension, tic):
 
    no_depth_levels = 38 ## Note this is hard coded!!
 
    if dimension == '2d':
-      mean_std_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, land, tic,
+      mean_std_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, hist_len, land, tic,
                                                transform=None)
       mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
       #------------------------------------
@@ -129,7 +129,7 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       #-------------------------
 
    elif dimension == '3d':
-      mean_std_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, land, tic,
+      mean_std_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, hist_len, land, tic,
                                                transform=None)
       mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
       
@@ -185,17 +185,10 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
    
       #-------------------------
 
-   no_in_channels = input_batch.shape[1]
-   no_out_channels = output_batch.shape[1]
-
    ## Save to file, so can be used to un-normalise when using model to predict
    mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
-   np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, no_in_channels, no_out_channels)
+   np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range)
    
-   logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
-   logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
-  
-   return no_in_channels, no_out_channels
 
 
 def ReadMeanStd(MeanStd_prefix):
@@ -204,13 +197,8 @@ def ReadMeanStd(MeanStd_prefix):
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
    inputs_range = mean_std_data['arr_2']
-   no_in_channels  = mean_std_data['arr_3']
-   no_out_channels  = mean_std_data['arr_4']
 
-   logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
-   logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
-
-   return(inputs_mean, inputs_std, inputs_range, no_in_channels, no_out_channels)
+   return(inputs_mean, inputs_std, inputs_range)
 
 def TrainModel(model_name, dimension, tic, TEST, no_tr_samples, no_val_samples, plot_freq, save_freq, train_loader,
                val_loader, h, optimizer, hyper_params, seed_value, losses, start_epoch=0):
@@ -529,6 +517,8 @@ def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses):
    elif tr_inf == 'inf':
       h.eval()
 
+ 
+   return losses, h, optimizer
 
 def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, hist_data):
    plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/PLOTS/'
@@ -647,19 +637,39 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
    batch_no = 0
 
-   h.train(False)
+   if isinstance(h, list):
+      for i in range(len(h)):
+         h[i].train(False)
+         if torch.cuda.is_available():
+            h[i] = h[i].cuda()
+   else:
+      h.train(False)
+      if torch.cuda.is_available():
+         h = h.cuda()
+
    with torch.no_grad():
       for batch_sample in data_loader:
-   
+  
+          print('batch_no; '+str(batch_no))
           input_batch  = batch_sample['input']
           target_batch = batch_sample['output']
           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
       
           # get prediction from the model, given the inputs
-          predicted = h(input_batch)
+          if isinstance(h, list):
+             predicted = h[0](input_batch)
+             for i in range(1, len(h)):
+                predicted = predicted + h[i](input_batch)
+             predicted = predicted / len(h)
+          else:
+             predicted = h(input_batch)
      
           if FirstPass:
+             if dimension == '2d': 
+                Mask_channels = input_batch[0,no_out_channels:,:,:].cpu().detach().numpy()
+             elif dimension == '3d': 
+                 Mask_channels = input_batch[0,no_out_channels:,:,:,:].cpu().detach().numpy()
              targets     = target_batch.cpu().detach().numpy()
              predictions = predicted.cpu().detach().numpy() 
           else:
@@ -675,10 +685,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
           FirstPass = False
           batch_no = batch_no + 1
 
-   if dimension == '2d': 
-      Mask_channels = input_batch[0,no_out_channels:,:,:].cpu().detach().numpy()
-   elif dimension == '3d': 
-      Mask_channels = input_batch[0,no_out_channels:,:,:,:].cpu().detach().numpy()
+   print('batches done')
 
    logging.info(targets.shape)
    logging.info(predictions.shape)
@@ -686,6 +693,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    # Denormalise
    targets = rr.RF_DeNormalise(targets, data_mean, data_std, data_range, no_out_channels)
    predictions = rr.RF_DeNormalise(predictions, data_mean, data_std, data_range, no_out_channels)
+   print('de-normalised')
    
    # Set up netcdf files
    nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput.nc'
@@ -862,9 +870,15 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    da_Y = mitgcm_ds['Yp1']
    da_Z = mitgcm_ds['diag_levels'] 
 
-   h.train(False)
-   if torch.cuda.is_available():
-       h = h.cuda()
+   if isinstance(h, list):
+      for i in range(len(h)):
+         h[i].train(False)
+         if torch.cuda.is_available():
+            h[i] = h[i].cuda()
+   else:
+      h.train(False)
+      if torch.cuda.is_available():
+         h = h.cuda()
 
    # Read in first sample from MITgcm dataset and save as first entry in both arrays
    if dimension == '2d':
@@ -877,16 +891,19 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       iterated_predictions = input_sample[:,:no_out_channels,:,:,:]
       MITgcm_data = input_sample[:,:no_out_channels,:,:,:]
       Mask_channels = input_sample[:,no_out_channels:,:,:,:]
-   logging.info('iterated_predictions.shape') 
-   logging.info(iterated_predictions.shape) 
-   logging.info('MITgcm_data.shape') 
-   logging.info(MITgcm_data.shape) 
 
    # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
    with torch.no_grad():
       for time in range(for_len):
-
-         predicted = h( torch.from_numpy(input_sample).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+         print(time)
+         if isinstance(h, list):
+            predicted = h[0]( torch.from_numpy(input_sample).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+            for i in range(1, len(h)):
+               predicted = predicted + \
+                           h[i]( torch.from_numpy(input_sample).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+            predicted = predicted / len(h)
+         else:
+            predicted = h( torch.from_numpy(input_sample).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
 
          iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
 

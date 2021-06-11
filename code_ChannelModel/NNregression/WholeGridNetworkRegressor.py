@@ -60,7 +60,9 @@ def parse_args():
 
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='ExcLand', type=str, action='store')
+    a.add_argument("-k", "--kernsize", default=3, type=int, action='store')
     a.add_argument("-p", "--padding", default='None', type=str, action='store')
+    a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
 
     a.add_argument("-w", "--numworkers", default=8, type=int, action='store')
@@ -118,17 +120,17 @@ if __name__ == "__main__":
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    
+   
     if args.test: 
-       model_name = args.name+args.land+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
+       model_name = args.name+args.land+'_ksize'+str(args.kernsize)+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_TEST'
     else:
-       model_name = args.name+args.land+'_'+args.padding+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])
+       model_name = args.name+args.land+'_ksize'+str(args.kernsize)+'_'+args.modelstyle+'_lr'+str(hyper_params['learning_rate'])+'_seed'+str(args.seed)
     MeanStd_prefix = args.land+'_'+args.dim
     
     # Overwrite certain variables if testing code and set up test bits
     if args.test:
        hyper_params['num_epochs'] = 5
-       subsample_rate = 50 # Keep datasets small when in testing mode
+       subsample_rate = 500 # Keep datasets small when in testing mode
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
@@ -157,7 +159,7 @@ if __name__ == "__main__":
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
     
-    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_97x240Domain/runs/100yrs/'
+    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_106x240Domain/runs/100yrs/'
     #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
     MITGCM_filename = DIR+'daily_ave_50yrs.nc'
     dataset_end_index = 50*360  # Look at 50 yrs of data
@@ -168,6 +170,7 @@ if __name__ == "__main__":
     val_end  = int(val_end_ratio * dataset_end_index)
     x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
     y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
+    z_dim    = ( ds.isel( T=slice(0) ) ).sizes['Zld000038']
     
     no_tr_samples = int(tr_end/subsample_rate)+1
     no_val_samples = int((val_end - tr_end)/subsample_rate)+1
@@ -189,10 +192,21 @@ if __name__ == "__main__":
     # Calulate, or read in mean and std
     #-----------------------------------
     if args.calculatemeanstd:
-       no_in_channels, no_out_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index, hyper_params["batch_size"], args.land, args.dim, tic)
+       no_in_channels, no_out_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate, dataset_end_index,
+                                                     hyper_params["batch_size"], args.land, args.dim, tic)
     
-    data_mean, data_std, data_range, no_in_channels, no_out_channels = ReadMeanStd(MeanStd_prefix)
+    data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
+ 
+    if args.dim == '2d':
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + 3*z_dim +1  # Eta field, plus Temp, U, V through depth, for each past time, plus masks
+       no_out_channels = 3*z_dim + 1                                # Eta field, plus Temp, U, V through depth, just once
+    elif args.dim == '3d':
+       no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
+       no_out_channels = 4                    # Eta, Temp, U, V just once
     
+    logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
+    logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
+
     TimeCheck(tic, 'getting mean & std')
     logging.info( GPUtil.showUtilization() )
     
@@ -201,14 +215,18 @@ if __name__ == "__main__":
     #-------------------------------------------------------------------------------------
     # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
     if args.dim == '2d':
-       Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+       Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
+                                             args.histlen, args.land, tic, 
                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+       Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
+                                             args.histlen, args.land, tic, 
                                              transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
     elif args.dim == '3d':
-       Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+       Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
+                                             args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index, args.land, tic, 
+       Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
+                                             args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
     else:
        raise RuntimeError("ERROR!!! what's happening with dimensions?!")
@@ -224,7 +242,8 @@ if __name__ == "__main__":
     #--------------
     # Set up model
     #--------------
-    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"], args.seed, args.padding, x_dim, y_dim_used)
+    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"],
+                               args.seed, args.padding, x_dim, y_dim_used, z_dim, args.kernsize)
    
     TimeCheck(tic, 'setting up model')
     logging.info( GPUtil.showUtilization() )
@@ -239,10 +258,10 @@ if __name__ == "__main__":
               'train_V'   : [],
               'train_Eta' : [],
               'val'       : [] }
-    
+   
     if args.loadmodel:
        if args.trainmodel:
-          LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses)
+          losses, h, optimizer = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses)
           losses, plotting_data, hist_data = TrainModel(model_name, args.dim, tic, args.test, no_tr_samples, no_val_samples, 
                                                         plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params,
                                                         args.seed, losses, start_epoch=start_epoch)
@@ -272,10 +291,10 @@ if __name__ == "__main__":
     # Iteratively predict 
     #---------------------
     if args.dim == '2d':
-       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.land, tic, 
+       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
     elif args.dim == '3d':
-       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.land, tic, 
+       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range)] ) )
     
     if args.iterate:

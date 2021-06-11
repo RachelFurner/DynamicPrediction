@@ -19,12 +19,9 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name_prefix = 'ExcLand_None_2d_'
-model_name_prefix = dir_name_prefix
-#model_style = 'UNet'
-model_style = 'UNet_transp'
-learning_rate = '0.0001'
 epochs = '199'
+dir_name = 'MultiModel_IncLand_ksize3_UNet2dtransp'
+model_name = dir_name+'_'+epochs+'epochs'
 for_len = 6*30
 animation_start = 0
 animation_end = 6*30
@@ -34,8 +31,6 @@ make_animation_plots = True
 
 #-----------
 
-dir_name = dir_name_prefix+model_style+'_lr'+learning_rate
-model_name = model_name_prefix+model_style+'_lr'+learning_rate+'_'+epochs+'epochs'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
 
