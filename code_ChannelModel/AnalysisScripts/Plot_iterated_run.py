@@ -20,7 +20,7 @@ plt.rcParams.update({'font.size': 14})
 point = [ 2, 48, 120]
 
 epochs = '199'
-dir_name = 'MultiModel_IncLand_ksize3_UNet2dtransp'
+dir_name = 'histfields_ExcLand_ksize3_UNet2dtransp_lr0.0001_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
 for_len = 6*30
 animation_start = 0

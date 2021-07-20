@@ -19,8 +19,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '199'
-dir_name = 'MultiModel_IncLand_ksize3_UNet2dtransp'
+epochs = '30'
+dir_name = 'ExcLand_UNet2dtransp_histlen1_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
@@ -38,10 +38,6 @@ da_Temp_RMS = stats_ds['TempRMS']
 da_U_RMS    = stats_ds['U_RMS']
 da_V_RMS    = stats_ds['V_RMS']
 da_Eta_RMS  = stats_ds['EtaRMS']
-da_Temp_CC  = stats_ds['TempCC']
-da_U_CC     = stats_ds['U_CC']
-da_V_CC     = stats_ds['V_CC']
-da_Eta_CC   = stats_ds['EtaCC']
 da_X = stats_ds['X']
 da_Y = stats_ds['Y']
 da_Z = stats_ds['Z']

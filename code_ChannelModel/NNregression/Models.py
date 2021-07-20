@@ -33,8 +33,8 @@ class CustomPad2dTransp(nn.Module):
       self.kern_size = kern_size
    def forward(self, x):
       # apply cyclical padding in x dir
-      pad_size = int( (self.kern_size-1)/2 )
-      x = nn.functional.pad(x, (pad_size,pad_size,0,0), mode='circular')
+      # pad_size = int( (self.kern_size-1)/2 )
+      x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0), mode='circular')
       return x
 
 class CustomPad3dTransp(nn.Module):
@@ -43,8 +43,8 @@ class CustomPad3dTransp(nn.Module):
       self.kern_size = kern_size
    def forward(self, x):
       # apply cyclical padding in x dir
-      pad_size = int( (self.kern_size-1)/2 )
-      x = nn.functional.pad(x, (pad_size,pad_size,0,0,0,0), mode='circular')
+      # pad_size = int( (self.kern_size-1)/2 )
+      x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0, 0, 0), mode='circular')
       return x
 
 class CustomPad2d(nn.Module):
@@ -152,6 +152,7 @@ class UNet2dTransp(nn.Module):
       del x
       del enc1
       del enc2
+      del cust_pad
       gc.collect()
       torch.cuda.empty_cache()
 
@@ -292,6 +293,7 @@ class UNet3dTransp(nn.Module):
       del x
       del enc1
       del enc2
+      del cust_pad
       gc.collect()
       torch.cuda.empty_cache()
 
