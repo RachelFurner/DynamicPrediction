@@ -18,7 +18,7 @@ import os
 #----------------------------
 plot_log = False
 
-run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2, 'StepSize':10}
 
 data_prefix=''
 model_prefix = 'alpha.001_'
@@ -228,6 +228,7 @@ if run_vars['lat'] or run_vars['lon'] or run_vars['dep']:
 #--------------------------------
 
 coef_filename = rootdir+'MODELS/'+exp_name+'_coefs.npz'
+print(coef_filename)
 coeff_data = np.load(coef_filename)
 intercept  = coeff_data['arr_0']
 raw_coeffs = coeff_data['arr_1']

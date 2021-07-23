@@ -19,10 +19,13 @@ import netCDF4 as nc4
 
 plt.rcParams.update({'font.size': 14})
 
+
+## WARNING: this code is not set up to work with StepSize other than 1
+
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':3, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2, 'StepSize':1}
 
 data_prefix=''
 exp_prefix = ''

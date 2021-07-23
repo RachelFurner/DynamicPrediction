@@ -156,10 +156,12 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    info_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_info.txt'
    info_file=open(info_filename,"w")
 
-   StepSize = 1 # how many output steps (months!) to predict over
+   #StepSize = 1 # how many output steps (months!) to predict over
+   StepSize = run_vars['StepSize'] # how many output steps (months!) to predict over
    halo_size = 1
    halo_list = (range(-halo_size, halo_size+1))
    subsample_rate = 200
+   #subsample_rate = 2000000
 
    start = 0
    data_end_index = 7200   # look at first 20yrs only for now to ensure dataset sizes aren't too huge!
@@ -248,6 +250,7 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
 
    for t in range(start, trainval_split, subsample_rate):  
+        print(t)
         #---------#
         # Region1 #
         #---------#
@@ -275,16 +278,20 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  density[t,z_lw_1-1:z_up_1+1,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1], 
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
+        outputs_1_DelT = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
+        outputs_1_Temp = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
 
-        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-        outputs_1 = outputs_1.reshape((-1, 1))
+        outputs_1_DelT = outputs_1_DelT.reshape((-1, 1))
+        outputs_1_Temp = outputs_1_Temp.reshape((-1, 1))
 
         if t == start:
            inputs_tr  = inputs_1 
-           outputs_tr = outputs_1
+           outputs_tr_DelT = outputs_1_DelT
+           outputs_tr_Temp = outputs_1_Temp
         else:
            inputs_tr  = np.concatenate( (inputs_tr , inputs_1 ), axis=0)
-           outputs_tr = np.concatenate( (outputs_tr, outputs_1), axis=0)
+           outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_1_DelT), axis=0)
+           outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_1_Temp), axis=0)
 
         #---------#
         # Region2 #
@@ -314,11 +321,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
                                  da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
-        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-        outputs_2 = outputs_2.reshape((-1, 1))
+        outputs_2_DelT = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+        outputs_2_Temp = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+
+        outputs_2_DelT = outputs_2_DelT.reshape((-1, 1))
+        outputs_2_Temp = outputs_2_Temp.reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_2 ), axis=0)
-        outputs_tr = np.concatenate( (outputs_tr, outputs_2), axis=0)
+        outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_2_DelT), axis=0)
+        outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_2_Temp), axis=0)
 
         #---------#
         # Region3 #
@@ -348,11 +359,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
                                  da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
-        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-        outputs_3 = outputs_3.reshape((-1, 1))
+        outputs_3_DelT = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+        outputs_3_Temp = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] 
+
+        outputs_3_DelT = outputs_3_DelT.reshape((-1, 1))
+        outputs_3_Temp = outputs_3_Temp.reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_3 ), axis=0)
-        outputs_tr = np.concatenate( (outputs_tr, outputs_3), axis=0)
+        outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_3_DelT), axis=0)
+        outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_3_Temp), axis=0)
 
 
    for t in range(trainval_split, valtest_split, subsample_rate):  
@@ -385,15 +400,20 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
-        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-        outputs_1 = outputs_1.reshape((-1, 1))
+        outputs_1_DelT = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
+        outputs_1_Temp = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
+ 
+        outputs_1_DelT = outputs_1_DelT.reshape((-1, 1))
+        outputs_1_Temp = outputs_1_Temp.reshape((-1, 1))
 
         if t == trainval_split:
            inputs_val  = inputs_1 
-           outputs_val = outputs_1
+           outputs_val_DelT = outputs_1_DelT
+           outputs_val_Temp = outputs_1_Temp
         else:
            inputs_val  = np.concatenate( (inputs_val , inputs_1 ), axis=0)
-           outputs_val = np.concatenate( (outputs_val, outputs_1), axis=0)
+           outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_1_DelT), axis=0)
+           outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_1_Temp), axis=0)
 
         #---------#
         # Region2 #
@@ -423,11 +443,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
                                  da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
 
-        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-        outputs_2 = outputs_2.reshape((-1, 1))
+        outputs_2_DelT = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+        outputs_2_Temp = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+
+        outputs_2_DelT = outputs_2_DelT.reshape((-1, 1))
+        outputs_2_Temp = outputs_2_Temp.reshape((-1, 1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_2 ), axis=0)
-        outputs_val = np.concatenate( (outputs_val, outputs_2), axis=0)
+        outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_2_DelT), axis=0)
+        outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_2_Temp), axis=0)
 
         #---------#
         # Region3 #
@@ -457,11 +481,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
                                  da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
-        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-        outputs_3 = outputs_3.reshape((-1,1))
+        outputs_3_DelT = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+        outputs_3_Temp = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+
+        outputs_3_DelT = outputs_3_DelT.reshape((-1,1))
+        outputs_3_Temp = outputs_3_Temp.reshape((-1,1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_3 ), axis=0)
-        outputs_val = np.concatenate( (outputs_val, outputs_3), axis=0)
+        outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_3_DelT), axis=0)
+        outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_3_Temp), axis=0)
 
 
    for t in range(valtest_split, data_end_index, subsample_rate):  
@@ -494,15 +522,20 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta[t,y_lw_1-1:y_up_1+1,x_lw_1-1:x_up_1+1],
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
 
-        outputs_1 = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
-        outputs_1 = outputs_1.reshape((-1, 1))
+        outputs_1_DelT = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
+        outputs_1_Temp = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
+
+        outputs_1_DelT = outputs_1_DelT.reshape((-1, 1))
+        outputs_1_Temp = outputs_1_Temp.reshape((-1, 1))
 
         if t == valtest_split:
            inputs_te  = inputs_1 
-           outputs_te = outputs_1
+           outputs_te_DelT = outputs_1_DelT
+           outputs_te_Temp = outputs_1_Temp
         else:
            inputs_te  = np.concatenate( (inputs_te , inputs_1 ), axis=0)
-           outputs_te = np.concatenate( (outputs_te, outputs_1), axis=0)
+           outputs_te_DelT = np.concatenate( (outputs_te_DelT, outputs_1_DelT), axis=0)
+           outputs_te_Temp = np.concatenate( (outputs_te_Temp, outputs_1_Temp), axis=0)
 
         #---------#
         # Region2 #
@@ -532,11 +565,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta2[t,y_lw_2-1:y_up_2+1,x_lw_2-1:x_up_2+1],
                                  da_lat[y_lw_2:y_up_2], da_lon2[x_lw_2:x_up_2], da_depth[z_lw_2:z_up_2] )
         
-        outputs_2 = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
-        outputs_2 = outputs_2.reshape((-1, 1))
+        outputs_2_DelT = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+        outputs_2_Temp = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] 
+
+        outputs_2_DelT = outputs_2_DelT.reshape((-1, 1))
+        outputs_2_Temp = outputs_2_Temp.reshape((-1, 1))
 
         inputs_te  = np.concatenate( (inputs_te , inputs_2 ), axis=0)
-        outputs_te = np.concatenate( (outputs_te, outputs_2), axis=0)
+        outputs_te_DelT = np.concatenate( (outputs_te_DelT, outputs_2_DelT), axis=0)
+        outputs_te_Temp = np.concatenate( (outputs_te_Temp, outputs_2_Temp), axis=0)
 
         #---------#
         # Region3 #
@@ -566,11 +603,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_Eta3[t,y_lw_3-1:y_up_3+1,x_lw_3-1:x_up_3+1],
                                  da_lat[y_lw_3:y_up_3], da_lon3[x_lw_3:x_up_3], da_depth[z_lw_3:z_up_3] )
 
-        outputs_3 = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
-        outputs_3 = outputs_3.reshape((-1, 1))
+        outputs_3_DelT = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+        outputs_3_Temp = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+
+        outputs_3_DelT = outputs_3_DelT.reshape((-1, 1))
+        outputs_3_Temp = outputs_3_Temp.reshape((-1, 1))
 
         inputs_te  = np.concatenate( (inputs_te , inputs_3 ), axis=0)
-        outputs_te = np.concatenate( (outputs_te, outputs_3), axis=0)
+        outputs_te_DelT = np.concatenate( (outputs_te_DelT, outputs_3_DelT), axis=0)
+        outputs_te_Temp = np.concatenate( (outputs_te_Temp, outputs_3_Temp), axis=0)
 
 
    # Release memory
@@ -642,52 +683,55 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    ordering_te  = np.random.permutation(inputs_te.shape[0])
    
    inputs_tr = inputs_tr[ordering_tr]
-   outputs_tr = outputs_tr[ordering_tr]
+   outputs_tr_DelT = outputs_tr_DelT[ordering_tr]
+   outputs_tr_Temp = outputs_tr_Temp[ordering_tr]
    inputs_val = inputs_val[ordering_val]
-   outputs_val = outputs_val[ordering_val]
+   outputs_val_DelT = outputs_val_DelT[ordering_val]
+   outputs_val_Temp = outputs_val_Temp[ordering_val]
    inputs_te = inputs_te[ordering_te]
-   outputs_te = outputs_te[ordering_te]
+   outputs_te_DelT = outputs_te_DelT[ordering_te]
+   outputs_te_Temp = outputs_te_Temp[ordering_te]
 
    if plot_histograms:
       #-----------------------------
       # Plot histograms of the data
       #-----------------------------
-      fig = rfplt.Plot_Histogram(outputs_tr, 100)
+      fig = rfplt.Plot_Histogram(outputs_tr_DelT, 100)
       plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_train_outputs', bbox_inches = 'tight', pad_inches = 0.1)
       
-      fig = rfplt.Plot_Histogram(outputs_val, 100)
+      fig = rfplt.Plot_Histogram(outputs_val_DelT, 100)
       plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_val_outputs', bbox_inches = 'tight', pad_inches = 0.1)
       
-      fig = rfplt.Plot_Histogram(outputs_te, 100)
+      fig = rfplt.Plot_Histogram(outputs_te_DelT, 100)
       plt.savefig('../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_histogram_test_outputs', bbox_inches = 'tight', pad_inches = 0.1)
      
    # Count number of large samples...
    print('*********************************')
-   print('Number of training & validation samples > 0.0005: '+str(sum(outputs_tr > 0.0005)+ sum(outputs_tr <= -0.0005))+', '+
-                                                              str(sum(outputs_val > 0.0005)+ sum(outputs_val <= -0.0005)) )
-   print('Number of training & validation samples > 0.001:  '+str(sum(outputs_tr > 0.001) + sum(outputs_tr <= -0.001)) +', '+
-                                                              str(sum(outputs_val > 0.001) + sum(outputs_val <= -0.001)) )
-   print('Number of training & validation samples > 0.002:  '+str(sum(outputs_tr > 0.002) + sum(outputs_tr <= -0.002)) +', '+
-                                                              str(sum(outputs_val > 0.002) + sum(outputs_val <= -0.002)) )
-   print('Number of training & validation samples > 0.0025: '+str(sum(outputs_tr > 0.0025)+ sum(outputs_tr <= -0.0025))+', '+
-                                                              str(sum(outputs_val > 0.0025)+ sum(outputs_val <= -0.0025)) )
-   print('Number of training & validation samples > 0.003:  '+str(sum(outputs_tr > 0.003) + sum(outputs_tr <= -0.003)) +', '+
-                                                              str(sum(outputs_val > 0.003) + sum(outputs_val <= -0.003)) )
-   print('Number of training & validation samples > 0.004:  '+str(sum(outputs_tr > 0.004) + sum(outputs_tr <= -0.004)) +', '+
-                                                              str(sum(outputs_val > 0.004) + sum(outputs_val <= -0.004)) )
-   print('Number of training & validation samples > 0.005:  '+str(sum(outputs_tr > 0.005) + sum(outputs_tr <= -0.005)) +', '+
-                                                              str(sum(outputs_val > 0.005) + sum(outputs_val <= -0.005)) )
+   print('Number of training & validation samples > 0.0005: '+str(sum(outputs_tr_DelT > 0.0005)+ sum(outputs_tr_DelT <= -0.0005))+', '+
+                                                              str(sum(outputs_val_DelT > 0.0005)+ sum(outputs_val_DelT <= -0.0005)) )
+   print('Number of training & validation samples > 0.001:  '+str(sum(outputs_tr_DelT > 0.001) + sum(outputs_tr_DelT <= -0.001)) +', '+
+                                                              str(sum(outputs_val_DelT > 0.001) + sum(outputs_val_DelT <= -0.001)) )
+   print('Number of training & validation samples > 0.002:  '+str(sum(outputs_tr_DelT > 0.002) + sum(outputs_tr_DelT <= -0.002)) +', '+
+                                                              str(sum(outputs_val_DelT > 0.002) + sum(outputs_val_DelT <= -0.002)) )
+   print('Number of training & validation samples > 0.0025: '+str(sum(outputs_tr_DelT > 0.0025)+ sum(outputs_tr_DelT <= -0.0025))+', '+
+                                                              str(sum(outputs_val_DelT > 0.0025)+ sum(outputs_val_DelT <= -0.0025)) )
+   print('Number of training & validation samples > 0.003:  '+str(sum(outputs_tr_DelT > 0.003) + sum(outputs_tr_DelT <= -0.003)) +', '+
+                                                              str(sum(outputs_val_DelT > 0.003) + sum(outputs_val_DelT <= -0.003)) )
+   print('Number of training & validation samples > 0.004:  '+str(sum(outputs_tr_DelT > 0.004) + sum(outputs_tr_DelT <= -0.004)) +', '+
+                                                              str(sum(outputs_val_DelT > 0.004) + sum(outputs_val_DelT <= -0.004)) )
+   print('Number of training & validation samples > 0.005:  '+str(sum(outputs_tr_DelT > 0.005) + sum(outputs_tr_DelT <= -0.005)) +', '+
+                                                              str(sum(outputs_val_DelT > 0.005) + sum(outputs_val_DelT <= -0.005)) )
    print('*********************************')
    
    #print most extreme values...
-   print('highest and lowest values in training data:   ' + str(np.max(outputs_tr))  + ', ' +str(np.min(outputs_tr)) )
-   print('highest and lowest values in validation data: ' + str(np.max(outputs_val)) + ', ' +str(np.min(outputs_val)) )
+   print('highest and lowest values in training data:   ' + str(np.max(outputs_tr_DelT))  + ', ' +str(np.min(outputs_tr_DelT)) )
+   print('highest and lowest values in validation data: ' + str(np.max(outputs_val_DelT)) + ', ' +str(np.min(outputs_val_DelT)) )
 
    # print out moments of dataset
-   print('mean of train and val sets : ' + str(np.mean(outputs_tr))  + ', ' + str(np.mean(outputs_val)) )
-   print('std  of train and val sets : ' + str(np.std(outputs_tr))   + ', ' + str(np.std(outputs_val)) )
-   print('skew of train and val sets : ' + str(stats.skew(outputs_tr))   + ', ' + str(stats.skew(outputs_val)) )
-   print('kurtosis of train and val sets : ' + str(stats.kurtosis(outputs_tr))   + ', ' + str(stats.kurtosis(outputs_val)) )
+   print('mean of train and val sets : ' + str(np.mean(outputs_tr_DelT))  + ', ' + str(np.mean(outputs_val_DelT)) )
+   print('std  of train and val sets : ' + str(np.std(outputs_tr_DelT))   + ', ' + str(np.std(outputs_val_DelT)) )
+   print('skew of train and val sets : ' + str(stats.skew(outputs_tr_DelT))   + ', ' + str(stats.skew(outputs_val_DelT)) )
+   print('kurtosis of train and val sets : ' + str(stats.kurtosis(outputs_tr_DelT))   + ', ' + str(stats.kurtosis(outputs_val_DelT)) )
 
    #----------------------------------------------
    # Normalise Data (based on training data only)
@@ -710,28 +754,32 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
        norm_inputs_tr[:, i], norm_inputs_val[:,i], norm_inputs_te[:, i], inputs_mean[i], inputs_std[i] = \
                                                           normalise_data(inputs_tr[:, i], inputs_val[:,i], inputs_te[:,i])
 
-   norm_outputs_tr, norm_outputs_val, norm_outputs_te, outputs_mean, outputs_std = \
-                                                          normalise_data(outputs_tr[:], outputs_val[:], outputs_te[:])
+   norm_outputs_tr_DelT, norm_outputs_val_DelT, norm_outputs_te_DelT, outputs_DelT_mean, outputs_DelT_std = \
+                                                          normalise_data(outputs_tr_DelT[:], outputs_val_DelT[:], outputs_te_DelT[:])
+
+   norm_outputs_tr_Temp, norm_outputs_val_Temp, norm_outputs_te_Temp, outputs_Temp_mean, outputs_Temp_std = \
+                                                          normalise_data(outputs_tr_Temp[:], outputs_val_Temp[:], outputs_te_Temp[:])
 
    ## Save mean and std to file, so can be used to un-normalise when using model to predict
    mean_std_file = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_MeanStd.npz'
-   np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_mean), np.asarray(outputs_std) )
+   np.savez( mean_std_file, inputs_mean, inputs_std, np.asarray(outputs_DelT_mean), np.asarray(outputs_DelT_std),
+             np.asarray(outputs_Temp_mean), np.asarray(outputs_Temp_std) )
   
    #---------------------------
    # Save the arrays if needed
    #---------------------------
    # Write out some info
-   info_file.write( 'max output : '+ str(max ( np.max(outputs_tr), np.max(outputs_val), np.max(outputs_te) ) ) +'\n' )
-   info_file.write( 'min output : '+ str(min ( np.min(outputs_tr), np.min(outputs_val), np.min(outputs_te) ) ) +'\n' )
+   info_file.write( 'max output : '+ str(max ( np.max(outputs_tr_DelT), np.max(outputs_val_DelT), np.max(outputs_te_DelT) ) ) +'\n' )
+   info_file.write( 'min output : '+ str(min ( np.min(outputs_tr_DelT), np.min(outputs_val_DelT), np.min(outputs_te_DelT) ) ) +'\n' )
 
    info_file.write('  inputs_tr.shape : ' + str( inputs_tr.shape) +'\n')
-   info_file.write(' outputs_tr.shape : ' + str(outputs_tr.shape) +'\n')
+   info_file.write(' outputs_tr_DelT.shape : ' + str(outputs_tr_DelT.shape) +'\n')
    info_file.write('\n')
    info_file.write(' inputs_val.shape : ' + str( inputs_val.shape) +'\n')
-   info_file.write('outputs_val.shape : ' + str(outputs_val.shape) +'\n')
+   info_file.write('outputs_val_DelT.shape : ' + str(outputs_val_DelT.shape) +'\n')
    info_file.write('\n')
    info_file.write('  inputs_te.shape : ' + str( inputs_te.shape) +'\n')
-   info_file.write(' outputs_te.shape : ' + str(outputs_te.shape) +'\n')
+   info_file.write(' outputs_te_DelT.shape : ' + str(outputs_te_DelT.shape) +'\n')
    info_file.write('\n')
    info_file.close
 
@@ -740,23 +788,28 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
       inputs_tr_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTr.npy'
       inputs_val_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsVal.npy'
       inputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_InputsTe.npy'
-      outputs_tr_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTr.npy'
-      outputs_val_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsVal.npy'
-      outputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTe.npy'
-      np.save(inputs_tr_filename,  norm_inputs_tr)
-      outputs_te_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTe.npy'
+      outputs_tr_DelT_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsDelTTr.npy'
+      outputs_val_DelT_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsDelTVal.npy'
+      outputs_te_DelT_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsDelTTe.npy'
+      outputs_tr_Temp_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTempTr.npy'
+      outputs_val_Temp_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTempVal.npy'
+      outputs_te_Temp_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_OutputsTempTe.npy'
       np.save(inputs_tr_filename,  norm_inputs_tr)
       np.save(inputs_val_filename, norm_inputs_val)
       np.save(inputs_te_filename,  norm_inputs_te)
       os.system("gzip %s" % (inputs_te_filename))
-      np.save(outputs_tr_filename, norm_outputs_tr)
-      np.save(outputs_val_filename,norm_outputs_val)
-      np.save(outputs_te_filename, norm_outputs_te)
-      os.system("gzip %s" % (outputs_te_filename))
+      np.save(outputs_tr_DelT_filename, norm_outputs_tr_DelT)
+      np.save(outputs_val_DelT_filename,norm_outputs_val_DelT)
+      np.save(outputs_te_DelT_filename, norm_outputs_te_DelT)
+      os.system("gzip %s" % (outputs_te_DelT_filename))
+      np.save(outputs_tr_Temp_filename, norm_outputs_tr_Temp)
+      np.save(outputs_val_Temp_filename,norm_outputs_val_Temp)
+      np.save(outputs_te_Temp_filename, norm_outputs_te_Temp)
+      os.system("gzip %s" % (outputs_te_Temp_filename))
    
    print('shape for inputs and outputs: tr; val; te')
-   print(norm_inputs_tr.shape, norm_outputs_tr.shape)
-   print(norm_inputs_val.shape, norm_outputs_val.shape)
-   print(norm_inputs_te.shape, norm_outputs_te.shape)
+   print(norm_inputs_tr.shape, norm_outputs_tr_DelT.shape)
+   print(norm_inputs_val.shape, norm_outputs_val_DelT.shape)
+   print(norm_inputs_te.shape, norm_outputs_te_DelT.shape)
    
-   return norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te
+   return norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr_DelT, norm_outputs_val_DelT, norm_outputs_te_DelT, norm_outputs_tr_Temp, norm_outputs_val_Temp, norm_outputs_te_Temp

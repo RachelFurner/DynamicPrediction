@@ -31,4 +31,6 @@ def create_dataname(run_vars):
    if run_vars['density']:
       exp_name=exp_name+'Dns'
    exp_name = exp_name+'PolyDeg'+str(run_vars['poly_degree'])
+   exp_name = exp_name+'_Step'+str(run_vars['StepSize'])
+   exp_name = exp_name+'_Predict'+str(run_vars['predict'])
    return exp_name 

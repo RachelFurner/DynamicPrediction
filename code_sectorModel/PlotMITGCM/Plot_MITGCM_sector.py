@@ -134,6 +134,7 @@ ax5.set_xticklabels(np.round(da_Y.values[np.array(lat_arange).astype(int)], deci
 ax5.set_yticks(depth_arange)
 ax5.set_yticklabels(da_Z.values[np.array(depth_arange)].astype(int))
 plt.text(-0.055, 0.86, '(c)', transform=fig.transFigure)
+#ax5.set_title('Ocean Temperature')
 plt.savefig(rootdir+'PLOTS/fig01c.eps', format='eps', bbox_inches = 'tight', pad_inches = 0.1)
 
 ### Fig 1d ###

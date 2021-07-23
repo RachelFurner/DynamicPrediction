@@ -34,7 +34,7 @@ plt.rc('ytick', labelsize='x-small')
 #----------------------------
 # Set variables for this run
 #----------------------------
-run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':1}
+run_vars = {'dimension':3, 'lat':True , 'lon':True , 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2, 'StepSize':1, 'predict':'DelT'}
 data_prefix = ''
 model_prefix = 'alpha.001_'
 
@@ -62,13 +62,28 @@ if not os.path.isdir(plot_dir):
 # Read in data
 #--------------------------------------------------------------
 print('reading in data')
-norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr, norm_outputs_val, norm_outputs_te = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, plot_histograms=True)
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_DelT_tr, norm_outputs_DelT_val, norm_outputs_DelT_te, norm_outputs_Temp_tr, norm_outputs_Temp_val, norm_outputs_Temp_te  = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, plot_histograms=True)
 del norm_inputs_te
-del norm_outputs_te
+del norm_outputs_DelT_te
+del norm_outputs_Temp_te
+
+#norm_inputs_tr = norm_inputs_tr[:5,:]
+#norm_inputs_val = norm_inputs_val[:5,:]
+#norm_outputs_DelT_tr = norm_outputs_DelT_tr[:5,:]
+#norm_outputs_DelT_val = norm_outputs_DelT_val[:5,:]
+#norm_outputs_Temp_tr = norm_outputs_Temp_tr[:5,:]
+#norm_outputs_Temp_val = norm_outputs_Temp_val[:5,:]
+
+if run_vars['predict'] == 'DelT':
+   norm_outputs_tr  = norm_outputs_DelT_tr
+   norm_outputs_val = norm_outputs_DelT_val
+
+elif run_vars['predict'] == 'Temp':
+   norm_outputs_tr = norm_outputs_Temp_tr
+   norm_outputs_val = norm_outputs_Temp_val
 
 print(norm_inputs_tr.shape)
 print(norm_inputs_val.shape)
-print(norm_outputs_tr.shape)
 print(norm_outputs_val.shape)
 
 #-------------------------------------------------------------
@@ -125,12 +140,8 @@ with open(pkl_filename, 'rb') as file:
 
 # predict values
 print('predict values')
-norm_lr_predicted_tr = lr.predict(norm_inputs_tr).reshape(-1,1)
-norm_lr_predicted_val = lr.predict(norm_inputs_val).reshape(-1,1)
-
-del norm_inputs_tr
-del norm_inputs_val
-gc.collect()
+norm_lr_predicted_tr = lr.predict(norm_inputs_tr).reshape(-1,1).astype('float64')
+norm_lr_predicted_val = lr.predict(norm_inputs_val).reshape(-1,1).astype('float64')
 
 # De-normalise the outputs and predictions
 
@@ -145,8 +156,17 @@ elif os.path.isfile(zip_mean_std_file):
    os.system("gunzip %s" % (mean_std_file))
 input_mean  = mean_std_data['arr_0']
 input_std   = mean_std_data['arr_1']
-output_mean = mean_std_data['arr_2']
-output_std  = mean_std_data['arr_3']
+output_DelT_mean = mean_std_data['arr_2']
+output_DelT_std  = mean_std_data['arr_3']
+output_Temp_mean = mean_std_data['arr_4']
+output_Temp_std  = mean_std_data['arr_5']
+
+if run_vars['predict'] == 'DelT':
+   output_mean = output_DelT_mean
+   output_std = output_DelT_std
+elif run_vars['predict'] == 'Temp':
+   output_mean = output_Temp_mean
+   output_std = output_Temp_std
 
 # define denormalising function
 def denormalise_data(norm_data,mean,std):
@@ -159,8 +179,6 @@ denorm_lr_predicted_val = denormalise_data(norm_lr_predicted_val, output_mean, o
 denorm_outputs_tr = denormalise_data(norm_outputs_tr, output_mean, output_std)
 denorm_outputs_val = denormalise_data(norm_outputs_val, output_mean, output_std)
 
-del norm_lr_predicted_tr
-del norm_lr_predicted_val
 del norm_outputs_tr
 del norm_outputs_val
 gc.collect()
@@ -171,6 +189,13 @@ gc.collect()
 # Calculate 'persistance' score - persistence prediction is just zero everywhere as we're predicting the trend
 predict_persistance_tr = np.zeros(denorm_outputs_tr.shape)
 predict_persistance_val = np.zeros(denorm_outputs_val.shape)
+
+if run_vars['predict'] == 'DelT':
+   np.save('./True_DelT', denorm_outputs_tr)
+   np.save('./Predicted_DelT', denorm_lr_predicted_tr)
+elif run_vars['predict'] == 'Temp':
+   np.save('./True_T', denorm_outputs_tr)
+   np.save('./Predicted_T', denorm_lr_predicted_tr)
 
 print('get stats')
 am.get_stats(model_name, 
@@ -185,6 +210,55 @@ bottom = min(min(denorm_outputs_tr), min(denorm_lr_predicted_tr), min(denorm_out
 bottom = bottom - 0.1*abs(top)
 am.plot_scatter(model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train', top=top, bottom=bottom, text='(a)')
 am.plot_scatter(model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val', top=top, bottom=bottom, text='(b)')
+
+##-----------------------------------------------------------------------------------------------
+## if training to predict DelT, Calc Stats on temperature rather than DelT for comparison of CCs
+##-----------------------------------------------------------------------------------------------
+
+if run_vars['predict'] == 'DelT':
+   # denormalise inputs and true outputs   
+   denorm_outputs_Temp_tr = denormalise_data(norm_outputs_Temp_tr, output_Temp_mean, output_Temp_std)
+   denorm_outputs_Temp_val = denormalise_data(norm_outputs_Temp_val, output_Temp_mean, output_Temp_std)
+   denorm_inputs_tr = denormalise_data(norm_inputs_tr, input_mean, input_std)
+   denorm_inputs_val = denormalise_data(norm_inputs_val, input_mean, input_std)
+
+   # Take original Temp value as persistence forecast, and add DelT prediction to original value for predicted Temp field 
+   if run_vars['dimension'] == 2:
+      predict_persistance_Temp_tr = denorm_inputs_tr[:,4].reshape(-1,1)
+      predict_persistance_Temp_val = denorm_inputs_val[:,4].reshape(-1,1)
+      denorm_lr_predicted_Temp_tr = denorm_inputs_tr[:,4].reshape(-1,1) + denorm_lr_predicted_tr
+      denorm_lr_predicted_Temp_val = denorm_inputs_val[:,4].reshape(-1,1) + denorm_lr_predicted_val
+   elif run_vars['dimension'] == 3:
+      predict_persistance_Temp_tr = denorm_inputs_tr[:,13].reshape(-1,1)
+      predict_persistance_Temp_val = denorm_inputs_val[:,13].reshape(-1,1)
+      denorm_lr_predicted_Temp_tr = denorm_inputs_tr[:,13].reshape(-1,1) + denorm_lr_predicted_tr
+      denorm_lr_predicted_Temp_val = denorm_inputs_val[:,13].reshape(-1,1) + denorm_lr_predicted_val
+
+   del norm_outputs_Temp_tr
+   del norm_outputs_Temp_val
+   gc.collect()
+
+   np.save('./True_T', denorm_outputs_Temp_tr)
+   np.save('./Predicted_T', denorm_lr_predicted_Temp_tr)
+
+   am.get_stats(model_name, 
+                name1='Training', truth1=denorm_outputs_Temp_tr, exp1=denorm_lr_predicted_Temp_tr, pers1=predict_persistance_Temp_tr,
+                name2='Validation', truth2=denorm_outputs_Temp_val, exp2=denorm_lr_predicted_Temp_val, pers2=predict_persistance_Temp_val,
+                name='TrainVal_Temp')
+
+   print('plot results')
+   top    = max(max(denorm_outputs_Temp_tr), max(denorm_lr_predicted_Temp_tr), max(denorm_outputs_Temp_val), max(denorm_lr_predicted_Temp_val))
+   top    = top + 0.1*abs(top)
+   bottom = min(min(denorm_outputs_Temp_tr), min(denorm_lr_predicted_Temp_tr), min(denorm_outputs_Temp_val), min(denorm_lr_predicted_Temp_val))
+   bottom = bottom - 0.1*abs(top)
+   am.plot_scatter(model_name, denorm_outputs_Temp_tr, denorm_lr_predicted_Temp_tr, name='train', top=top, bottom=bottom, text='(a)')
+   am.plot_scatter(model_name, denorm_outputs_Temp_val, denorm_lr_predicted_Temp_val, name='val', top=top, bottom=bottom, text='(b)')
+
+del norm_inputs_tr
+del norm_inputs_val
+del norm_lr_predicted_tr
+del norm_lr_predicted_val
+gc.collect()
 
 ##------------------
 ## plot histograms:
@@ -207,4 +281,5 @@ am.plot_scatter(model_name, denorm_outputs_val, denorm_lr_predicted_val, name='v
 #am.plot_scatter(model_name, denorm_outputs_tr, denorm_lr_predicted_tr-denorm_outputs_tr, name='train', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 #am.plot_scatter(model_name, denorm_outputs_val, denorm_lr_predicted_val-denorm_outputs_val, name='val', xlabel='DeltaT', ylabel='Errors', exp_cor=False)
 #
+
 
