@@ -59,9 +59,9 @@ def parse_args():
     a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
 
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
-    a.add_argument("-la", "--land", default='ExcLand', type=str, action='store')
+    a.add_argument("-la", "--land", default='IncLand', type=str, action='store')
     a.add_argument("-k", "--kernsize", default=3, type=int, action='store')
-    a.add_argument("-p", "--padding", default='None', type=str, action='store')
+    a.add_argument("-p", "--padding", default='Cons', type=str, action='store')
     a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
 
@@ -161,8 +161,7 @@ if __name__ == "__main__":
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
     
-    #DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_104x240LandNorthSouth/runs/old_inputs/50yr_CntrlDataset/'
-    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_104x240Domain/runs/50yr_CntrlDataset/'
+    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_104x240LandNorthSouth/runs/50yr_Cntrl/'
     #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
     MITGCM_filename = DIR+'daily_ave_50yrs.nc'
     
