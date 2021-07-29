@@ -139,7 +139,7 @@ def GetInputs(run_vars, Temp, Sal, U, V, Kwx, Kwy, Kwz, dns, Eta, lat, lon, dept
        
    return(inputs)
 
-def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, save_arrays=False, plot_histograms=False):
+def ReadMITGCM(MITGCM_filename, clim_filename, density_file, trainval_split_ratio, valtest_split_ratio, data_name, run_vars, save_arrays=False, plot_histograms=False):
 
    '''
      Routine to read in MITGCM data into input and output arrays, split into train, val and test
@@ -156,12 +156,10 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    info_filename = '../../../INPUT_OUTPUT_ARRAYS/SinglePoint_'+data_name+'_info.txt'
    info_file=open(info_filename,"w")
 
-   #StepSize = 1 # how many output steps (months!) to predict over
    StepSize = run_vars['StepSize'] # how many output steps (months!) to predict over
    halo_size = 1
    halo_list = (range(-halo_size, halo_size+1))
    subsample_rate = 200
-   #subsample_rate = 2000000
 
    start = 0
    data_end_index = 7200   # look at first 20yrs only for now to ensure dataset sizes aren't too huge!
@@ -190,6 +188,9 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
    density = np.load( density_file, mmap_mode='r' ) 
    print(density.shape)
+
+   ds_clim = xr.open_dataset(clim_filename)
+   da_clim_T=ds_clim['Ttave'].values
 
    x_size = da_T.shape[3]
    y_size = da_T.shape[2]
@@ -280,18 +281,26 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
                                  da_lat[y_lw_1:y_up_1], da_lon[x_lw_1:x_up_1], da_depth[z_lw_1:z_up_1] )
         outputs_1_DelT = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
         outputs_1_Temp = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
+        orig_1_Temp    = da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
 
         outputs_1_DelT = outputs_1_DelT.reshape((-1, 1))
         outputs_1_Temp = outputs_1_Temp.reshape((-1, 1))
+        orig_1_Temp    = orig_1_Temp.reshape((-1, 1))
+
+        clim_1_Temp    = da_clim_T[0, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ].reshape((-1,1))
 
         if t == start:
            inputs_tr  = inputs_1 
            outputs_tr_DelT = outputs_1_DelT
            outputs_tr_Temp = outputs_1_Temp
+           orig_tr_Temp = orig_1_Temp
+           clim_tr_Temp = clim_1_Temp
         else:
            inputs_tr  = np.concatenate( (inputs_tr , inputs_1 ), axis=0)
            outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_1_DelT), axis=0)
            outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_1_Temp), axis=0)
+           orig_tr_Temp    = np.concatenate( (orig_tr_Temp, orig_1_Temp), axis=0)
+           clim_tr_Temp    = np.concatenate( (clim_tr_Temp, clim_1_Temp), axis=0)
 
         #---------#
         # Region2 #
@@ -323,13 +332,19 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
         outputs_2_DelT = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
         outputs_2_Temp = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+        orig_2_Temp    = da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
 
         outputs_2_DelT = outputs_2_DelT.reshape((-1, 1))
         outputs_2_Temp = outputs_2_Temp.reshape((-1, 1))
+        orig_2_Temp    = orig_2_Temp.reshape((-1, 1))
+
+        clim_2_Temp    = da_clim_T[0, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ].reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_2 ), axis=0)
         outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_2_DelT), axis=0)
         outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_2_Temp), axis=0)
+        orig_tr_Temp    = np.concatenate( (orig_tr_Temp, orig_2_Temp), axis=0)
+        clim_tr_Temp    = np.concatenate( (clim_tr_Temp, clim_2_Temp), axis=0)
 
         #---------#
         # Region3 #
@@ -361,13 +376,19 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
         outputs_3_DelT = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
         outputs_3_Temp = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] 
+        orig_3_Temp = da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] 
 
         outputs_3_DelT = outputs_3_DelT.reshape((-1, 1))
         outputs_3_Temp = outputs_3_Temp.reshape((-1, 1))
+        orig_3_Temp = orig_3_Temp.reshape((-1, 1))
+
+        clim_3_Temp = da_clim_T[0, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ].reshape((-1, 1))
 
         inputs_tr  = np.concatenate( (inputs_tr , inputs_3 ), axis=0)
         outputs_tr_DelT = np.concatenate( (outputs_tr_DelT, outputs_3_DelT), axis=0)
         outputs_tr_Temp = np.concatenate( (outputs_tr_Temp, outputs_3_Temp), axis=0)
+        orig_tr_Temp = np.concatenate( (orig_tr_Temp, orig_3_Temp), axis=0)
+        clim_tr_Temp = np.concatenate( (clim_tr_Temp, clim_3_Temp), axis=0)
 
 
    for t in range(trainval_split, valtest_split, subsample_rate):  
@@ -402,18 +423,26 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
         outputs_1_DelT = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ] - da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1, x_lw_1:x_up_1 ]
         outputs_1_Temp = da_T[ t+StepSize, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
+        orig_1_Temp = da_T[ t, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ]
  
         outputs_1_DelT = outputs_1_DelT.reshape((-1, 1))
         outputs_1_Temp = outputs_1_Temp.reshape((-1, 1))
+        orig_1_Temp = orig_1_Temp.reshape((-1, 1))
+
+        clim_1_Temp = da_clim_T[0, z_lw_1:z_up_1, y_lw_1:y_up_1 ,x_lw_1:x_up_1 ].reshape((-1, 1))
 
         if t == trainval_split:
            inputs_val  = inputs_1 
            outputs_val_DelT = outputs_1_DelT
            outputs_val_Temp = outputs_1_Temp
+           orig_val_Temp = orig_1_Temp
+           clim_val_Temp = clim_1_Temp
         else:
            inputs_val  = np.concatenate( (inputs_val , inputs_1 ), axis=0)
            outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_1_DelT), axis=0)
            outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_1_Temp), axis=0)
+           orig_val_Temp = np.concatenate( (orig_val_Temp, orig_1_Temp), axis=0)
+           clim_val_Temp = np.concatenate( (clim_val_Temp, clim_1_Temp), axis=0)
 
         #---------#
         # Region2 #
@@ -445,13 +474,19 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
         outputs_2_DelT = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ] - da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
         outputs_2_Temp = da_T[ t+StepSize, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
+        orig_2_Temp = da_T[ t, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ]
 
         outputs_2_DelT = outputs_2_DelT.reshape((-1, 1))
         outputs_2_Temp = outputs_2_Temp.reshape((-1, 1))
+        orig_2_Temp = orig_2_Temp.reshape((-1, 1))
+
+        clim_2_Temp = da_clim_T[0, z_lw_2:z_up_2, y_lw_2:y_up_2, x_lw_2:x_up_2 ].reshape((-1, 1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_2 ), axis=0)
         outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_2_DelT), axis=0)
         outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_2_Temp), axis=0)
+        orig_val_Temp = np.concatenate( (orig_val_Temp, orig_2_Temp), axis=0)
+        clim_val_Temp = np.concatenate( (clim_val_Temp, clim_2_Temp), axis=0)
 
         #---------#
         # Region3 #
@@ -483,13 +518,19 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
 
         outputs_3_DelT = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ] - da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
         outputs_3_Temp = da_T[ t+StepSize, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
+        orig_3_Temp = da_T[ t, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ]
 
         outputs_3_DelT = outputs_3_DelT.reshape((-1,1))
         outputs_3_Temp = outputs_3_Temp.reshape((-1,1))
+        orig_3_Temp = orig_3_Temp.reshape((-1,1))
+
+        clim_3_Temp = da_clim_T[0, z_lw_3:z_up_3, y_lw_3:y_up_3, x_lw_3:x_up_3 ].reshape((-1,1))
 
         inputs_val  = np.concatenate( (inputs_val , inputs_3 ), axis=0)
         outputs_val_DelT = np.concatenate( (outputs_val_DelT, outputs_3_DelT), axis=0)
         outputs_val_Temp = np.concatenate( (outputs_val_Temp, outputs_3_Temp), axis=0)
+        orig_val_Temp = np.concatenate( (orig_val_Temp, orig_3_Temp), axis=0)
+        clim_val_Temp = np.concatenate( (clim_val_Temp, clim_3_Temp), axis=0)
 
 
    for t in range(valtest_split, data_end_index, subsample_rate):  
@@ -685,9 +726,15 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    inputs_tr = inputs_tr[ordering_tr]
    outputs_tr_DelT = outputs_tr_DelT[ordering_tr]
    outputs_tr_Temp = outputs_tr_Temp[ordering_tr]
+   orig_tr_Temp = orig_tr_Temp[ordering_tr]
+   clim_tr_Temp = clim_tr_Temp[ordering_tr]
+
    inputs_val = inputs_val[ordering_val]
    outputs_val_DelT = outputs_val_DelT[ordering_val]
    outputs_val_Temp = outputs_val_Temp[ordering_val]
+   orig_val_Temp = orig_val_Temp[ordering_val]
+   clim_val_Temp = clim_val_Temp[ordering_val]
+
    inputs_te = inputs_te[ordering_te]
    outputs_te_DelT = outputs_te_DelT[ordering_te]
    outputs_te_Temp = outputs_te_Temp[ordering_te]
@@ -811,5 +858,9 @@ def ReadMITGCM(MITGCM_filename, density_file, trainval_split_ratio, valtest_spli
    print(norm_inputs_tr.shape, norm_outputs_tr_DelT.shape)
    print(norm_inputs_val.shape, norm_outputs_val_DelT.shape)
    print(norm_inputs_te.shape, norm_outputs_te_DelT.shape)
+
+   print('shape for orig_Temp and clim_Temp, tr&val')
+   print(orig_tr_Temp.shape, orig_val_Temp.shape)
+   print(clim_tr_Temp.shape, clim_val_Temp.shape)
    
-   return norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr_DelT, norm_outputs_val_DelT, norm_outputs_te_DelT, norm_outputs_tr_Temp, norm_outputs_val_Temp, norm_outputs_te_Temp
+   return norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_tr_DelT, norm_outputs_val_DelT, norm_outputs_te_DelT, norm_outputs_tr_Temp, norm_outputs_val_Temp, norm_outputs_te_Temp, orig_tr_Temp, orig_val_Temp, clim_tr_Temp, clim_val_Temp

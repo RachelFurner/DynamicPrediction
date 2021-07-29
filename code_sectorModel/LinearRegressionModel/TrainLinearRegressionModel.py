@@ -43,6 +43,7 @@ TrainModel = True
 DIR = '/data/hpcdata/users/racfur/MITgcm/verification/MundaySectorConfig_2degree/runs/100yrs/'
 MITGCM_filename=DIR+'mnc_test_0002/cat_tave.nc'
 density_file = DIR+'DensityData.npy'
+clim_filename = DIR+'mnc_test_0002/ncra_cat_tave.nc'
 
 print('run_vars; '+str(run_vars))
 print('model_prefix ; '+str(model_prefix))
@@ -62,17 +63,12 @@ if not os.path.isdir(plot_dir):
 # Read in data
 #--------------------------------------------------------------
 print('reading in data')
-norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_DelT_tr, norm_outputs_DelT_val, norm_outputs_DelT_te, norm_outputs_Temp_tr, norm_outputs_Temp_val, norm_outputs_Temp_te  = rr.ReadMITGCM(MITGCM_filename, density_file, 0.7, 0.9, data_name, run_vars, plot_histograms=True)
+norm_inputs_tr, norm_inputs_val, norm_inputs_te, norm_outputs_DelT_tr, norm_outputs_DelT_val, norm_outputs_DelT_te, \
+norm_outputs_Temp_tr, norm_outputs_Temp_val, norm_outputs_Temp_te, orig_temp_tr, orig_temp_val, clim_temp_tr, clim_temp_val \
+          = rr.ReadMITGCM(MITGCM_filename, clim_filename, density_file, 0.7, 0.9, data_name, run_vars, plot_histograms=True)
 del norm_inputs_te
 del norm_outputs_DelT_te
 del norm_outputs_Temp_te
-
-#norm_inputs_tr = norm_inputs_tr[:5,:]
-#norm_inputs_val = norm_inputs_val[:5,:]
-#norm_outputs_DelT_tr = norm_outputs_DelT_tr[:5,:]
-#norm_outputs_DelT_val = norm_outputs_DelT_val[:5,:]
-#norm_outputs_Temp_tr = norm_outputs_Temp_tr[:5,:]
-#norm_outputs_Temp_val = norm_outputs_Temp_val[:5,:]
 
 if run_vars['predict'] == 'DelT':
    norm_outputs_tr  = norm_outputs_DelT_tr
@@ -211,28 +207,20 @@ bottom = bottom - 0.1*abs(top)
 am.plot_scatter(model_name, denorm_outputs_tr, denorm_lr_predicted_tr, name='train', top=top, bottom=bottom, text='(a)')
 am.plot_scatter(model_name, denorm_outputs_val, denorm_lr_predicted_val, name='val', top=top, bottom=bottom, text='(b)')
 
-##-----------------------------------------------------------------------------------------------
-## if training to predict DelT, Calc Stats on temperature rather than DelT for comparison of CCs
-##-----------------------------------------------------------------------------------------------
+##-----------------------------------------------------------------------------------------------------------------
+## if training to predict DelT, Calc Stats on temperature rather than DelT for comparison of CCs with other papers
+##-----------------------------------------------------------------------------------------------------------------
 
 if run_vars['predict'] == 'DelT':
    # denormalise inputs and true outputs   
    denorm_outputs_Temp_tr = denormalise_data(norm_outputs_Temp_tr, output_Temp_mean, output_Temp_std)
    denorm_outputs_Temp_val = denormalise_data(norm_outputs_Temp_val, output_Temp_mean, output_Temp_std)
-   denorm_inputs_tr = denormalise_data(norm_inputs_tr, input_mean, input_std)
-   denorm_inputs_val = denormalise_data(norm_inputs_val, input_mean, input_std)
 
    # Take original Temp value as persistence forecast, and add DelT prediction to original value for predicted Temp field 
-   if run_vars['dimension'] == 2:
-      predict_persistance_Temp_tr = denorm_inputs_tr[:,4].reshape(-1,1)
-      predict_persistance_Temp_val = denorm_inputs_val[:,4].reshape(-1,1)
-      denorm_lr_predicted_Temp_tr = denorm_inputs_tr[:,4].reshape(-1,1) + denorm_lr_predicted_tr
-      denorm_lr_predicted_Temp_val = denorm_inputs_val[:,4].reshape(-1,1) + denorm_lr_predicted_val
-   elif run_vars['dimension'] == 3:
-      predict_persistance_Temp_tr = denorm_inputs_tr[:,13].reshape(-1,1)
-      predict_persistance_Temp_val = denorm_inputs_val[:,13].reshape(-1,1)
-      denorm_lr_predicted_Temp_tr = denorm_inputs_tr[:,13].reshape(-1,1) + denorm_lr_predicted_tr
-      denorm_lr_predicted_Temp_val = denorm_inputs_val[:,13].reshape(-1,1) + denorm_lr_predicted_val
+   predict_persistance_Temp_tr = orig_temp_tr.reshape(-1,1)
+   predict_persistance_Temp_val = orig_temp_val.reshape(-1,1)
+   denorm_lr_predicted_Temp_tr = orig_temp_tr.reshape(-1,1) + denorm_lr_predicted_tr
+   denorm_lr_predicted_Temp_val = orig_temp_val.reshape(-1,1) + denorm_lr_predicted_val
 
    del norm_outputs_Temp_tr
    del norm_outputs_Temp_val
@@ -251,8 +239,36 @@ if run_vars['predict'] == 'DelT':
    top    = top + 0.1*abs(top)
    bottom = min(min(denorm_outputs_Temp_tr), min(denorm_lr_predicted_Temp_tr), min(denorm_outputs_Temp_val), min(denorm_lr_predicted_Temp_val))
    bottom = bottom - 0.1*abs(top)
-   am.plot_scatter(model_name, denorm_outputs_Temp_tr, denorm_lr_predicted_Temp_tr, name='train', top=top, bottom=bottom, text='(a)')
-   am.plot_scatter(model_name, denorm_outputs_Temp_val, denorm_lr_predicted_Temp_val, name='val', top=top, bottom=bottom, text='(b)')
+   am.plot_scatter(model_name, denorm_outputs_Temp_tr, denorm_lr_predicted_Temp_tr, name='Temp_train', top=top, bottom=bottom, text='(a)')
+   am.plot_scatter(model_name, denorm_outputs_Temp_val, denorm_lr_predicted_Temp_val, name='Temp_val', top=top, bottom=bottom, text='(b)')
+
+   # Get stats and plot anomaly correlation coefficients
+
+   print('clim')
+   print(clim_temp_tr[:5])
+   print('outputs_Temp')
+   print(denorm_outputs_Temp_tr[:5])
+   print('predicted_Temp')
+   print(denorm_lr_predicted_Temp_tr[:5])
+
+   am.get_stats(model_name, 
+                name1='Training', truth1=denorm_outputs_Temp_tr-clim_temp_tr, exp1=denorm_lr_predicted_Temp_tr-clim_temp_tr, 
+                pers1=predict_persistance_Temp_tr-clim_temp_tr,
+                name2='Validation', truth2=denorm_outputs_Temp_val-clim_temp_val, exp2=denorm_lr_predicted_Temp_val-clim_temp_val,
+                pers2=predict_persistance_Temp_val-clim_temp_val,
+                name='TrainVal_AnomCCTemp')
+
+   print('plot results')
+   top    = max(max(denorm_outputs_Temp_tr-clim_temp_tr), max(denorm_lr_predicted_Temp_tr-clim_temp_tr),
+                max(denorm_outputs_Temp_val-clim_temp_tr), max(denorm_lr_predicted_Temp_val-clim_temp_tr))
+   top    = top + 0.1*abs(top)
+   bottom = min(min(denorm_outputs_Temp_tr-clim_temp_tr), min(denorm_lr_predicted_Temp_tr-clim_temp_tr), 
+                min(denorm_outputs_Temp_val-clim_temp_tr), min(denorm_lr_predicted_Temp_val-clim_temp_tr))
+   bottom = bottom - 0.1*abs(top)
+   am.plot_scatter(model_name, denorm_outputs_Temp_tr-clim_temp_tr, denorm_lr_predicted_Temp_tr-clim_temp_tr, 
+                   name='AnomCC_train', top=top, bottom=bottom, text='(a)')
+   am.plot_scatter(model_name, denorm_outputs_Temp_val-clim_temp_tr, denorm_lr_predicted_Temp_val-clim_temp_tr,
+                   name='AnomCC_val', top=top, bottom=bottom, text='(b)')
 
 del norm_inputs_tr
 del norm_inputs_val

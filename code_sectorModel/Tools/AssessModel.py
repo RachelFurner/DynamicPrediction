@@ -50,6 +50,7 @@ def get_stats(exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None
       stats_file.write('%60s %.4e \n' % (' persistence rms score ;', np.sqrt(pers1_mse)))
    stats_file.write('%60s %.4e \n' % (' '+exp_name+' rms score ;', np.sqrt(exp1_mse)))
    stats_file.write('%60s %.4e \n' % (' '+exp_name+' corellation coefficient ;', (exp1_corcoef)))
+   stats_file.write(exp_name+' corellation coefficient ;'+str(exp1_corcoef))
    stats_file.write('\n')
    if truth2 is not None and exp2 is not None:
       stats_file.write('--------------------------------------------------------\n')
@@ -59,6 +60,7 @@ def get_stats(exp_name, name1, truth1, exp1, pers1=None, name2=None, truth2=None
          stats_file.write('%60s %.4e \n' % (' persistence rms score ;', np.sqrt(pers2_mse)))
       stats_file.write('%60s %.4e \n' % (' '+exp_name+' rms score ;', np.sqrt(exp2_mse)))
       stats_file.write('%60s %.4e \n' % (' '+exp_name+' corellation coefficient ;', (exp2_corcoef)))
+      stats_file.write(exp_name+' corellation coefficient ;'+str(exp2_corcoef))
       stats_file.write('\n')
    stats_file.close()
 
