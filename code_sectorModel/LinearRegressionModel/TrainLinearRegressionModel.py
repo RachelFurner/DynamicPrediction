@@ -260,14 +260,14 @@ if run_vars['predict'] == 'DelT':
 
    print('plot results')
    top    = max(max(denorm_outputs_Temp_tr-clim_temp_tr), max(denorm_lr_predicted_Temp_tr-clim_temp_tr),
-                max(denorm_outputs_Temp_val-clim_temp_tr), max(denorm_lr_predicted_Temp_val-clim_temp_tr))
+                max(denorm_outputs_Temp_val-clim_temp_val), max(denorm_lr_predicted_Temp_val-clim_temp_val))
    top    = top + 0.1*abs(top)
    bottom = min(min(denorm_outputs_Temp_tr-clim_temp_tr), min(denorm_lr_predicted_Temp_tr-clim_temp_tr), 
-                min(denorm_outputs_Temp_val-clim_temp_tr), min(denorm_lr_predicted_Temp_val-clim_temp_tr))
+                min(denorm_outputs_Temp_val-clim_temp_val), min(denorm_lr_predicted_Temp_val-clim_temp_val))
    bottom = bottom - 0.1*abs(top)
    am.plot_scatter(model_name, denorm_outputs_Temp_tr-clim_temp_tr, denorm_lr_predicted_Temp_tr-clim_temp_tr, 
                    name='AnomCC_train', top=top, bottom=bottom, text='(a)')
-   am.plot_scatter(model_name, denorm_outputs_Temp_val-clim_temp_tr, denorm_lr_predicted_Temp_val-clim_temp_tr,
+   am.plot_scatter(model_name, denorm_outputs_Temp_val-clim_temp_val, denorm_lr_predicted_Temp_val-clim_temp_val,
                    name='AnomCC_val', top=top, bottom=bottom, text='(b)')
 
 del norm_inputs_tr
