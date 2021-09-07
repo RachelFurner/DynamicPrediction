@@ -107,8 +107,9 @@ def plot_scatter(model_name, data1, data2, name='norm', xlabel=None, ylabel=None
       # Calculate the correlation coefficient and mse
       cor_coef = np.corrcoef(data1, data2)[0,1]
       mse = metrics.mean_squared_error(data1, data2)
-      ax1.annotate('Correlation Coefficient: '+str(np.round(cor_coef,2)), (0.22, 0.87), xycoords='figure fraction')
-      ax1.annotate('Mean Squared Error: '+str(np.format_float_scientific(mse, 2)), (0.22, 0.83), xycoords='figure fraction')
+      #ax1.annotate('Correlation Coefficient: '+str(np.round(cor_coef,2)), (0.22, 0.87), xycoords='figure fraction')
+      #ax1.annotate('Mean Squared Error: '+str(np.format_float_scientific(mse, 2)), (0.22, 0.83), xycoords='figure fraction')
+      ax1.annotate('Mean Squared Error: '+str(np.format_float_scientific(mse, 2)), (0.22, 0.87), xycoords='figure fraction')
       if text:
          ax1.annotate(text, (0.0, 0.90), xycoords='figure fraction')
    else:  # Assume we expect points to fit on 0 line, i.e. plotting errors against something
