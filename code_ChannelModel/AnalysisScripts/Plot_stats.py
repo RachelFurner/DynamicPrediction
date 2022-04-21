@@ -19,8 +19,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '30'
-dir_name = 'ExcLand_UNet2dtransp_histlen1_seed30475'
+epochs = '34'
+dir_name = 'IncLand_UNet2dtransp_histlen1_seed20475'
 model_name = dir_name+'_'+epochs+'epochs'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
@@ -41,28 +41,41 @@ da_Eta_RMS  = stats_ds['EtaRMS']
 da_X = stats_ds['X']
 da_Y = stats_ds['Y']
 da_Z = stats_ds['Z']
+da_Temp_mask= stats_ds['Temp_Mask']
+da_U_mask   = stats_ds['U_Mask']
+da_V_mask   = stats_ds['V_Mask']
+da_Eta_mask = stats_ds['Eta_Mask']
+
+masked_Temp_RMS = np.where( da_Temp_mask.values==0, np.nan, da_Temp_RMS.values )
+masked_U_RMS    = np.where( da_U_mask.values==0, np.nan, da_U_RMS.values )
+masked_V_RMS    = np.where( da_V_mask.values==0, np.nan, da_V_RMS.values )
+masked_Eta_RMS  = np.where( da_Eta_mask.values==0, np.nan, da_Eta_RMS.values )
 
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
-fig, ax, im = ChnPlt.plot_depth_fld(da_Temp_RMS.values[level,:,:], 'Temperature RMS Errors', level,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_Temp_RMS[level,:,:], 'Temperature RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.15)
+                                   #title=None, min_value=0.0, max_value=0.05)
+                                   title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(da_U_RMS.values[level,:,:], 'U Vel RMS Errors', level,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_U_RMS[level,:,:], 'U Vel RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.025)
+                                   #title=None, min_value=0.0, max_value=0.04)
+                                   title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(da_V_RMS.values[level,:,:], 'V Vel RMS Errors', level,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_V_RMS[level,:,:], 'V Vel RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.025)
+                                   #title=None, min_value=0.0, max_value=0.025)
+                                   title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(da_Eta_RMS.values[:,:], 'Eta RMS Errors', 0,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_Eta_RMS[:,:], 'Eta RMS Errors', 0,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.04)
+                                   #title=None, min_value=0.0, max_value=0.025)
+                                   title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_Eta_RMS.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 
