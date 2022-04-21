@@ -30,7 +30,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch
 from torchvision import transforms, utils
-import torch.autograd.profiler as profiler
 
 import netCDF4 as nc4
 
@@ -44,8 +43,6 @@ import multiprocessing as mp
 #import torch.multiprocessing
 #torch.multiprocessing.set_sharing_strategy('file_system')
 
-import GPUtil
-
 def parse_args():
     a = argparse.ArgumentParser()
 
@@ -57,6 +54,7 @@ def parse_args():
     a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
     a.add_argument("-a", "--assess", default=False, type=bool, action='store')
     a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
+    a.add_argument("-be", "--best", default=False, type=bool, action='store')
 
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='IncLand', type=str, action='store')
@@ -92,25 +90,17 @@ if __name__ == "__main__":
     # Manually set variables for this run
     #--------------------------------------
 
-    logging.info('args')
-    logging.info(args)
+    logging.info('args '+str(args))
     
-    hyper_params = {
-        "batch_size": args.batchsize,
-        "num_epochs": args.epochs, # amount of new epochs to train, so added to any already saved.
-        "learning_rate": args.learningrate,  # might need further tuning, but note loss increases on first pass with 0.001
-        "criterion": torch.nn.MSELoss(),
-        }
-    
-    subsample_rate = 10     # number of time steps to skip over when creating training and test data
+    subsample_rate = 5      # number of time steps to skip over when creating training and test data
     train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
     val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
     
     plot_freq = 10     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
-    #for_len = 30*6   # How long to iteratively predict for
-    for_len = 30     # How long to iteratively predict for
+    for_len = 30*6   # How long to iteratively predict for
+    #for_len = 60     # How long to iteratively predict for
     start = 5        #
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -124,14 +114,13 @@ if __name__ == "__main__":
    
     if args.test: 
        model_name = args.name+args.land+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)+'_TEST'
+       for_len = min(for_len, 50)
     else:
        model_name = args.name+args.land+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)
-    MeanStd_prefix = args.land+'_'+args.dim
     
     # Overwrite certain variables if testing code and set up test bits
     if args.test:
-       hyper_params['num_epochs'] = 5
-       subsample_rate = 5000 # Keep datasets small when in testing mode
+       args.epochs = 5
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
@@ -145,10 +134,10 @@ if __name__ == "__main__":
     if args.trainmodel:
        if args.loadmodel: 
           start_epoch = args.savedepochs+1
-          total_epochs = args.savedepochs+hyper_params['num_epochs']
+          total_epochs = args.savedepochs+args.epochs
        else:
-          start_epoch = 0
-          total_epochs = hyper_params['num_epochs']-1
+          start_epoch = 1
+          total_epochs = args.epochs
     else:
        start_epoch = args.savedepochs
        total_epochs = args.savedepochs
@@ -156,20 +145,18 @@ if __name__ == "__main__":
     if args.land == 'IncLand':
        y_dim_used = 104
     elif args.land == 'ExcLand':
-       y_dim_used = 96
-       raise RuntimeError("ERROR, Current set up with MITgcm grid doesn't allow this option")
+       y_dim_used = 97
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
     
     DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_104x240LandNorthSouth/runs/50yr_Cntrl/'
     #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
-    MITGCM_filename = DIR+'daily_ave_50yrs.nc'
+    if args.test: 
+       MITGCM_filename = DIR+'daily_ave_small_set.nc'
+    else:
+       MITGCM_filename = DIR+'daily_ave_50yrs.nc'
     
-    ds       = xr.open_dataset(MITGCM_filename)
-    tr_start = 0
-    x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
-    y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
-    z_dim    = ( ds.isel( T=slice(0) ) ).sizes['Zld000038']
+    ds = xr.open_dataset(MITGCM_filename)
     
     ds.close()
 
@@ -178,33 +165,28 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     logging.info('Using device: '+device+'\n')
     
-    logging.info('Batch Size: '+str(hyper_params['batch_size'])+'\n')
-    
-    TimeCheck(tic, 'setting variables')
-    logging.info( GPUtil.showUtilization() )
+    #TimeCheck(tic, 'setting variables')
     
     #-----------------------------------
     # Calulate, or read in mean and std
     #-----------------------------------
     if args.calculatemeanstd:
-       no_in_channels, no_out_channels = CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
-                                                     hyper_params["batch_size"], args.land, args.dim, tic)
-    
-    data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
- 
+       CalcMeanStd(args.land+'_'+args.dim, MITGCM_filename, train_end_ratio, subsample_rate,
+                   args.batchsize, args.land, args.dim, tic)
+
+    data_mean, data_std, data_range = ReadMeanStd(args.land+'_'+args.dim)
+
+    z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zld000038'] 
     if args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + 3*z_dim +1  # Eta field, plus Temp, U, V through depth, for each past time, plus masks
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + 2*z_dim   # Eta field, plus Temp, U, V through depth, for each past time, plus T & V masks
        no_out_channels = 3*z_dim + 1                                # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
-       no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
+       no_in_channels = args.histlen * 4 + 2  # Eta Temp, U, V , for each past time, plus T & V masks
        no_out_channels = 4                    # Eta, Temp, U, V just once
-    
-    logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
-    logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
+   
+    logging.debug('no_in_channels ;'+str(no_in_channels)+'\n')
+    logging.debug('no_out_channels ;'+str(no_out_channels)+'\n')
 
-    TimeCheck(tic, 'getting mean & std')
-    logging.info( GPUtil.showUtilization() )
-    
     #-------------------------------------------------------------------------------------
     # Create training and valdiation Datsets and dataloaders with normalisation
     #-------------------------------------------------------------------------------------
@@ -221,36 +203,30 @@ if __name__ == "__main__":
     elif args.dim == '3d':
        Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
                                              args.histlen, args.land, tic, 
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
        Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
                                              args.histlen, args.land, tic, 
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     else:
        raise RuntimeError("ERROR!!! what's happening with dimensions?!")
     no_tr_samples = len(Train_Dataset)
     no_val_samples = len(Val_Dataset)
-    logging.info('no_training_samples ; '+str(no_tr_samples)+'\n')
-    logging.info('no_validation_samples ; '+str(no_val_samples)+'\n')
-    
-    train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=hyper_params["batch_size"], shuffle=True,
+    logging.debug('no_training_samples ; '+str(no_tr_samples)+'\n')
+    logging.debug('no_validation_samples ; '+str(no_val_samples)+'\n')
+
+    train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
                                                num_workers=args.numworkers, pin_memory=True )
-    val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=hyper_params["batch_size"], shuffle=True, 
+    val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
                                                num_workers=args.numworkers, pin_memory=True )
-    
-    TimeCheck(tic, 'reading training & validation data')
-    logging.info( GPUtil.showUtilization() )
     
     #--------------
     # Set up model
     #--------------
-    h, optimizer = CreateModel(args.modelstyle, no_in_channels, no_out_channels, hyper_params["learning_rate"],
-                               args.seed, args.padding, x_dim, y_dim_used, z_dim, args.kernsize)
+    h, optimizer = CreateModel( args.modelstyle, no_in_channels, no_out_channels, args.learningrate, args.seed, args.padding,
+                                (ds.isel(T=slice(0))).sizes['X'], y_dim_used, (ds.isel(T=slice(0))).sizes['Zld000038'], args.kernsize )
    
-    TimeCheck(tic, 'setting up model')
-    logging.info( GPUtil.showUtilization() )
-    
     #------------------
     # Train or load the model:
     #------------------
@@ -261,53 +237,56 @@ if __name__ == "__main__":
               'train_V'   : [],
               'train_Eta' : [],
               'val'       : [] }
-   
+  
     if args.loadmodel:
        if args.trainmodel:
-          losses, h, optimizer = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses)
+          losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best)
           losses, plotting_data, histogram_data = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, 
-                                                        plot_freq, save_freq, train_loader, val_loader, h, optimizer, hyper_params,
-                                                        args.seed, losses, no_in_channels, no_out_channels, start_epoch=start_epoch)
+                                                             plot_freq, save_freq, train_loader, val_loader, h, optimizer,
+                                                             args.epochs, torch.nn.MSELoss(), args.seed, losses, 
+                                                             no_in_channels, no_out_channels, start_epoch=start_epoch, current_best_loss=current_best_loss)
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, histogram_data)
        else:
-          LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses)
+          LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best)
     elif args.trainmodel:  # Training mode BUT NOT loading model!
        losses, plotting_data, histogram_data = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, plot_freq,
-                                                     save_freq, train_loader, val_loader, h, optimizer, hyper_params, args.seed,
+                                                     save_freq, train_loader, val_loader, h, optimizer,
+                                                     args.epochs, torch.nn.MSELoss(), args.seed,
                                                      losses, no_in_channels, no_out_channels)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, plotting_data, histogram_data)
     
-    TimeCheck(tic, 'loading/training model')
-    logging.info( GPUtil.showUtilization() )
+    #TimeCheck(tic, 'loading/training model')
     
     #------------------
     # Assess the model 
     #------------------
     if args.assess:
     
-       OutputStats(model_name, MeanStd_prefix, MITGCM_filename, train_loader, h, total_epochs, y_dim_used, args.dim, args.histlen, no_in_channels, no_out_channels)
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
+                   args.histlen, no_in_channels, no_out_channels, args.land, 'training')
     
-    TimeCheck(tic, 'assessing model')
-    logging.info( GPUtil.showUtilization() )
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
+                   args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
+    
+    #TimeCheck(tic, 'assessing model')
     
     #---------------------
     # Iteratively predict 
     #---------------------
     if args.dim == '2d':
-       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, args.histlen, args.land, tic, 
+       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
                                                                                     args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     elif args.dim == '3d':
-       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, args.histlen, args.land, tic, 
+       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, 
                                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
                                                                                     args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     
     if args.iterate:
-       IterativelyPredict(model_name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs, y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels) 
+       IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
+                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels) 
     
-    TimeCheck(tic, 'iteratively forecasting')
-    logging.info( GPUtil.showUtilization() )
+    #TimeCheck(tic, 'iteratively forecasting')
     
-    TimeCheck(tic, 'script')
-    logging.info( GPUtil.showUtilization() )
+    #TimeCheck(tic, 'script')
 

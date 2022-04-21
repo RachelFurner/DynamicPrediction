@@ -22,7 +22,7 @@ import multiprocessing as mp
 import time as time
 import sys
 sys.path.append('../NNregression')
-from WholeGridNetworkRegressorModules import TimeCheck 
+#from WholeGridNetworkRegressorModules import TimeCheck 
 
 # Create Dataset, which inherits the data.Dataset class
 class MITGCM_Dataset_2d(data.Dataset):
@@ -74,20 +74,17 @@ class MITGCM_Dataset_2d(data.Dataset):
           self.V_mask[:,:4,:]  = 0.0
           self.V_mask[:,-3:,:] = 0.0
    
-       #elif self.land == 'ExcLand':
-       # New ocean dims dont work for this!
-       #   # Set dims based on V grid
-       #   self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[0]
-       #   self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[1] 
-       #   self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[2]
+       elif self.land == 'ExcLand':
+          # Set dims based on V grid
+          self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[0]
+          self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[1] 
+          self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[2]
 
-       #   # manually set masks for now - later look to output from MITgcm and read in. 
-       #   # Here mask is ones everywhere
-       #   self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.U_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.Eta_mask            = np.ones(( self.y_dim, self.x_dim ))
-   
+          # manually set masks for now - later look to output from MITgcm and read in. 
+          # Here mask is ones everywhere
+          self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+  
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
 
@@ -113,30 +110,29 @@ class MITGCM_Dataset_2d(data.Dataset):
           da_Eta_in    = ds_InputSlice['ETAN'].values[:,0,:,:]
           da_Eta_out   = ds_OutputSlice['ETAN'].values[:,0,:,:]
        
-       #elif self.land == 'ExcLand':
-       ## New ocean dims dont work for this!
+       elif self.land == 'ExcLand':
        #   # Just cut out the ocean parts of the grid, and leave mask as all ones
    
-       #   # Read in the data
-       #   da_T_in_tmp  = ds_InputSlice['THETA'].values[:,:,:land,:] 
-       #   da_T_in      = 0.5 * (da_T_in_tmp[:,:,:-1,:]+da_T_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
-       #   da_T_out_tmp = ds_OutputSlice['THETA'].values[:,:,:land,:]
-       #   da_T_out     = 0.5 * (da_T_out_tmp[:,:,:-1,:]+da_T_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          # Read in the data
+          da_T_in_tmp  = ds_InputSlice['THETA'].values[:,:,3:101,:] 
+          da_T_in      = 0.5 * (da_T_in_tmp[:,:,:-1,:]+da_T_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          da_T_out_tmp = ds_OutputSlice['THETA'].values[:,:,3:101,:]
+          da_T_out     = 0.5 * (da_T_out_tmp[:,:,:-1,:]+da_T_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
 
-       #   da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,:land,:]
-       #   da_U_in_tmp  = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:]) # average x dir onto same grid as T points  
-       #   da_U_in      = 0.5 * (da_U_in_tmp[:,:,:-1,:]+da_U_in_tmp[:,:,1:,:]) # average y dir onto same grid as V points  
-       #   da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,:land,:]
-       #   da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:])  # average to get onto same grid as T points
-       #   da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1,:]+da_U_out_tmp[:,:,1:,:])  # average y dir onto same grid as V points  
+          da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,3:101,:]
+          da_U_in_tmp  = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:]) # average x dir onto same grid as T points  
+          da_U_in      = 0.5 * (da_U_in_tmp[:,:,:-1,:]+da_U_in_tmp[:,:,1:,:]) # average y dir onto same grid as V points  
+          da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,3:101,:]
+          da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:])  # average to get onto same grid as T points
+          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1,:]+da_U_out_tmp[:,:,1:,:])  # average y dir onto same grid as V points  
 
-       #   da_V_in      = ds_InputSlice['VVEL'].values[:,:,1:land,:]  # Ignore first point as zero
-       #   da_V_out     = ds_OutputSlice['VVEL'].values[:,:,1:land,:]    # Ignore first point as zero
+          da_V_in      = ds_InputSlice['VVEL'].values[:,:,4:101,:]    # Extra land point at South compared to other variables
+          da_V_out     = ds_OutputSlice['VVEL'].values[:,:,4:101,:]  # Extra land point at South compared to other variables 
 
-       #   da_Eta_in_tmp = ds_InputSlice['ETAN'].values[:,0,:land,:]
-       #   da_Eta_in     = 0.5 * (da_Eta_in_tmp[:,:-1,:]+da_Eta_in_tmp[:,1:,:]) # average to get onto same grid as V points  
-       #   da_Eta_out_tmp= ds_OutputSlice['ETAN'].values[:,0,:land,:]
-       #   da_Eta_out    = 0.5 * (da_Eta_out_tmp[:,:-1,:]+da_Eta_out_tmp[:,1:,:]) # average to get onto same grid as V points  
+          da_Eta_in_tmp = ds_InputSlice['ETAN'].values[:,0,3:101,:]
+          da_Eta_in     = 0.5 * (da_Eta_in_tmp[:,:-1,:]+da_Eta_in_tmp[:,1:,:]) # average to get onto same grid as V points  
+          da_Eta_out_tmp= ds_OutputSlice['ETAN'].values[:,0,3:101,:]
+          da_Eta_out    = 0.5 * (da_Eta_out_tmp[:,:-1,:]+da_Eta_out_tmp[:,1:,:]) # average to get onto same grid as V points  
 
        del ds_InputSlice
        del ds_OutputSlice
@@ -149,20 +145,20 @@ class MITGCM_Dataset_2d(data.Dataset):
        #da_T_in  = np.where(self.T_mask==0, 0, da_T_in)
        #da_T_out = np.where(self.T_mask==0, 0, da_T_out)
       
-       #da_U_in  = np.where(self.U_mask==0, 0, da_U_in)
-       #da_U_out = np.where(self.U_mask==0, 0, da_U_out)
+       #da_U_in  = np.where(self.T_mask==0, 0, da_U_in)
+       #da_U_out = np.where(self.T_mask==0, 0, da_U_out)
       
        #da_V_in  = np.where(self.V_mask==0, 0, da_V_in)
        #da_V_out = np.where(self.V_mask==0, 0, da_V_out)
       
-       #da_Eta_in  = np.where(self.Eta_mask==0, 0, da_Eta_in)
-       #da_Eta_out = np.where(self.Eta_mask==0, 0, da_Eta_out)
+       #da_Eta_in  = np.where(self.T_mask==0, 0, da_Eta_in)
+       #da_Eta_out = np.where(self.T_mask==0, 0, da_Eta_out)
 
        #TimeCheck(self.tic, 'masked data')
 
        # Set up sample arrays ready to fill (better for memory than concatenating)
        # Dims are channels,y,x
-       sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim)+(1+3*self.z_dim), self.y_dim, self.x_dim ))
+       sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim)+(2*self.z_dim), self.y_dim, self.x_dim ))
        sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
 
        for time in range(self.hist_len):
@@ -203,25 +199,22 @@ class MITGCM_Dataset_2d(data.Dataset):
        # Add masks onto inputs but not outputs
        sample_input[ self.hist_len*3*self.z_dim+self.hist_len:self.hist_len*3*self.z_dim+self.hist_len+self.z_dim, :, :] = \
                                              self.T_mask[:, :, :]
-       sample_input[ self.hist_len*3*self.z_dim+self.hist_len+self.z_dim:self.hist_len*3*self.z_dim+self.hist_len+2*self.z_dim, :, :] = \
-                                             self.T_mask[:, :, :]
-       sample_input[ self.hist_len*3*self.z_dim+self.hist_len+2*self.z_dim:self.hist_len*3*self.z_dim+self.hist_len+3*self.z_dim, :, :]  = \
+       sample_input[ self.hist_len*3*self.z_dim+self.hist_len+self.z_dim:self.hist_len*3*self.z_dim+self.hist_len+2*self.z_dim, :, :]  = \
                                              self.V_mask[:, :, :]
-       sample_input[ self.hist_len*3*self.z_dim+self.hist_len+3*self.z_dim, :, :]  = self.T_mask[0, :, :] 
 
        #TimeCheck(self.tic, 'Catted masks on')
  
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
  
-       sample = {'input':sample_input, 'output':sample_output}
+       #sample = {'input':sample_input, 'output':sample_output}
        #TimeCheck(self.tic, 'converted to torch tensor and stored as sample')
 
        if self.transform:
-          sample = self.transform(sample)
+          sample_input, sample_output = self.transform({'input':sample_input, 'output':sample_output})
           #TimeCheck(self.tic, 'Normalised data')
  
-       return sample
+       return sample_input, sample_output
 
 
 class MITGCM_Dataset_3d(data.Dataset):
@@ -272,17 +265,14 @@ class MITGCM_Dataset_3d(data.Dataset):
           self.V_mask[:,:4,:]  = 0.0
           self.V_mask[:,-3:,:] = 0.0
    
-       #elif self.land == 'ExcLand':
-       ## New ocean dims dont work for this!
-       #   # Set dims based on V grid
-       #   self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[0]
-       #   self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[1] 
-       #   self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,1:land,:]).shape[2]
+       elif self.land == 'ExcLand':
+          # Set dims based on V grid
+          self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[0]
+          self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[1] 
+          self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[2]
 
-       #   self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.U_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       #   self.Eta_mask            = np.ones(( self.y_dim, self.x_dim ))
+          self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
    
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
@@ -308,30 +298,29 @@ class MITGCM_Dataset_3d(data.Dataset):
           da_Eta_in    = ds_InputSlice['ETAN'].values[:,:,:,:]
           da_Eta_out   = ds_OutputSlice['ETAN'].values[:,:,:,:]
        
-       #elif self.land == 'ExcLand':
-       ## New ocean dims dont work for this!
-       #   # Just cut out the ocean parts of the grid, and leave mask as all zeros
+       elif self.land == 'ExcLand':
+          # Just cut out the ocean parts of the grid, and leave mask as all zeros
 
-       #   # Read in the data
-       #   da_T_in_tmp  = ds_InputSlice['THETA'].values[:,:,:land,:] 
-       #   da_T_in      = 0.5 * (da_T_in_tmp[:,:,:-1,:]+da_T_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
-       #   da_T_out_tmp = ds_OutputSlice['THETA'].values[:,:,:land,:]
-       #   da_T_out     = 0.5 * (da_T_out_tmp[:,:,:-1,:]+da_T_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          # Read in the data
+          da_T_in_tmp  = ds_InputSlice['THETA'].values[:,:,3:101,:] 
+          da_T_in      = 0.5 * (da_T_in_tmp[:,:,:-1,:]+da_T_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          da_T_out_tmp = ds_OutputSlice['THETA'].values[:,:,3:101,:]
+          da_T_out     = 0.5 * (da_T_out_tmp[:,:,:-1,:]+da_T_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
 
-       #   da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,:land,:]
-       #   da_U_in_tmp  = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:]) # average x dir onto same grid as T points  
-       #   da_U_in      = 0.5 * (da_U_in_tmp[:,:,:-1,:]+da_U_in_tmp[:,:,1:,:]) # average y dir onto same grid as V points  
-       #   da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,:land,:]
-       #   da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:])  # average to get onto same grid as T points
-       #   da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1,:]+da_U_out_tmp[:,:,1:,:])  # average y dir onto same grid as V points  
+          da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,3:101,:]
+          da_U_in_tmp  = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:]) # average x dir onto same grid as T points  
+          da_U_in      = 0.5 * (da_U_in_tmp[:,:,:-1,:]+da_U_in_tmp[:,:,1:,:]) # average y dir onto same grid as V points  
+          da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,3:101,:]
+          da_U_out_tmp = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:])  # average to get onto same grid as T points
+          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:-1,:]+da_U_out_tmp[:,:,1:,:])  # average y dir onto same grid as V points  
 
-       #   da_V_in      = ds_InputSlice['VVEL'].values[:,:,1:land,:]  # Ignore first point as zero
-       #   da_V_out     = ds_OutputSlice['VVEL'].values[:,:,1:land,:]    # Ignore first point as zero
+          da_V_in      = ds_InputSlice['VVEL'].values[:,:,4:101,:]  # Ignore first point as zero
+          da_V_out     = ds_OutputSlice['VVEL'].values[:,:,3:101,:]    # Ignore first point as zero
 
-       #   da_Eta_in_tmp = ds_InputSlice['ETAN'].values[:,:,:land,:]
-       #   da_Eta_in     = 0.5 * (da_Eta_in_tmp[:,:,:-1,:]+da_Eta_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
-       #   da_Eta_out_tmp= ds_OutputSlice['ETAN'].values[:,:,:land,:]
-       #   da_Eta_out    = 0.5 * (da_Eta_out_tmp[:,:,:-1,:]+da_Eta_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          da_Eta_in_tmp = ds_InputSlice['ETAN'].values[:,:,3:101,:]
+          da_Eta_in     = 0.5 * (da_Eta_in_tmp[:,:,:-1,:]+da_Eta_in_tmp[:,:,1:,:]) # average to get onto same grid as V points  
+          da_Eta_out_tmp= ds_OutputSlice['ETAN'].values[:,:,3:101,:]
+          da_Eta_out    = 0.5 * (da_Eta_out_tmp[:,:,:-1,:]+da_Eta_out_tmp[:,:,1:,:]) # average to get onto same grid as V points  
 
        del ds_InputSlice
        del ds_OutputSlice
@@ -342,18 +331,18 @@ class MITGCM_Dataset_3d(data.Dataset):
        #da_T_in  = np.where(self.T_mask==0, 0, da_T_in)
        #da_T_out = np.where(self.T_mask==0, 0, da_T_out)
       
-       #da_U_in  = np.where(self.U_mask==0, 0, da_U_in)
-       #da_U_out = np.where(self.U_mask==0, 0, da_U_out)
+       #da_U_in  = np.where(self.T_mask==0, 0, da_U_in)
+       #da_U_out = np.where(self.T_mask==0, 0, da_U_out)
       
        #da_V_in  = np.where(self.V_mask==0, 0, da_V_in)
        #da_V_out = np.where(self.V_mask==0, 0, da_V_out)
       
-       #da_Eta_in  = np.where(self.Eta_mask==0, 0, da_Eta_in)
-       #da_Eta_out = np.where(self.Eta_mask==0, 0, da_Eta_out)
+       #da_Eta_in  = np.where(self.T_mask==0, 0, da_Eta_in)
+       #da_Eta_out = np.where(self.T_mask==0, 0, da_Eta_out)
 
 
        # Fill input and output arrays
-       sample_input  = np.zeros(( 4*self.hist_len+4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
+       sample_input  = np.zeros(( 4*self.hist_len+2, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
        sample_output = np.zeros(( 4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
 
        for time in range(self.hist_len):
@@ -380,19 +369,17 @@ class MITGCM_Dataset_3d(data.Dataset):
 
        # Cat masks onto inputs but not outputs
        sample_input[4*self.hist_len,:,:,:]  = self.T_mask[:, :, :]
-       sample_input[4*self.hist_len+1,:,:,:]  = self.T_mask[:, :, :]
-       sample_input[4*self.hist_len+2,:,:,:]  = self.V_mask[:, :, :]
-       sample_input[4*self.hist_len+3,:,:,:]  = np.broadcast_to(self.T_mask[0, :, :],(self.z_dim, self.y_dim, self.x_dim))
+       sample_input[4*self.hist_len+1,:,:,:]  = self.V_mask[:, :, :]
 
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
  
-       sample = {'input':sample_input, 'output':sample_output}
+       #sample = {'input':sample_input, 'output':sample_output}
        
        if self.transform:
           sample = self.transform(sample)
  
-       return (sample)
+       return sample_input, sample_output
 
 
 class RF_Normalise_sample(object):
@@ -433,14 +420,6 @@ class RF_Normalise_sample(object):
            sample['output'][:self.no_out_channels, :, :] = ( sample['output'][:self.no_out_channels, :, :] -
                                                              self.train_mean[:self.no_out_channels,:,:] ) /  \
                                                              self.train_range[:self.no_out_channels,:,:]
- 
-           # Easy code with two for loops - takes about 9 mins
-           #for time in range(self.histlen):
-           #   for channel in range(self.no_out_channels):
-           #      sample['input'][time*self.no_out_channels+channel, :, :] = (sample['input'][time*self.no_out_channels+channel, :, :] 
-           #                                                               - self.train_mean[channel]) / self.train_range[channel]
-           #for channel in range(self.no_out_channels):
-           #   sample['output'][channel, :, :] = (sample['output'][channel, :, :] - self.train_mean[channel]) / self.train_range[channel]
 
         elif self.dim == '3d':
 
@@ -458,7 +437,7 @@ class RF_Normalise_sample(object):
            #for channel in range(self.no_out_channels):
            #   sample['output'][channel, :, :] = (sample['output'][channel, :, :, :] - self.train_mean[channel]) / self.train_range[channel]
 
-        return sample
+        return sample['input'], sample['output']
 
 def RF_ReNormalise_predicted(prediction, train_mean, train_std, train_range, no_out_channels, dim):
     """Normalise data based on training means and std (given)
