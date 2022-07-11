@@ -19,18 +19,18 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-epochs = '34'
-dir_name = 'IncLand_UNet2dtransp_histlen1_seed20475'
-model_name = dir_name+'_'+epochs+'epochs'
-for_len = 6*30
-animation_start = 0
-animation_end = 6*30
+dir_name = 'bdyweight100_Spits_UNet2dtransp_histlen1_seed30475'
+epochs = '200'
+iteration_len = 180
 
 plot_timeseries = True 
-make_animation_plots = True
+make_animation_plots = True 
+animation_end = 1*30
+ts_end = 1*30
 
 #-----------
 
+model_name = dir_name+'_'+epochs+'epochs'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
 
@@ -41,7 +41,7 @@ x_coord = point[2]
 #------------------------
 print('reading in data')
 #------------------------
-iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forecast'+str(for_len)+'.nc'
+iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forecast'+str(iteration_len)+'.nc'
 iter_ds = xr.open_dataset(iter_data_filename)
 da_true_Temp = iter_ds['True_Temp']
 da_true_U    = iter_ds['True_U']
@@ -76,27 +76,35 @@ masked_Pred_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_pred_Eta.values )
 # Plot timeseries at a point
 #----------------------------
 if plot_timeseries:
-   fig = ChnPlt.plt_timeseries( point, da_pred_Temp.shape[0], {'True Temp':masked_True_Temp, 'Pred Temp':masked_Pred_Temp }, y_label='Temperature ('+u'\xb0'+'C)' )
+   fig = ChnPlt.plt_timeseries( point, ts_end, 
+                                {'True Temp':masked_True_Temp[:ts_end], 'Pred Temp':masked_Pred_Temp[:ts_end] },
+                                y_label='Temperature ('+u'\xb0'+'C)' )
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
-               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=3., max_value=4.)
+               '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=3., max_value=4.)
 
-   fig = ChnPlt.plt_timeseries( point, da_pred_U.shape[0], {'True U':masked_True_U, 'Pred U':masked_Pred_U }, y_label='U Vel $(m s^{-1})$' )
+   fig = ChnPlt.plt_timeseries( point, ts_end, 
+                                {'True U':masked_True_U[:ts_end], 'Pred U':masked_Pred_U[:ts_end] },
+                                y_label='U Vel $(m s^{-1})$' )
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
-               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=0., max_value=0.5 )
+               '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=0., max_value=0.5 )
 
-   fig = ChnPlt.plt_timeseries( point, da_pred_V.shape[0], {'True V':masked_True_V, 'Pred V':masked_Pred_V }, y_label='V Vel $(m s^{-1})$')
+   fig = ChnPlt.plt_timeseries( point, ts_end, 
+                                {'True V':masked_True_V[:ts_end], 'Pred V':masked_Pred_V[:ts_end] },
+                                y_label='V Vel $(m s^{-1})$')
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
-               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.5, max_value=0.5)
+               '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.5, max_value=0.5)
 
-   fig = ChnPlt.plt_timeseries( point[1:], da_pred_Eta.shape[0], {'True Eta':masked_True_Eta, 'Pred Eta':masked_Pred_Eta }, y_label='SSH $(m)$')
+   fig = ChnPlt.plt_timeseries( point[1:], ts_end, 
+                                {'True Eta':masked_True_Eta[:ts_end], 'Pred Eta':masked_Pred_Eta[:ts_end] },
+                                y_label='SSH $(m)$')
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Eta_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
-               '_'+str(for_len)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.3, max_value=0.3)
+               '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.3, max_value=0.3)
 
 #-------------------------------
 # Plot spatial plots to animate
 #-------------------------------
 if make_animation_plots:
-   for time in range(animation_start,animation_end):
+   for time in range(0,animation_end):
       fig = ChnPlt.plot_depth_fld_diff(masked_True_Temp[time,level,:,:], 'True Temperature',
                                        masked_Pred_Temp[time,level,:,:], 'Predicted Temperature',
                                        level, da_X.values, da_Y.values, da_Z.values, title=None,

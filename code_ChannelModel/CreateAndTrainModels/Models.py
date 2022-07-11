@@ -687,7 +687,7 @@ class UNet3d(nn.Module):
           )
       )
 
-def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_value, padding_type, xdim, ydim, zdim, kern_size):
+def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_value, padding_type, xdim, ydim, zdim, kern_size, weight_decay=0):
    # inputs are (no_samples, 115channels, 100y, 240x).  (38 vertical levels, T, U, V 3d, Eta 2d)
    os.environ['PYTHONHASHSEED'] = str(seed_value)
    np.random.seed(seed_value)
@@ -713,7 +713,7 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_val
        h = h.cuda()
    h = h.float()
  
-   optimizer = torch.optim.Adam( h.parameters(), lr=lr )
+   optimizer = torch.optim.Adam( h.parameters(), lr=lr, weight_decay=weight_decay )
 
    return h, optimizer
 

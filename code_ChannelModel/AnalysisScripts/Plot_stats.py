@@ -19,9 +19,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '34'
-dir_name = 'IncLand_UNet2dtransp_histlen1_seed20475'
+epochs = '200'
+dir_name = 'bdyweight100_Spits_UNet2dtransp_histlen1_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
+#trainorval='training'
+trainorval='validation'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
 
@@ -32,7 +34,7 @@ x_coord = point[2]
 #------------------------
 print('reading in data')
 #------------------------
-stats_data_filename=rootdir+'/STATS/'+model_name+'_StatsOutput.nc'
+stats_data_filename=rootdir+'/STATS/'+model_name+'_StatsOutput_'+trainorval+'.nc'
 stats_ds = xr.open_dataset(stats_data_filename)
 da_Temp_RMS = stats_ds['TempRMS']
 da_U_RMS    = stats_ds['U_RMS']
@@ -56,115 +58,24 @@ masked_Eta_RMS  = np.where( da_Eta_mask.values==0, np.nan, da_Eta_RMS.values )
 #--------------------------
 fig, ax, im = ChnPlt.plot_depth_fld(masked_Temp_RMS[level,:,:], 'Temperature RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   #title=None, min_value=0.0, max_value=0.05)
-                                   title=None, min_value=0.0)
-plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+                                   title=None, min_value=0.0, max_value=0.028)
+                                   #title=None, min_value=0.0)
+plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = ChnPlt.plot_depth_fld(masked_U_RMS[level,:,:], 'U Vel RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   #title=None, min_value=0.0, max_value=0.04)
-                                   title=None, min_value=0.0)
-plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+                                   title=None, min_value=0.0, max_value=0.023)
+                                   #title=None, min_value=0.0)
+plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = ChnPlt.plot_depth_fld(masked_V_RMS[level,:,:], 'V Vel RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   #title=None, min_value=0.0, max_value=0.025)
-                                   title=None, min_value=0.0)
-plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+                                   title=None, min_value=0.0, max_value=0.016)
+                                   #title=None, min_value=0.0)
+plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = ChnPlt.plot_depth_fld(masked_Eta_RMS[:,:], 'Eta RMS Errors', 0,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   #title=None, min_value=0.0, max_value=0.025)
-                                   title=None, min_value=0.0)
-plt.savefig(rootdir+'/STATS/'+model_name+'_Eta_RMS.png', bbox_inches = 'tight', pad_inches = 0.1)
-
-
-#fig, ax, im = ChnPlt.plot_depth_fld(da_Temp_CC.values[level,:,:], 'Temperature CC Errors', level,
-#                                   da_X.values, da_Y.values, da_Z.values,
-#                                   title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_CC_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_depth_fld(da_U_CC.values[level,:,:], 'U Vel CC Errors', level,
-#                                   da_X.values, da_Y.values, da_Z.values,
-#                                   title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_U_CC_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_depth_fld(da_V_CC.values[level,:,:], 'V Vel CC Errors', level,
-#                                   da_X.values, da_Y.values, da_Z.values,
-#                                   title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_V_CC_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_depth_fld(da_Eta_CC.values[:,:], 'Eta CC Errors', 0,
-#                                   da_X.values, da_Y.values, da_Z.values,
-#                                   title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Eta_CC.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#
-##-----------------------
-## Plot y-cross sections
-##-----------------------
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_Temp_RMS.values, 'Temperature RMS Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_U_RMS.values, 'U Vel RMS Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_V_RMS.values, 'V Vel RMS Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_Temp_CC.values, 'Temperature CC Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_CC_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_U_CC.values, 'U Vel CC Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_U_CC_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_yconst_crss_sec(da_V_CC.values, 'V Vel CC Errors', y_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_V_CC_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-##-----------------------
-## Plot x-cross sections
-##-----------------------
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_Temp_RMS.values, 'Temperature RMS Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_U_RMS.values, 'U Vel RMS Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_V_RMS.values, 'V Vel RMS Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_Temp_CC.values, 'Temperature CC Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_CC_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_U_CC.values, 'U Vel CC Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_U_CC_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
-#fig, ax, im = ChnPlt.plot_xconst_crss_sec(da_V_CC.values, 'V Vel CC Errors', x_coord,
-#                                          da_X.values, da_Y.values, da_Z.values,
-#                                          title=None, min_value=None, max_value=None)
-#plt.savefig(rootdir+'/STATS/'+model_name+'_V_CC_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
-#
+                                   title=None, min_value=0.0, max_value=0.014)
+                                   #title=None, min_value=0.0)
+plt.savefig(rootdir+'/STATS/'+model_name+'_Eta_RMS_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)

@@ -19,8 +19,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-model_dir_name = 'IncLand_UNet2dtransp_histlen1_seed20475'
-epochs = '34'
+model_dir_name = 'lr1e5IncLand_UNet2dtransp_histlen1_seed30475'
+epochs = '200'
 for_len = '180'
 
 #-----------

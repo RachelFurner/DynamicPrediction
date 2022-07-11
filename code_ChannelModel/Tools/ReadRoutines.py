@@ -13,12 +13,14 @@ import xarray as xr
 from torch.utils import data
 from torchvision import transforms, utils
 import torch
-import gc
+
+import numpy.lib.stride_tricks as npst
 
 import multiprocessing as mp
 #import torch.multiprocessing
 #torch.multiprocessing.set_sharing_strategy('file_system')
 
+import gc
 import time as time
 import sys
 sys.path.append('../NNregression')
@@ -39,7 +41,7 @@ class MITGCM_Dataset_2d(data.Dataset):
          worth assessing impact of this at some stage
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -57,24 +59,9 @@ class MITGCM_Dataset_2d(data.Dataset):
        self.tic       = tic 
        
        # manually set masks for now - later look to output from MITgcm and read in
-       if self.land == 'IncLand':
-          # Set dims based on T grid
-          self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
-          self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
-          self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
-   
-          # U and Eta masks to match T-mask
-          self.T_mask          = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.T_mask[:,:3,:]  = 0.0
-          self.T_mask[:,-3:,:] = 0.0
+       # one over ocean points, zero over land points
 
-          # Later we cut off top row of V data, as this has an extra point and need dimensions to match
-          # Note v-mask extends one point above and below t, but cutting off top row deals with top boundary
-          self.V_mask          = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.V_mask[:,:4,:]  = 0.0
-          self.V_mask[:,-3:,:] = 0.0
-   
-       elif self.land == 'ExcLand':
+       if self.land == 'ExcLand':
           # Set dims based on V grid
           self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[0]
           self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[1] 
@@ -82,9 +69,60 @@ class MITGCM_Dataset_2d(data.Dataset):
 
           # manually set masks for now - later look to output from MITgcm and read in. 
           # Here mask is ones everywhere
-          self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.masks = np.ones(( 4*self.z_dim, self.y_dim, self.x_dim ))
   
+       else:
+          # Set dims based on T grid
+          self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
+          self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
+          self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
+   
+          # Set up masks 
+          self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
+
+          # T mask
+          self.masks[0:self.z_dim,:3,:]  = 0.0
+          self.masks[0:self.z_dim,-3:,:] = 0.0
+          # U mask
+          self.masks[self.z_dim:2*self.z_dim,:3,:]  = 0.0
+          self.masks[self.z_dim:2*self.z_dim,-3:,:] = 0.0
+          # V mask
+          # Later we cut off top row of V data, as this has an extra point and need dimensions to match
+          # Note v-mask extends one point above and below t, but cutting off top row deals with top boundary
+          self.masks[2*self.z_dim:3*self.z_dim,:4,:]  = 0.0
+          self.masks[2*self.z_dim:3*self.z_dim,-3:,:] = 0.0
+          # Eta mask
+          self.masks[3*self.z_dim,:3,:]  = 0.0
+          self.masks[3*self.z_dim,-3:,:] = 0.0
+
+          if self.land == 'Spits':
+             # T
+             self.masks[:self.z_dim,:30,54:60]  = 0.0
+             self.masks[:self.z_dim,67:,169:175] = 0.0
+             # U
+             self.masks[self.z_dim:2*self.z_dim,:30,54:60]  = 0.0
+             self.masks[self.z_dim:2*self.z_dim,67:,169:175] = 0.0
+             # V
+             self.masks[2*self.z_dim:3*self.z_dim,:31,54:60]  = 0.0
+             self.masks[2*self.z_dim:3*self.z_dim,67:,169:175] = 0.0
+             # Eta
+             self.masks[3*self.z_dim,:31,54:60]  = 0.0
+             self.masks[3*self.z_dim,67:,169:175] = 0.0
+
+          # Set up a mask identifying boundary points (ocean points adjacent to a land point)
+          # Boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
+          self.bdy_masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
+          # set land points to zero, and ocean points to bdy_weight using masks
+          self.bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 1, bdy_weight)
+          # Set ocean interior to one
+          padded_masks = np.zeros((3*self.z_dim+1, self.y_dim+2, self.x_dim+2))
+          padded_masks[:,0,1:-1]=self.masks[:,0,:]
+          padded_masks[:,1:-1,1:-1]=self.masks[:,:,:]
+          padded_masks[:,-1,1:-1]=self.masks[:,-1,:]
+          padded_masks[:,1:-1,0]=self.masks[:,:,-1]
+          padded_masks[:,1:-1,-1]=self.masks[:,:,0]
+          self.bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,3,3)), axis=(3,4,5) ), 1, self.bdy_masks)
+
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
 
@@ -93,7 +131,7 @@ class MITGCM_Dataset_2d(data.Dataset):
        ds_InputSlice  = self.ds.isel(T=slice(idx*self.stride,idx*self.stride+self.hist_len))
        ds_OutputSlice = self.ds.isel(T=[idx*self.stride+self.hist_len])
 
-       if self.land == 'IncLand':
+       if self.land == 'IncLand' or self.land == 'Spits':
           # Read in the data
 
           da_T_in      = ds_InputSlice['THETA'].values[:,:,:,:] 
@@ -111,7 +149,7 @@ class MITGCM_Dataset_2d(data.Dataset):
           da_Eta_out   = ds_OutputSlice['ETAN'].values[:,0,:,:]
        
        elif self.land == 'ExcLand':
-       #   # Just cut out the ocean parts of the grid, and leave mask as all ones
+       #   # Just cut out the ocean parts of the grid
    
           # Read in the data
           da_T_in_tmp  = ds_InputSlice['THETA'].values[:,:,3:101,:] 
@@ -141,24 +179,9 @@ class MITGCM_Dataset_2d(data.Dataset):
 
        #TimeCheck(self.tic, 'Read in data')
 
-       ## Shouldn't need to mask the data, as land values set to zero in MITgcm output already
-       #da_T_in  = np.where(self.T_mask==0, 0, da_T_in)
-       #da_T_out = np.where(self.T_mask==0, 0, da_T_out)
-      
-       #da_U_in  = np.where(self.T_mask==0, 0, da_U_in)
-       #da_U_out = np.where(self.T_mask==0, 0, da_U_out)
-      
-       #da_V_in  = np.where(self.V_mask==0, 0, da_V_in)
-       #da_V_out = np.where(self.V_mask==0, 0, da_V_out)
-      
-       #da_Eta_in  = np.where(self.T_mask==0, 0, da_Eta_in)
-       #da_Eta_out = np.where(self.T_mask==0, 0, da_Eta_out)
-
-       #TimeCheck(self.tic, 'masked data')
-
        # Set up sample arrays ready to fill (better for memory than concatenating)
        # Dims are channels,y,x
-       sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim)+(2*self.z_dim), self.y_dim, self.x_dim ))
+       sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim), self.y_dim, self.x_dim ))
        sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
 
        for time in range(self.hist_len):
@@ -196,14 +219,6 @@ class MITGCM_Dataset_2d(data.Dataset):
 
        #TimeCheck(self.tic, 'Catted data')
 
-       # Add masks onto inputs but not outputs
-       sample_input[ self.hist_len*3*self.z_dim+self.hist_len:self.hist_len*3*self.z_dim+self.hist_len+self.z_dim, :, :] = \
-                                             self.T_mask[:, :, :]
-       sample_input[ self.hist_len*3*self.z_dim+self.hist_len+self.z_dim:self.hist_len*3*self.z_dim+self.hist_len+2*self.z_dim, :, :]  = \
-                                             self.V_mask[:, :, :]
-
-       #TimeCheck(self.tic, 'Catted masks on')
- 
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
  
@@ -214,7 +229,7 @@ class MITGCM_Dataset_2d(data.Dataset):
           sample_input, sample_output = self.transform({'input':sample_input, 'output':sample_output})
           #TimeCheck(self.tic, 'Normalised data')
  
-       return sample_input, sample_output
+       return sample_input, sample_output, self.masks, self.bdy_masks
 
 
 class MITGCM_Dataset_3d(data.Dataset):
@@ -273,6 +288,22 @@ class MITGCM_Dataset_3d(data.Dataset):
 
           self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
           self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+
+       elif self.land == 'Spits':
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("NOT SET UP FOR THIS IN 3D")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
+          print("STOP")
    
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
