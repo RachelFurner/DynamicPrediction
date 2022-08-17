@@ -4,7 +4,6 @@
 print('import packages')
 import sys
 sys.path.append('../Tools')
-import CreateDataName as cn
 import Channel_Model_Plotting as ChnlPlt
 
 import numpy as np
@@ -28,10 +27,12 @@ time_step = '24hrs'
 
 #----------------------
 
-datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_SmallDomain/runs/100yrs/'
-data_filename=datadir + 'daily_ave_50yrs.nc'
+datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+#data_filename=datadir + '12hrly_data.nc'
+data_filename=datadir + '12hrly_small_set.nc'
 grid_filename=datadir + 'grid.nc'
 mon_file = datadir + 'monitor.nc'
+stats_file = datadir + 'stats.nc'
 rootdir = '../../../MITGCM_Analysis_Channel/'
 
 level = point[0]
@@ -45,7 +46,6 @@ print('reading in ds')
 ds = xr.open_dataset(data_filename)
 # ignore last 8 y -points as these are land
 da_T = ds['THETA'][:,:,:-8,:]
-da_W = ds['WVEL'][:,:,:-8,:]
 da_X = ds['X']
 da_Y = ds['Y'][:-8]
 ds_grid = xr.open_dataset(grid_filename)
@@ -61,8 +61,59 @@ print(da_T.shape)
 #----------------------
 # Read in monitor file
 #----------------------
-ds_mon=xr.open_dataset(mon_file)
+ds_mon = xr.open_dataset(mon_file)
 nc_mon = Dataset(mon_file)
+
+#--------------------
+# Read in stats file
+#--------------------
+ds_stats = xr.open_dataset(stats_file)
+
+#-------------------------
+# Plot Mean and std plots
+#-------------------------
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanTemp'][level,:,:], 'Mean Temperature', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/MeanTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanUVel'][level,:,:], 'Mean U Velocity', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanVVel'][level,:,:], 'Mean V Velocity', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanEta'][:,:], 'Mean Eta', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/MeanEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdTemp'][level,:,:], 'Std Temperature', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/StdTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdUVel'][level,:,:], 'Std U Velocity', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/StdUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdVVel'][level,:,:], 'Std V Velocity', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/StdVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdEta'][:,:], 'Std Eta', level,
+                                   da_X.values, da_Y.values, da_Z.values,
+                                   title=None, min_value=None, max_value=None)
+plt.savefig(rootdir+'PLOTS/StdEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
+
+
 
 #--------------------------
 # Plot spatial depth plots
@@ -91,16 +142,11 @@ fig, ax, im = ChnlPlt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature', x_co
                                          title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_xconst_crss_sec(da_W[time,:,:,:], 'Vertical Velocity', x_coord,
-                                         da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=-0.00003, max_value=0.00003, cmap='bwr')
-plt.savefig(rootdir+'PLOTS/'+time_step+'_Wvel_x'+str(x_coord), bbox_inches = 'tight', pad_inches = 0.1)
-
 #----------------------------------
 # Plot diffs between time t and t+1
 #----------------------------------
 print('plot diffs between t and t+1')
-fig = ChnlPlt.plot_depth_fld_diff(da_T[time,:,:,:], 'Temp at time t', da_T[time+1,:,:,:], 'Temp at time t+1', level,
+fig = ChnlPlt.plot_depth_fld_diff(da_T[time,level,:,:], 'Temp at time t', da_T[time+1,level,:,:], 'Temp at time t+1', level,
                                 da_X.values, da_Y.values, da_Z.values,
                                 title=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)

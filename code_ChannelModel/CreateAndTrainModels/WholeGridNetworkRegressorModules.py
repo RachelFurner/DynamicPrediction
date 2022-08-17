@@ -55,35 +55,47 @@ def sizeof_fmt(num, suffix='B'):
 #   logging.info('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
-                batch_size, land, dimension, tic):
+                batch_size, land, dimension, bdy_weight, histlen, tic):
 
    no_depth_levels = 38 ## Note this is hard coded!!
 
    if dimension == '2d':
-      mean_std_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic,
-                                               transform=None)    # Use histlen=1 for this, as doesn't make much impact
+      mean_std_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic, bdy_weight,
+                                               np.zeros(( histlen*(3*no_depth_levels+1) )), transform=None)    # Use histlen=1 for this, as doesn't make much impact
       mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
       #------------------------------------
       # First calculate the mean and range
       #------------------------------------
       batch_no = 0
       count = 0.
-      for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
+      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
+      for input_batch, target_batch, masks in mean_std_loader:
           
+          # Mask with Nans
+          input_batch = np.where(masks == 1, input_batch, np.nan)
+          target_batch = np.where(masks == 1, target_batch, np.nan)
+ 
           # SHAPE: (batch_size, channels, y, x)
 
           # Calc mean of this batch
-          batch_inputs_mean  = np.mean(input_batch.numpy(), axis = (0,2,3))
+          batch_inputs_mean  = np.nanmean(input_batch, axis = (0,2,3))
+          batch_targets_mean  = np.nanmean(target_batch, axis = (0,2,3))
  
           #combine with previous mean and calc min and max
           if batch_no==0:
              inputs_mean = batch_inputs_mean  
-             inputs_min  = np.amin( input_batch.numpy(), axis = (0,2,3) )
-             inputs_max  = np.amax( input_batch.numpy(), axis = (0,2,3) )
+             inputs_min  = np.nanmin( input_batch, axis = (0,2,3) )
+             inputs_max  = np.nanmax( input_batch, axis = (0,2,3) )
+             targets_mean = batch_targets_mean  
+             targets_min  = np.nanmin( target_batch, axis = (0,2,3) )
+             targets_max  = np.nanmax( target_batch, axis = (0,2,3) )
           else:
              inputs_mean = 1./(count+input_batch.shape[0]) * ( count*inputs_mean + input_batch.shape[0]*batch_inputs_mean )
-             inputs_min  = np.minimum( inputs_min, np.amin(input_batch.numpy()) )
-             inputs_max  = np.maximum( inputs_max, np.amax(input_batch.numpy()) )
+             inputs_min  = np.minimum( inputs_min, np.nanmin(input_batch) )
+             inputs_max  = np.maximum( inputs_max, np.nanmax(input_batch) )
+             targets_mean = 1./(count+target_batch.shape[0]) * ( count*targets_mean + target_batch.shape[0]*batch_targets_mean )
+             targets_min  = np.minimum( targets_min, np.nanmin(target_batch) )
+             targets_max  = np.maximum( targets_max, np.nanmax(target_batch) )
 
           batch_no = batch_no+1
           count = count + input_batch.shape[0]
@@ -91,36 +103,53 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       ## combine across all depth levels in each field (samples sizes are the same across all depths, so don't need to account for this)
       for i in range(3):  # Temp, U, V. No need to do for Eta as already 2-d/1 channel. Sal not included in model as const.
          inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels]  = 1./no_depth_levels * np.sum(inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_min[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.amin(inputs_min[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_max[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.amax(inputs_max[i*no_depth_levels:(i+1)*no_depth_levels])
+         inputs_min[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmin(inputs_min[i*no_depth_levels:(i+1)*no_depth_levels])
+         inputs_max[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmax(inputs_max[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_mean[i*no_depth_levels:(i+1)*no_depth_levels]  = 1./no_depth_levels * np.sum(targets_mean[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_min[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmin(targets_min[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_max[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmax(targets_max[i*no_depth_levels:(i+1)*no_depth_levels])
 
       inputs_range = inputs_max - inputs_min
+      targets_range = targets_max - targets_min
 
       #-------------------------
       # Next calculate the std 
       #-------------------------
       count = 0.
-      for input_batch, output_batch, masks, bdy_masks in mean_std_loader:
+      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
+      for input_batch, target_batch, masks in mean_std_loader:
           
+          # Mask with Nans
+          input_batch = np.where(masks == 1, input_batch, np.nan)
+          target_batch = np.where(masks == 1, target_batch, np.nan)
+ 
           # SHAPE: (batch_size, channels, y, x)
    
           inputs_dfm = np.zeros((input_batch.shape[1]))
+          targets_dfm = np.zeros((target_batch.shape[1]))
           # Calc diff from mean for this batch
           for channel in range(input_batch.shape[1]):
-             inputs_dfm[channel]  = inputs_dfm[channel] + np.sum( np.square( input_batch.numpy()[:,channel,:,:]-inputs_mean[channel] ) )
-          count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]
+             inputs_dfm[channel]  = inputs_dfm[channel] + np.nansum( np.square( input_batch[:,channel,:,:]-inputs_mean[channel] ) )
+          for channel in range(target_batch.shape[1]):
+             targets_dfm[channel]  = targets_dfm[channel] + np.sum( np.square( target_batch[:,channel,:,:]-targets_mean[channel] ) )
+          #count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]
+          count = count + np.sum(~np.isnan(input_batch))   # Same number of Nans in inputs and targets
    
       ## sum across all depth levels in each field and calc std
-      for i in range(3):  # Temp, U, V. Sal not included in model as const. Eta done below as already 2d channel.
+      for i in range(3):  # Temp, U, V. Sal not included in model as const. Eta already 2d channel.
          inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels])
 
       inputs_var = inputs_dfm / (no_depth_levels*count)
-       
       inputs_std = np.sqrt(inputs_var)
+      targets_var = targets_dfm / (no_depth_levels*count)
+      targets_std = np.sqrt(targets_var)
    
       #-------------------------
 
    elif dimension == '3d':
+      logging.info('Code not properly set up for 3d - Mean and Std still calculated over nextfield not DeltaT')
+      sys.exit()
       mean_std_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic,
                                                transform=None)    # Use histlen=1 for this, as doesn't make much impact
       mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -130,22 +159,23 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       #------------------------------------
       batch_no = 0
       count = 0.
-      for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
+      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
+      for input_batch, target_batch, masks in mean_std_loader:
           
           # SHAPE: (batch_size, channels, z, y, x)
    
           # Calc mean of this batch
-          batch_inputs_mean  = np.mean(input_batch.numpy(), axis = (0,2,3,4))
+          batch_inputs_mean  = np.mean(input_batch, axis = (0,2,3,4))
     
           #combine with previous mean and calc min and max
           if batch_no==0:
              inputs_mean = batch_inputs_mean  
-             inputs_min  = np.amin( input_batch.numpy(), axis = (0,2,3,4) )
-             inputs_max  = np.amax( input_batch.numpy(), axis = (0,2,3,4) )
+             inputs_min  = np.amin( input_batch, axis = (0,2,3,4) )
+             inputs_max  = np.amax( input_batch, axis = (0,2,3,4) )
           else:
              inputs_mean = 1./(count+input_batch.shape[0]) * ( count*inputs_mean + input_batch.shape[0]*batch_inputs_mean )
-             inputs_min  = np.minimum( inputs_min, np.amin(input_batch.numpy()) )
-             inputs_max  = np.maximum( inputs_max, np.amax(input_batch.numpy()) )
+             inputs_min  = np.minimum( inputs_min, np.amin(input_batch) )
+             inputs_max  = np.maximum( inputs_max, np.amax(input_batch) )
    
           batch_no = batch_no+1
           count = count + input_batch.shape[0]
@@ -156,14 +186,15 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       # Next calculate the std 
       #-------------------------
       count = 0.
-      for input_batch, output_batch, masks, bdy_masks in mean_std_loader:
+      #for input_batch, output_batch, masks, bdy_masks in mean_std_loader:
+      for input_batch, output_batch, masks in mean_std_loader:
           
           # SHAPE: (batch_size, channels, z, y, x)
    
           inputs_dfm = np.zeros((input_batch.shape[1]))
           # Calc diff from mean for this batch
           for channel in range(input_batch.shape[1]):
-             inputs_dfm[channel]  = inputs_dfm[channel] + np.sum( np.square( input_batch.numpy()[:,channel,:,:,:]-inputs_mean[channel] ) )
+             inputs_dfm[channel]  = inputs_dfm[channel] + np.sum( np.square( input_batch[:,channel,:,:,:]-inputs_mean[channel] ) )
           count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]*input_batch.shape[4]
    
       inputs_var = inputs_dfm / count
@@ -174,7 +205,7 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
 
    ## Save to file, so can be used to un-normalise when using model to predict
    mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
-   np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range)
+   np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range )
    
 def ReadMeanStd(MeanStd_prefix):
    mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
@@ -182,13 +213,15 @@ def ReadMeanStd(MeanStd_prefix):
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
    inputs_range = mean_std_data['arr_2']
+   targets_mean  = mean_std_data['arr_3']
+   targets_std   = mean_std_data['arr_4']
+   targets_range = mean_std_data['arr_5']
 
-   return(inputs_mean, inputs_std, inputs_range)
+   return(inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range)
 
-def my_loss(output, target, bdy_mask):
-    #loss = torch.mean( (output - target)**2 * bdy_mask )
-    loss = torch.mean( (output - target)**2 * (bdy_mask-1) )
-    return loss
+def my_loss(output, target):
+   loss = torch.mean( (output - target)**2 )
+   return loss
 
 def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_samples, save_freq, train_loader, val_loader,
                h, optimizer, num_epochs, seed_value, losses, no_in_channels, no_out_channels, start_epoch=1, current_best_loss=0.1):
@@ -223,11 +256,12 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
 
        h.train(True)
 
-       for input_batch, target_batch, masks, bdy_masks in train_loader:
+       #for input_batch, target_batch, masks, bdy_masks in train_loader:
+       for input_batch, target_batch, masks in train_loader:
 
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
-           bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
+           #bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
            # mask targets to circumvent issues with normalisation!
            target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * masks
            # input_batch SHAPE: (no_samples, no_channels, z, y, x) if 3d, (no_samples, no_channels, y, x) if 2d.
@@ -236,6 +270,7 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            optimizer.zero_grad()
        
            # get prediction from the model, given the inputs
+           #predicted_batch = h( torch.cat((input_batch, masks, bdy_masks), dim=1) ) * masks
            predicted_batch = h( torch.cat((input_batch, masks), dim=1) ) * masks
    
            logging.debug('For test run check if output is correct shape, the following two shapes should match!\n')
@@ -244,27 +279,34 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            logging.debug('masks.shape : '+str(masks.shape)+'\n')
               
            # Calculate and update loss values
-           loss = my_loss(predicted_batch, target_batch, bdy_masks).double()
+           #loss = my_loss(predicted_batch, target_batch, bdy_masks).double()
+           loss = my_loss(predicted_batch, target_batch).double()
            losses['train'][-1] = losses['train'][-1] + loss.item() * input_batch.shape[0]
             
            if dimension == '2d': 
               losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
                                          my_loss( predicted_batch[:,:no_depth_levels,:,:],
                                          target_batch[:,:no_depth_levels,:,:],
-                                         bdy_masks[:,:no_depth_levels,:,:] ).item() * input_batch.shape[0]
+                                         ).item() * input_batch.shape[0]
+                                         #bdy_masks[:,:no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_U'][-1] = losses['train_U'][-1] + \
                                       my_loss( predicted_batch[:,no_depth_levels:2*no_depth_levels,:,:],
                                       target_batch[:,no_depth_levels:2*no_depth_levels,:,:],
-                                      bdy_masks[:,no_depth_levels:2*no_depth_levels,:,:] ).item() * input_batch.shape[0]
+                                      ).item() * input_batch.shape[0]
+                                      #bdy_masks[:,no_depth_levels:2*no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_V'][-1] = losses['train_V'][-1] + \
                                       my_loss( predicted_batch[:,2*no_depth_levels:3*no_depth_levels,:,:],
                                       target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:],
-                                      bdy_masks[:,2*no_depth_levels:3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
+                                      ).item() * input_batch.shape[0]
+                                      #bdy_masks[:,2*no_depth_levels:3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_Eta'][-1] = losses['train_Eta'][-1] + \
                                         my_loss( predicted_batch[:,3*no_depth_levels,:,:],
                                         target_batch[:,3*no_depth_levels,:,:],
-                                        bdy_masks[:,3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
+                                        ).item() * input_batch.shape[0]
+                                        #bdy_masks[:,3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
            elif dimension == '3d': 
+              logging.info('Code not properly set up for 3d - Mean and Std still calculated over nextfield not DeltaT')
+              sys.exit()
               losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
                                          my_loss( predicted_batch[:,0,:,:,:], target_batch[:,0,:,:,:] ).item() * input_batch.shape[0]
               losses['train_U'][-1]    = losses['train_U'][-1] + \
@@ -281,18 +323,16 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            optimizer.step()
    
            ## Doesn't work in current form with histlen changes to ordering of data - need to redo.
-           #if epoch == start_epoch and batch_no == 0:
-           #   # Save info to plot histogram of data
-           #   if dimension == '2d':
-           #      for var in range(3):
-           #         for time in range(histlen):
-           #            # no_out_channels = number of physical variable channels at each time step
-           #            histogram_data[var] = np.concatenate(( histogram_data[var], 
-           #                input_batch[:,time*no_out_channels+no_depth_levels*var:time*no_out_channels+no_depth_levels*(var+1),:,:]
-           #                            .cpu().detach().numpy().reshape(-1) ))
-           #      for time in range(histlen):
-           #         histogram_data[3] = np.concatenate(( histogram_data[var],
-           #                input_batch[:,time*no_out_channels+no_depth_levels*3,:,:].cpu().detach().numpy().reshape(-1) ))
+           if epoch == start_epoch and batch_no == 0:
+              # Save info to plot histogram of data
+              if dimension == '2d':
+                 for var in range(3):
+                    # no_out_channels = number of physical variable channels at each time step
+                    histogram_data[var] = np.concatenate(( histogram_data[var], 
+                        input_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:]
+                                    .cpu().detach().numpy().reshape(-1) ))
+                 histogram_data[3] = np.concatenate(( histogram_data[3],
+                        input_batch[:,no_depth_levels*3,:,:].cpu().detach().numpy().reshape(-1) ))
            #   elif dimension == '3d':
            #      for var in range(3):
            #         for time in range(histlen):
@@ -325,20 +365,23 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
        
        h.train(False)
 
-       for input_batch, target_batch, masks, bdy_masks in val_loader:
+       #for input_batch, target_batch, masks, bdy_masks in val_loader:
+       for input_batch, target_batch, masks in val_loader:
    
            # Send inputs and labels to GPU if available
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
-           bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
+           #bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
            target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * masks
            
            # get prediction from the model, given the inputs
+           #predicted_batch = h( torch.cat((input_batch, masks, bdy_masks), dim=1) ) * masks
            predicted_batch = h( torch.cat((input_batch, masks), dim=1) ) * masks
        
            # get loss for the predicted_batch output
            losses['val'][-1] = losses['val'][-1] +  \
-                               my_loss( predicted_batch, target_batch, bdy_masks ).item() * input_batch.shape[0]
+                               my_loss( predicted_batch, target_batch ).item() * input_batch.shape[0]
+                               #my_loss( predicted_batch, target_batch, bdy_masks ).item() * input_batch.shape[0]
    
            del input_batch
            del target_batch
@@ -389,7 +432,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_chan
 
    logging.info('Making scatter plots')
 
-   data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
 
    no_depth_levels = 38  # Hard coded...perhaps should change...?
 
@@ -398,13 +441,19 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_chan
    h.train(False)
 
    with torch.no_grad():
-      input_batch, target_batch, masks, bdy_masks = next(iter(data_loader))
+      #input_batch, target_batch, masks, bdy_masks = next(iter(data_loader))
+      input_batch, target_batch, masks = next(iter(data_loader))
       input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
-      predicted_batch = h( torch.cat( ( input_batch, masks.to(device, non_blocking=True, dtype=torch.float) ), dim=1) ).cpu().detach() * masks
+      predicted_batch = h( torch.cat(
+                           ( input_batch,
+                           masks.to(device, non_blocking=True, dtype=torch.float)
+                           #, bdy_masks.to(device, non_blocking=True, dtype=torch.float)
+                           ), dim=1)
+                         ).cpu().detach() * masks
 
    # Denormalise and mask
-   target_batch = rr.RF_DeNormalise(target_batch, data_mean, data_std, data_range, no_out_channels, dimension) * masks
-   predicted_batch = rr.RF_DeNormalise(predicted_batch, data_mean, data_std, data_range, no_out_channels, dimension) * masks
+   target_batch = rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks
+   predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks
 
    if dimension == '2d':
       # reshape to give each variable its own dimension
@@ -512,7 +561,7 @@ def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losse
    ax1.set_ylabel('Loss')
    ax1.set_yscale('log')
    ax1.legend()
-   plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch_epoch'+str(total_epochs)+'.eps',
+   plt.savefig(plot_dir+'/'+model_name+'_TrainingValLossPerEpoch_epoch'+str(total_epochs)+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
@@ -539,7 +588,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-   data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
 
    # Read in grid data from MITgcm file
    mitgcm_ds = xr.open_dataset(mitgcm_filename)
@@ -567,7 +616,8 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
          h = h.cuda()
 
    with torch.no_grad():
-      for input_batch, target_batch, masks, bdy_masks in data_loader:
+      #for input_batch, target_batch, masks, bdy_masks in data_loader:
+      for input_batch, target_batch, masks in data_loader:
           
           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
           target_batch = target_batch.cpu().detach().numpy()
@@ -576,15 +626,21 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
           if isinstance(h, list):
              predicted_batch = h[0](input_batch) 
              for i in range(1, len(h)):
-                predicted_batch = predicted_batch + h[i]( torch.cat((input_batch, masks.to(device, non_blocking=True, dtype=torch.float)), dim=1) )
+                predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, 
+                                                                      masks.to(device, non_blocking=True, dtype=torch.float)
+                                                                     # , bdy_masks.to(device, non_blocking=True, dtype=torch.float)
+                                                                     ), dim=1) )
              predicted_batch = predicted_batch / len(h)
           else:
-             predicted_batch = h( torch.cat((input_batch, masks.to(device, non_blocking=True, dtype=torch.float)), dim=1) ) 
+             predicted_batch = h( torch.cat((input_batch,
+                                             masks.to(device, non_blocking=True, dtype=torch.float)
+                                            # , bdy_masks.to(device, non_blocking=True, dtype=torch.float)
+                                            ), dim=1) ) 
           predicted_batch = predicted_batch.cpu().detach().numpy() 
 
           # Denormalise and mask
-          target_batch = rr.RF_DeNormalise(target_batch, data_mean, data_std, data_range, no_out_channels, dimension) * masks.numpy()
-          predicted_batch = rr.RF_DeNormalise(predicted_batch, data_mean, data_std, data_range, no_out_channels, dimension) * masks.numpy()
+          target_batch = rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks.numpy()
+          predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks.numpy()
 
           # Add summed error of this batch
           if batch_no==0:
@@ -635,10 +691,10 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    nc_VMask      = nc_file.createVariable( 'V_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_EtaMask    = nc_file.createVariable( 'Eta_Mask'   , 'f4', ('Y', 'X')      )
 
-   nc_TempBdyMask   = nc_file.createVariable( 'Temp_Bdy_Mask'  , 'f4', ('Z', 'Y', 'X') )
-   nc_UBdyMask      = nc_file.createVariable( 'U_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
-   nc_VBdyMask      = nc_file.createVariable( 'V_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
-   nc_EtaBdyMask    = nc_file.createVariable( 'Eta_Bdy_Mask'   , 'f4', ('Y', 'X')      )
+   #nc_TempBdyMask   = nc_file.createVariable( 'Temp_Bdy_Mask'  , 'f4', ('Z', 'Y', 'X') )
+   #nc_UBdyMask      = nc_file.createVariable( 'U_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
+   #nc_VBdyMask      = nc_file.createVariable( 'V_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
+   #nc_EtaBdyMask    = nc_file.createVariable( 'Eta_Bdy_Mask'   , 'f4', ('Y', 'X')      )
 
    nc_PredTemp   = nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_PredU      = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
@@ -672,10 +728,10 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       nc_VMask[:,:,:]    = masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
       nc_EtaMask[:,:]    = masks[0,3*no_depth_levels,:,:]
 
-      nc_TempBdyMask[:,:,:] = bdy_masks[0,0:no_depth_levels,:,:]
-      nc_UBdyMask[:,:,:]    = bdy_masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_VBdyMask[:,:,:]    = bdy_masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_EtaBdyMask[:,:]    = bdy_masks[0,3*no_depth_levels,:,:]
+      #nc_TempBdyMask[:,:,:] = bdy_masks[0,0:no_depth_levels,:,:]
+      #nc_UBdyMask[:,:,:]    = bdy_masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
+      #nc_VBdyMask[:,:,:]    = bdy_masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
+      #nc_EtaBdyMask[:,:]    = bdy_masks[0,3*no_depth_levels,:,:]
 
       nc_PredTemp[:,:,:,:] = predictions[:no_samples,0:no_depth_levels,:,:]
       nc_PredU[:,:,:,:]    = predictions[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
@@ -728,13 +784,15 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
 
 def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
-                       y_dim_used, land, dimension, histlen, no_in_channels, no_out_channels):
+                       y_dim_used, land, dimension, histlen, no_in_channels, no_out_channels, landvalues):
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-   data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
 
    no_depth_levels = 38  # Hard coded...perhaps should change...?
+
+   landvalues = torch.tensor(landvalues)
 
    # Read in grid data from MITgcm file
    mitgcm_ds = xr.open_dataset(mitgcm_filename)
@@ -756,80 +814,85 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
          h = h.cuda()
 
    # Read in first sample from MITgcm dataset and save as first entry in both arrays
-   input_sample, target_sample, masks, bdy_masks = Iterate_Dataset.__getitem__(start)
-   input_sample = input_sample.unsqueeze(0).numpy()
-   masks = np.expand_dims(masks, axis=0)
+   #input_sample, target_sample, masks, bdy_masks = Iterate_Dataset.__getitem__(start)
+   input_sample, target_sample, masks = Iterate_Dataset.__getitem__(start)
+   # Give extra dimension at front (usually number of samples)
+   input_sample = input_sample.unsqueeze(0)
+   masks = masks.unsqueeze(0)
+   #bdy_masks = bdy_masks.unsqueeze(0)
    if dimension == '2d':
-      #input_sample = input_sample[:,:,:].unsqueeze(0).numpy()
-      iterated_predictions = input_sample[:,:no_depth_levels*3+1,:,:]
-      MITgcm_data = input_sample[:,:no_depth_levels*3+1,:,:]
-      for time in range(0,histlen):
-         iterated_predictions = np.concatenate( (iterated_predictions, 
-                                input_sample[:,(no_depth_levels*3+1)*time:(no_depth_levels*3+1)*(time+1),:,:]), axis=0)
-         MITgcm_data = np.concatenate( (MITgcm_data, 
-                                input_sample[:,(no_depth_levels*3+1)*time:(no_depth_levels*3+1)*(time+1),:,:]), axis=0)
+      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0),
+                                          inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
+      #MITgcm_data = input_sample[:,:histlen*(no_depth_levels*3+1),:,:]  # take variable channels, leave mask channels
+      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0)
    elif dimension == '3d':
-      #input_sample = input_sample[:,:,:,:].unsqueeze(0).numpy()
-      iterated_predictions = input_sample[:,:4,:,:]
+      iterated_fields = rr.RF_DeNormalise(input_sample[:,:4,:,:], inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
       MITgcm_data = input_sample[:,:4,:,:]
-      for time in range(1,histlen):
-         iterated_predictions = np.concatenate( (iterated_predictions, input_sample[:,4*time:4*(time+1),:,:]), axis=0)
-         MITgcm_data = np.concatenate( (MITgcm_data, input_sample[:,4*time:4*(time+1),:,:]), axis=0)
+      for time in range(1,histlen+1):
+         iterated_fields = torch.cat( (iterated_fields, 
+                                       rr.RF_DeNormalise(input_sample[:,4*time:4*(time+1),:,:], inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
+                                      ), axis=0)
+         MITgcm_data = torch.cat( (MITgcm_data, input_sample[:,4*time:4*(time+1),:,:]), axis=0)
 
    # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
    with torch.no_grad():
       for time in range(for_len):
-
          # Make prediction
          # multi model ensemble, or single model predictions
          if isinstance(h, list):
-            predicted = h[0]( torch.from_numpy( np.concatenate((input_sample, masks), axis=1) )
-                              .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+            #predicted = h[0]( torch.cat((input_sample, masks, bdy_masks), axis=1)
+            predicted = h[0]( torch.cat((input_sample, masks), axis=1)
+                              .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
             for i in range(1, len(h)):
                predicted = predicted + \
-                           h[i]( torch.from_numpy( np.concatenate((input_sample, masks), axis=1) )
-                                 .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+                           h[i]( torch.cat((input_sample, masks), axis=1)
+                                 .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
+                           #h[i]( torch.cat((input_sample, masks, bdy_masks), axis=1)
             predicted = predicted / len(h)
          else:
-            predicted = h( torch.from_numpy( np.concatenate((input_sample, masks), axis=1) )
-                           .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach().numpy()
+            #predicted = h( torch.cat( (input_sample, masks, bdy_masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
+            predicted = h( torch.cat( (input_sample, masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
+                         ).cpu().detach()
 
          # Remask land on outputs ready for next iteration
-         # Denormalise and mask
-         predicted = rr.RF_DeNormalise(predicted, data_mean, data_std, data_range, no_out_channels, dimension) * masks
-         # Re-Normalise
-         predicted = rr.RF_ReNormalise_predicted(predicted, data_mean, data_std, data_range, no_out_channels, dimension)
-
+         # Denormalise and add to previous field
+         predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, no_out_channels, dimension) + iterated_fields[-1,:,:,:]
+         # Mask field
+         predicted = torch.where( masks==1, predicted, landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) )
          # Cat prediction onto existing predicted fields
-         iterated_predictions = np.concatenate( ( iterated_predictions, predicted ), axis=0 )
+         iterated_fields = torch.cat( ( iterated_fields, predicted ), axis=0 )
+         # Re-Normalise ready to use as inputs
+         predicted = rr.RF_ReNormalise_predicted(predicted, inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
 
          # Get MITgcm data for relevant step, and prep new input sample
          if dimension == '2d':
-            MITgcm_data = np.concatenate( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[1]
-                                            [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0).numpy() ),
-                                            axis=0 )
-            input_sample = np.zeros((1, histlen*3*no_depth_levels+histlen, y_dim_used, da_X.shape[0]))
-            for time in range(histlen):
-               input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:]=iterated_predictions[-histlen+time,:,:,:]
+            MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
+                                       [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
+                                       axis=0 )
+            input_sample = torch.zeros((1, histlen*(3*no_depth_levels+1), y_dim_used, da_X.shape[0]))
+            for time in range(histlen-1):
+               input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:] = \
+                                 input_sample[0,(time+1)*(3*no_depth_levels+1):(time+2)*(3*no_depth_levels+1),:,:]
+            input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:]= predicted
+           
 
          elif dimension == '3d':
-            MITgcm_data = np.concatenate( ( MITgcm_data, 
-                                            Iterate_Dataset.__getitem__(start+time+1)[1][(histlen-1)*4:histlen*4,:,:,:].unsqueeze(0).numpy() ),
-                                            axis=0 )
-            input_sample = np.zeros((1, histlen*4, da_Z.shape[0], y_dim_used, da_X.shape[0]))
+            MITgcm_data = torch.cat( ( MITgcm_data, 
+                                       Iterate_Dataset.__getitem__(start+time+1)[0][(histlen-1)*4:histlen*4,:,:,:].unsqueeze(0) ),
+                                       axis=0 )
+            input_sample = torch.zeros((1, histlen*4, da_Z.shape[0], y_dim_used, da_X.shape[0]))
             for time in range(histlen):
-               input_sample[0,time*4:(time+1)*4,:,:,:]=iterated_predictions[-histlen+time,:,:,:,:]
+               input_sample[0,time*4:(time+1)*4,:,:,:]=predicted[:,:,:,:]
 
          del predicted
          gc.collect()
          torch.cuda.empty_cache()
 
-   logging.debug('iterated_predictions.shape ; '+str(iterated_predictions.shape))
+   logging.debug('iterated_fields.shape ; '+str(iterated_fields.shape))
    logging.debug('MITgcm_data.shape ; '+str(MITgcm_data.shape))
 
-   ## Denormalise and mask
-   iterated_predictions = rr.RF_DeNormalise(iterated_predictions, data_mean, data_std, data_range, no_out_channels, dimension) * masks
-   MITgcm_data          = rr.RF_DeNormalise(MITgcm_data,          data_mean, data_std, data_range, no_out_channels, dimension) * masks
+   ## Denormalise MITgcm Data 
+   MITgcm_data          = rr.RF_DeNormalise(MITgcm_data, inputs_mean, inputs_std, inputs_range, no_out_channels, dimension) 
 
    # Set up netcdf files
    nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_Forecast'+str(for_len)+'.nc'
@@ -866,7 +929,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    nc_EtaErrors  = nc_file.createVariable( 'Eta_Errors' , 'f4', ('T', 'Y', 'X')      )
 
    # Fill variables
-   nc_T[:] = np.arange(iterated_predictions.shape[0])
+   nc_T[:] = np.arange(iterated_fields.shape[0])
    nc_Z[:] = da_Z.values
    nc_Y[:] = da_Y.values[:y_dim_used]
    nc_X[:] = da_X.values
@@ -882,15 +945,15 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
       nc_TrueEta[:,:,:]    = MITgcm_data[:,3*no_depth_levels,:,:]
 
-      nc_PredTemp[:,:,:,:] = iterated_predictions[:,0:no_depth_levels,:,:]
-      nc_PredU[:,:,:,:]    = iterated_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_PredV[:,:,:,:]    = iterated_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_PredEta[:,:,:]    = iterated_predictions[:,3*no_depth_levels,:,:]
+      nc_PredTemp[:,:,:,:] = iterated_fields[:,0:no_depth_levels,:,:]
+      nc_PredU[:,:,:,:]    = iterated_fields[:,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_PredV[:,:,:,:]    = iterated_fields[:,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_PredEta[:,:,:]    = iterated_fields[:,3*no_depth_levels,:,:]
       
-      nc_TempErrors[:,:,:,:] = iterated_predictions[:,0:no_depth_levels,:,:] - MITgcm_data[:,0:no_depth_levels,:,:]
-      nc_UErrors[:,:,:,:]    = iterated_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:] - MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_VErrors[:,:,:,:]    = iterated_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:] - MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_EtaErrors[:,:,:]    = iterated_predictions[:,3*no_depth_levels,:,:] - MITgcm_data[:,3*no_depth_levels,:,:]
+      nc_TempErrors[:,:,:,:] = iterated_fields[:,0:no_depth_levels,:,:] - MITgcm_data[:,0:no_depth_levels,:,:]
+      nc_UErrors[:,:,:,:]    = iterated_fields[:,1*no_depth_levels:2*no_depth_levels,:,:] - MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_VErrors[:,:,:,:]    = iterated_fields[:,2*no_depth_levels:3*no_depth_levels,:,:] - MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_EtaErrors[:,:,:]    = iterated_fields[:,3*no_depth_levels,:,:] - MITgcm_data[:,3*no_depth_levels,:,:]
 
    elif dimension == '3d':
       nc_TempMask[:,:,:] = masks[0,0,:,:,:]
@@ -903,12 +966,12 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2,:,:,:]
       nc_TrueEta[:,:,:]    = MITgcm_data[:,3,0,:,:]
 
-      nc_PredTemp[:,:,:,:] = iterated_predictions[:,0,:,:,:]
-      nc_PredU[:,:,:,:]    = iterated_predictions[:,1,:,:,:]
-      nc_PredV[:,:,:,:]    = iterated_predictions[:,2,:,:,:]
-      nc_PredEta[:,:,:]    = iterated_predictions[:,3,0,:,:]
+      nc_PredTemp[:,:,:,:] = iterated_fields[:,0,:,:,:]
+      nc_PredU[:,:,:,:]    = iterated_fields[:,1,:,:,:]
+      nc_PredV[:,:,:,:]    = iterated_fields[:,2,:,:,:]
+      nc_PredEta[:,:,:]    = iterated_fields[:,3,0,:,:]
       
-      nc_TempErrors[:,:,:,:] = iterated_predictions[:,0,:,:,:] - MITgcm_data[:,0,:,:,:]
-      nc_UErrors[:,:,:,:]    = iterated_predictions[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]
-      nc_VErrors[:,:,:,:]    = iterated_predictions[:,2,:,:,:] - MITgcm_data[:,2,:,:,:]
-      nc_EtaErrors[:,:,:]    = iterated_predictions[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]
+      nc_TempErrors[:,:,:,:] = iterated_fields[:,0,:,:,:] - MITgcm_data[:,0,:,:,:]
+      nc_UErrors[:,:,:,:]    = iterated_fields[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]
+      nc_VErrors[:,:,:,:]    = iterated_fields[:,2,:,:,:] - MITgcm_data[:,2,:,:,:]
+      nc_EtaErrors[:,:,:]    = iterated_fields[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]

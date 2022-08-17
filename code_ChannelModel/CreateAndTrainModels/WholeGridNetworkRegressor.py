@@ -51,7 +51,7 @@ def parse_args():
     a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
-    a.add_argument("-la", "--land", default='IncLand', type=str, action='store')
+    a.add_argument("-la", "--land", default='Spits', type=str, action='store')
     a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
     a.add_argument("-p", "--padding", default='None', type=str, action='store')
     a.add_argument("-k", "--kernsize", default=3, type=int, action='store')
@@ -69,6 +69,7 @@ def parse_args():
     a.add_argument("-ps", "--plotscatter", default=False, type=bool, action='store')
     a.add_argument("-a", "--assess", default=False, type=bool, action='store')
     a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
+    a.add_argument("-lv", "--landvalue", default=0, type=float, action='store')
 
     return a.parse_args()
 
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
     for_len = 30*6   # How long to iteratively predict for
-    #for_len = 60     # How long to iteratively predict for
+    #for_len = 10     # How long to iteratively predict for
     start = 5        #
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -112,15 +113,13 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
    
+    # Amend some variables if testing code
     if args.test: 
        model_name = args.name+args.land+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)+'_TEST'
        for_len = min(for_len, 50)
+       args.epochs = 5
     else:
        model_name = args.name+args.land+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)
-    
-    # Overwrite certain variables if testing code and set up test bits
-    if args.test:
-       args.epochs = 5
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
@@ -156,12 +155,14 @@ if __name__ == "__main__":
           MITGCM_filename = DIR+'12hrly_small_set.nc'
        else:
           MITGCM_filename = DIR+'12hrly_data.nc'
+       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
     else:
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
        if args.test: 
-          MITGCM_filename = DIR+'12hrly_small_set.nc'
+          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
        else:
           MITGCM_filename = DIR+'12hrly_data.nc'
+       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
     
     ds = xr.open_dataset(MITGCM_filename)
     
@@ -179,13 +180,13 @@ if __name__ == "__main__":
     #-----------------------------------
     if args.calculatemeanstd:
        CalcMeanStd(args.land+'_'+args.dim, MITGCM_filename, train_end_ratio, subsample_rate,
-                   args.batchsize, args.land, args.dim, tic)
+                   args.batchsize, args.land, args.dim, args.bdyweight, args.histlen, tic)
 
-    data_mean, data_std, data_range = ReadMeanStd(args.land+'_'+args.dim)
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.land+'_'+args.dim)
 
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
     if args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + ( 3*z_dim + 1)  # Eta field, plus Temp, U, V through depth, for each past time, plus masks
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + 1* ( 3*z_dim + 1)  # Eta field, plus Temp, U, V through depth, for each past time, plus masks and bdy_masks
        no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
        no_in_channels = args.histlen * 4  # Eta Temp, U, V , for each past time 
@@ -197,24 +198,33 @@ if __name__ == "__main__":
     #-------------------------------------------------------------------------------------
     # Create training and valdiation Datsets and dataloaders with normalisation
     #-------------------------------------------------------------------------------------
+    if args.landvalue == -999:
+       landvalues = inputs_mean
+    else:
+       landvalues = np.ones(( args.histlen*(3*38+1) ))
+       landvalues[:] = args.landvalue
     # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
     if args.dim == '2d':
        Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
        Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     elif args.dim == '3d':
        Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
                                              args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
        Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
                                              args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
                                                                                args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     else:
        raise RuntimeError("ERROR!!! what's happening with dimensions?!")
@@ -311,17 +321,19 @@ if __name__ == "__main__":
     # Iteratively predict 
     #---------------------
     if args.dim == '2d':
-       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                    targets_mean, targets_std, targets_range,
                                                                                     args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     elif args.dim == '3d':
        Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                    targets_mean, targets_std, targets_range,
                                                                                     args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
     
     if args.iterate:
        IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
-                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels) 
+                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues) 
     
     #TimeCheck(tic, 'iteratively forecasting')
     

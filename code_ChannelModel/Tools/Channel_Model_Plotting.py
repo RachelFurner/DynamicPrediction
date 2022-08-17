@@ -62,7 +62,7 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
     ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m depth')
 
     # Add a color bar
-    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3))
+    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend='max')
 
     if title:
        plt.suptitle(title, fontsize=14)
@@ -100,7 +100,7 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
     cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
     cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
     cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
-    cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes)
+    cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes, extend='both')
  
     if title:
        plt.suptitle(title, fontsize=14)
@@ -340,7 +340,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None):
    if y_label:
       ax.set_ylabel(y_label)
    ax.set_xlabel('No of days')
-   ax.set_title(str(int(length/30))+' months')
+   #ax.set_title(str(int(length/30))+' months')
    if ylim:
       ax.set_ylim(ylim)
  

@@ -20,10 +20,10 @@ plt.rcParams.update({'font.size': 14})
 point = [ 2, 8, 6]
 
 epochs = '200'
-dir_name = 'bdyweight100_Spits_UNet2dtransp_histlen1_seed30475'
+dir_name = 'CSpline_Spits_UNet2dtransp_histlen1_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
-#trainorval='training'
-trainorval='validation'
+trainorval='training'
+#trainorval='validation'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
 
