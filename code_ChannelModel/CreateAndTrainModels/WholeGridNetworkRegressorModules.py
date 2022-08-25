@@ -37,22 +37,6 @@ import gc as gc
 import logging
 
 import multiprocessing as mp
-#import torch.multiprocessing
-#torch.multiprocessing.set_sharing_strategy('file_system')
-
-#add this routine for memory profiling
-def sizeof_fmt(num, suffix='B'):
-    ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
-    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f %s%s" % (num, 'Yi', suffix)
-
-
-#def TimeCheck(tic, task):
-#   toc = time.time()
-#   logging.info('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
                 batch_size, land, dimension, bdy_weight, histlen, grid_filename, tic):
@@ -68,7 +52,6 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       #------------------------------------
       batch_no = 0
       count = 0.
-      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
       for input_batch, target_batch, masks in mean_std_loader:
           
           # Mask with Nans
@@ -223,6 +206,7 @@ def my_loss(output, target):
    loss = torch.mean( (output - target)**2 )
    return loss
 
+# GAN attempts are a work in progress - nowhere near set up to test yet
 def trainGAN_fn(train_loader, val_loader, disc, gen, loader, opt_disc, opt_gen, l1_loss, bce, g_scaler, d_scaler):
 
     disc = Discriminator(in_channels=no_in_channels).to(config.DEVICE)
@@ -319,7 +303,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
 
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
-           #bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
            # mask targets to circumvent issues with normalisation!
            target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * masks
            # input_batch SHAPE: (no_samples, no_channels, z, y, x) if 3d, (no_samples, no_channels, y, x) if 2d.
@@ -328,7 +311,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            optimizer.zero_grad()
        
            # get prediction from the model, given the inputs
-           #predicted_batch = h( torch.cat((input_batch, masks, bdy_masks), dim=1) ) * masks
            predicted_batch = h( torch.cat((input_batch, masks), dim=1) ) * masks
    
            logging.debug('For test run check if output is correct shape, the following two shapes should match!\n')
@@ -337,7 +319,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            logging.debug('masks.shape : '+str(masks.shape)+'\n')
               
            # Calculate and update loss values
-           #loss = my_loss(predicted_batch, target_batch, bdy_masks).double()
            loss = my_loss(predicted_batch, target_batch).double()
            losses['train'][-1] = losses['train'][-1] + loss.item() * input_batch.shape[0]
             
@@ -346,22 +327,18 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
                                          my_loss( predicted_batch[:,:no_depth_levels,:,:],
                                          target_batch[:,:no_depth_levels,:,:],
                                          ).item() * input_batch.shape[0]
-                                         #bdy_masks[:,:no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_U'][-1] = losses['train_U'][-1] + \
                                       my_loss( predicted_batch[:,no_depth_levels:2*no_depth_levels,:,:],
                                       target_batch[:,no_depth_levels:2*no_depth_levels,:,:],
                                       ).item() * input_batch.shape[0]
-                                      #bdy_masks[:,no_depth_levels:2*no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_V'][-1] = losses['train_V'][-1] + \
                                       my_loss( predicted_batch[:,2*no_depth_levels:3*no_depth_levels,:,:],
                                       target_batch[:,2*no_depth_levels:3*no_depth_levels,:,:],
                                       ).item() * input_batch.shape[0]
-                                      #bdy_masks[:,2*no_depth_levels:3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
               losses['train_Eta'][-1] = losses['train_Eta'][-1] + \
                                         my_loss( predicted_batch[:,3*no_depth_levels,:,:],
                                         target_batch[:,3*no_depth_levels,:,:],
                                         ).item() * input_batch.shape[0]
-                                        #bdy_masks[:,3*no_depth_levels,:,:] ).item() * input_batch.shape[0]
            elif dimension == '3d': 
               logging.info('Code not properly set up for 3d - Mean and Std still calculated over nextfield not DeltaT')
               sys.exit()
@@ -385,7 +362,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
               # Save info to plot histogram of data
               if dimension == '2d':
                  for var in range(3):
-                    # no_out_channels = number of physical variable channels at each time step
                     histogram_data[var] = np.concatenate(( histogram_data[var], 
                         input_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:]
                                     .cpu().detach().numpy().reshape(-1) ))
@@ -415,7 +391,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
        losses['train_Eta'][-1] = losses['train_Eta'][-1] / no_tr_samples
   
        logging.info('epoch {}, training loss {}'.format(epoch, losses['train'][-1])+'\n')
-       #TimeCheck(tic, 'finished epoch training')
 
        #### Validation ######
    
@@ -428,7 +403,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
    
            # Send inputs and labels to GPU if available
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
-           #bdy_masks = bdy_masks.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
            target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * masks
            
@@ -439,7 +413,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            # get loss for the predicted_batch output
            losses['val'][-1] = losses['val'][-1] +  \
                                my_loss( predicted_batch, target_batch ).item() * input_batch.shape[0]
-                               #my_loss( predicted_batch, target_batch, bdy_masks ).item() * input_batch.shape[0]
    
            del input_batch
            del target_batch
@@ -454,7 +427,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
   
        # Save model if this is the best version of the model 
        if losses['val'][-1] < current_best_loss :
-           ### SAVE IT ###
            for model_file in glob.glob('../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch*_SavedBESTModel.pt'):
               os.remove(model_file)
            pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedBESTModel.pt'
@@ -470,7 +442,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
 
        # Save model if its been a while 
        if ( epoch%save_freq == 0 or epoch == num_epochs+start_epoch-1 ) and epoch != start_epoch :
-           ### Save Model ###
            pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
            torch.save({
                        'epoch': epoch,
@@ -505,7 +476,6 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_chan
       predicted_batch = h( torch.cat(
                            ( input_batch,
                            masks.to(device, non_blocking=True, dtype=torch.float)
-                           #, bdy_masks.to(device, non_blocking=True, dtype=torch.float)
                            ), dim=1)
                          ).cpu().detach() * masks
 
@@ -674,7 +644,6 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
          h = h.cuda()
 
    with torch.no_grad():
-      #for input_batch, target_batch, masks, bdy_masks in data_loader:
       for input_batch, target_batch, masks in data_loader:
           
           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
@@ -686,13 +655,11 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
              for i in range(1, len(h)):
                 predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, 
                                                                       masks.to(device, non_blocking=True, dtype=torch.float)
-                                                                     # , bdy_masks.to(device, non_blocking=True, dtype=torch.float)
                                                                      ), dim=1) )
              predicted_batch = predicted_batch / len(h)
           else:
              predicted_batch = h( torch.cat((input_batch,
                                              masks.to(device, non_blocking=True, dtype=torch.float)
-                                            # , bdy_masks.to(device, non_blocking=True, dtype=torch.float)
                                             ), dim=1) ) 
           predicted_batch = predicted_batch.cpu().detach().numpy() 
 
@@ -731,7 +698,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    no_depth_levels = 38  # Hard coded...perhaps should change...?
    nc_file.createDimension('T', no_samples)
    nc_file.createDimension('Z', da_Z.values.shape[0])
-   nc_file.createDimension('Y', y_dim_used)  #da_Y.values.shape[0])
+   nc_file.createDimension('Y', y_dim_used) 
    nc_file.createDimension('X', da_X.values.shape[0])
    # Create variables
    nc_T = nc_file.createVariable('T', 'i4', 'T')
@@ -748,11 +715,6 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    nc_UMask      = nc_file.createVariable( 'U_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_VMask      = nc_file.createVariable( 'V_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_EtaMask    = nc_file.createVariable( 'Eta_Mask'   , 'f4', ('Y', 'X')      )
-
-   #nc_TempBdyMask   = nc_file.createVariable( 'Temp_Bdy_Mask'  , 'f4', ('Z', 'Y', 'X') )
-   #nc_UBdyMask      = nc_file.createVariable( 'U_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
-   #nc_VBdyMask      = nc_file.createVariable( 'V_Bdy_Mask'     , 'f4', ('Z', 'Y', 'X') )
-   #nc_EtaBdyMask    = nc_file.createVariable( 'Eta_Bdy_Mask'   , 'f4', ('Y', 'X')      )
 
    nc_PredTemp   = nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_PredU      = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
@@ -785,11 +747,6 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       nc_UMask[:,:,:]    = masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
       nc_VMask[:,:,:]    = masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
       nc_EtaMask[:,:]    = masks[0,3*no_depth_levels,:,:]
-
-      #nc_TempBdyMask[:,:,:] = bdy_masks[0,0:no_depth_levels,:,:]
-      #nc_UBdyMask[:,:,:]    = bdy_masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
-      #nc_VBdyMask[:,:,:]    = bdy_masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
-      #nc_EtaBdyMask[:,:]    = bdy_masks[0,3*no_depth_levels,:,:]
 
       nc_PredTemp[:,:,:,:] = predictions[:no_samples,0:no_depth_levels,:,:]
       nc_PredU[:,:,:,:]    = predictions[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
@@ -877,11 +834,9 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    # Give extra dimension at front (usually number of samples)
    input_sample = input_sample.unsqueeze(0)
    masks = masks.unsqueeze(0)
-   #bdy_masks = bdy_masks.unsqueeze(0)
    if dimension == '2d':
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0),
                                           inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
-      #MITgcm_data = input_sample[:,:histlen*(no_depth_levels*3+1),:,:]  # take variable channels, leave mask channels
       MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0)
    elif dimension == '3d':
       iterated_fields = rr.RF_DeNormalise(input_sample[:,:4,:,:], inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
@@ -898,17 +853,14 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
          # Make prediction
          # multi model ensemble, or single model predictions
          if isinstance(h, list):
-            #predicted = h[0]( torch.cat((input_sample, masks, bdy_masks), axis=1)
             predicted = h[0]( torch.cat((input_sample, masks), axis=1)
                               .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
             for i in range(1, len(h)):
                predicted = predicted + \
                            h[i]( torch.cat((input_sample, masks), axis=1)
                                  .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
-                           #h[i]( torch.cat((input_sample, masks, bdy_masks), axis=1)
             predicted = predicted / len(h)
          else:
-            #predicted = h( torch.cat( (input_sample, masks, bdy_masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
             predicted = h( torch.cat( (input_sample, masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
                          ).cpu().detach()
 

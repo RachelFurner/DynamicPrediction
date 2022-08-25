@@ -13,7 +13,6 @@ import xarray as xr
 from torch.utils import data
 from torchvision import transforms, utils
 import torch
-from scipy.interpolate import CubicSpline
 import numpy.lib.stride_tricks as npst
 
 import multiprocessing as mp
@@ -25,7 +24,6 @@ import time as time
 import sys
 sys.path.append('../NNregression')
 #from WholeGridNetworkRegressorModules import TimeCheck 
-
 
 
 
@@ -72,7 +70,6 @@ class MITGCM_Dataset_2d(data.Dataset):
 
           # Here mask is ones everywhere
           self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
-          #self.bdy_masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
   
        else:
           # Set dims based on T grid
@@ -88,51 +85,7 @@ class MITGCM_Dataset_2d(data.Dataset):
              self.masks[i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
           self.masks[3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
 
-          ## T mask
-          #self.masks[0:self.z_dim,:3,:]  = 0 
-          #self.masks[0:self.z_dim,-3:,:] = 0
-          ## U mask
-          #self.masks[self.z_dim:2*self.z_dim,:3,:]  = 0
-          #self.masks[self.z_dim:2*self.z_dim,-3:,:] = 0
-          ## V mask
-          ## Later we cut off top row of V data, as this has an extra point and need dimensions to match
-          ## Note v-mask extends one point above and below t, but cutting off top row deals with top boundary
-          #self.masks[2*self.z_dim:3*self.z_dim,:4,:]  = 0
-          #self.masks[2*self.z_dim:3*self.z_dim,-3:,:] = 0
-          ## Eta mask
-          #self.masks[3*self.z_dim,:3,:]  = 0
-          #self.masks[3*self.z_dim,-3:,:] = 0
-
-          #if self.land == 'Spits':
-          #   # T
-          #   self.masks[:self.z_dim,:30,54:60]  = 0
-          #   self.masks[:self.z_dim,67:,169:175] = 0
-          #   # U
-          #   self.masks[self.z_dim:2*self.z_dim,:30,54:60]  = 0
-          #   self.masks[self.z_dim:2*self.z_dim,67:,169:175] = 0
-          #   # V
-          #   self.masks[2*self.z_dim:3*self.z_dim,:31,54:60]  = 0
-          #   self.masks[2*self.z_dim:3*self.z_dim,67:,169:175] = 0
-          #   # Eta
-          #   self.masks[3*self.z_dim,:31,54:60]  = 0
-          #   self.masks[3*self.z_dim,67:,169:175] = 0
-
-          # Set up a mask identifying boundary points (ocean points adjacent to a land point)
-          # Boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
-          #self.bdy_masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
-          # set land points to zero, and ocean points to bdy_weight using masks
-          #self.bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 1, bdy_weight)
-          # Set ocean interior to one
-          #padded_masks = np.zeros((3*self.z_dim+1, self.y_dim+2, self.x_dim+2))
-          #padded_masks[:,0,1:-1]=self.masks[:,0,:]
-          #padded_masks[:,1:-1,1:-1]=self.masks[:,:,:]
-          #padded_masks[:,-1,1:-1]=self.masks[:,-1,:]
-          #padded_masks[:,1:-1,0]=self.masks[:,:,-1]
-          #padded_masks[:,1:-1,-1]=self.masks[:,:,0]
-          #self.bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,3,3)), axis=(3,4,5) ), 1, self.bdy_masks)
-   
        self.masks = torch.from_numpy(self.masks)
-       #self.bdy_masks = torch.from_numpy(self.bdy_masks)
 
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
@@ -231,19 +184,12 @@ class MITGCM_Dataset_2d(data.Dataset):
        gc.collect()
        torch.cuda.empty_cache()
 
-       #TimeCheck(self.tic, 'Catted data')
-
        sample_input = torch.from_numpy(sample_input)
        sample_output = torch.from_numpy(sample_output)
  
-       #sample = {'input':sample_input, 'output':sample_output}
-       #TimeCheck(self.tic, 'converted to torch tensor and stored as sample')
-
        if self.transform:
           sample_input, sample_output = self.transform({'input':sample_input, 'output':sample_output})
-          #TimeCheck(self.tic, 'Normalised data')
  
-       #return sample_input, sample_output, self.masks, self.bdy_masks
        return sample_input, sample_output, self.masks
 
 

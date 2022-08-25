@@ -148,7 +148,6 @@ if __name__ == "__main__":
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
     
-    #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
     if args.land == 'Spits':
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
        if args.test: 
@@ -186,10 +185,10 @@ if __name__ == "__main__":
 
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
     if args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + 1* ( 3*z_dim + 1)  # Eta field, plus Temp, U, V through depth, for each past time, plus masks and bdy_masks
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + 1* ( 3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks & bdy_masks
        no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
-       no_in_channels = args.histlen * 4  # Eta Temp, U, V , for each past time 
+       no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
        no_out_channels = 4                # Eta, Temp, U, V just once
    
     logging.debug('no_in_channels ;'+str(no_in_channels)+'\n')
@@ -239,25 +238,6 @@ if __name__ == "__main__":
     val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
                                                num_workers=args.numworkers, pin_memory=True )
 
-    ##--------------
-    ## Set up masks
-    ##--------------
-    ## Read in mask fields, and cat together. Only needed once as mask constant
-    #input_batch, target_batch = next(iter(train_loader))
-    #input_batch  = input_batch[0].unsqueeze(0)
-    #if args.dim == '2d':
-    #   mask = np.ones( (1, z_dim*3+1, input_batch.shape[2], input_batch.shape[3]) )
-    #   mask[:,        :z_dim , :, :]  = input_batch[:,-2*z_dim:-z_dim,:,:]
-    #   mask[:,   z_dim:2*z_dim, :, :] = input_batch[:,-2*z_dim:-z_dim,:,:]
-    #   mask[:, 2*z_dim:3*z_dim, :, :] = input_batch[:,  -z_dim:      ,:,:]
-    #   mask[:, 3*z_dim        , :, :] = input_batch[:,-2*z_dim       ,:,:]
-    #elif args.dim == '3d':
-    #   mask = np.ones( (1, 4, input_batch.shape(2), input_batch.shape(3)) )
-    #   mask[:,0,:,:] = input_batch[:,-2,:,:],
-    #   mask[:,1,:,:] = input_batch[:,-2,:,:],
-    #   mask[:,2,:,:] = input_batch[:,-1,:,:],
-    #   mask[:,3,:,:] = input_batch[:,-2,:,:],
-
     #--------------
     # Set up model
     #--------------
@@ -285,14 +265,12 @@ if __name__ == "__main__":
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, histogram_data)
        else:
           LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best)
-    elif args.trainmodel:  # Training mode BUT NOT loading model!
+    elif args.trainmodel:  # Training mode BUT NOT loading model
        losses, histogram_data = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples,
                                                      save_freq, train_loader, val_loader, h, optimizer,
                                                      args.epochs, args.seed,
                                                      losses, no_in_channels, no_out_channels)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, histogram_data)
-    
-    #TimeCheck(tic, 'loading/training model')
     
     #--------------------
     # Plot scatter plots
@@ -302,8 +280,6 @@ if __name__ == "__main__":
        PlotScatter(model_name, args.dim, train_loader, h, total_epochs, 'training', no_out_channels, args.land+'_'+args.dim)
        PlotScatter(model_name, args.dim, val_loader, h, total_epochs, 'validation', no_out_channels, args.land+'_'+args.dim)
     
-    
-    #TimeCheck(tic, 'assessing model')
     #------------------
     # Assess the model 
     #------------------
@@ -314,8 +290,6 @@ if __name__ == "__main__":
     
        OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
-    
-    #TimeCheck(tic, 'assessing model')
     
     #---------------------
     # Iteratively predict 
@@ -335,7 +309,3 @@ if __name__ == "__main__":
        IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
                           y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues) 
     
-    #TimeCheck(tic, 'iteratively forecasting')
-    
-    #TimeCheck(tic, 'script')
-
