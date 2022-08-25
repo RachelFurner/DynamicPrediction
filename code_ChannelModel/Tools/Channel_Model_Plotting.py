@@ -42,7 +42,7 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, m
     return(ax, im)
 
 def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, 
-                   title=None, min_value=None, max_value=None, diff=False, cmap=None): 
+                   title=None, min_value=None, max_value=None, diff=False, cmap=None, extend=None): 
     
     # Create a figure
     fig = plt.figure(figsize=(8,4))  #(24,10))
@@ -57,12 +57,14 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
     else:
        if cmap==None:
           cmap = 'viridis'
+    if extend==None:
+       extend='neither'
     ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
 
     ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m depth')
 
     # Add a color bar
-    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend='max')
+    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend=extend)
 
     if title:
        plt.suptitle(title, fontsize=14)

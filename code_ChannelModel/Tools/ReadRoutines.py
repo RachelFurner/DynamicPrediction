@@ -148,23 +148,13 @@ class MITGCM_Dataset_2d(data.Dataset):
           da_T_in      = ds_InputSlice['THETA'].values[:,:,:,:] 
           da_T_out     = ds_OutputSlice['THETA'].values[:,:,:,:] - da_T_in[-1,:,:,:]
  
-          # cubic spline U data onto T grid
-          U_spline_in  = CubicSpline(np.arange(ds_InputSlice['UVEL'].shape[3]), ds_InputSlice['UVEL'].values[:,:,:,:],
-                                                   axis=3, bc_type='periodic', extrapolate='periodic') 
-          da_U_in      = U_spline_in( np.arange(0.5, ds_InputSlice['UVEL'].shape[3]-0.5) )
-          U_spline_out = CubicSpline(np.arange(ds_OutputSlice['UVEL'].shape[3]), ds_OutputSlice['UVEL'].values[:,:,:,:],
-                                                     axis=3, bc_type='periodic', extrapolate='periodic')
-          da_U_out     = U_spline_out( np.arange(0.5, ds_InputSlice['UVEL'].shape[3]-0.5) ) - da_U_in[-1,:,:,:]
-   
-          # cubic spline V data onto T grid
-          V_spline_in  = CubicSpline(np.arange(ds_InputSlice['VVEL'].shape[2]), ds_InputSlice['VVEL'].values[:,:,:,:],
-                                                   axis=2, extrapolate=False) 
-          da_V_in      = V_spline_in( np.arange(0.5, ds_InputSlice['VVEL'].shape[2]-0.5) )
-          V_spline_out = CubicSpline(np.arange(ds_OutputSlice['VVEL'].shape[2]), ds_OutputSlice['VVEL'].values[:,:,:,:],
-                                                     axis=2, extrapolate=False)
-          da_V_out     = V_spline_out( np.arange(0.5, ds_InputSlice['VVEL'].shape[2]-0.5) ) - da_V_in[-1,:,:,:]
-          #da_V_in  = ds_InputSlice['VVEL'].values[:,:,:-1,:]                 #ignore last land point to get to same as T grid
-          #da_V_out = ds_OutputSlice['VVEL'].values[:,:,:-1,:] - da_V_in[-1,:,:,:]      #ignore last land point to get to same as T grid 
+          da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,:,:]
+          da_U_in      = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
+          da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,:,:]
+          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
+
+          da_V_in  = ds_InputSlice['VVEL'].values[:,:,:-1,:]                           #ignore last land point to get to same as T grid
+          da_V_out = ds_OutputSlice['VVEL'].values[:,:,:-1,:] - da_V_in[-1,:,:,:]      #ignore last land point to get to same as T grid 
    
           da_Eta_in  = ds_InputSlice['ETAN'].values[:,0,:,:]
           da_Eta_out = ds_OutputSlice['ETAN'].values[:,0,:,:] - da_Eta_in[-1,:,:]

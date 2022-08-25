@@ -55,13 +55,13 @@ def sizeof_fmt(num, suffix='B'):
 #   logging.info('Finished '+task+' at {:0.4f} seconds'.format(toc - tic)+'\n')
 
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
-                batch_size, land, dimension, bdy_weight, histlen, tic):
+                batch_size, land, dimension, bdy_weight, histlen, grid_filename, tic):
 
    no_depth_levels = 38 ## Note this is hard coded!!
 
    if dimension == '2d':
       mean_std_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic, bdy_weight,
-                                               np.zeros(( histlen*(3*no_depth_levels+1) )), transform=None)    # Use histlen=1 for this, as doesn't make much impact
+                                               np.zeros(( histlen*(3*no_depth_levels+1) )), grid_filename,  transform=None) # Use histlen=1 for this, shouldn't impact it
       mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
       #------------------------------------
       # First calculate the mean and range
@@ -112,9 +112,9 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       inputs_range = inputs_max - inputs_min
       targets_range = targets_max - targets_min
 
-      #-------------------------
+      #------------------------
       # Next calculate the std 
-      #-------------------------
+      #------------------------
       count = 0.
       #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
       for input_batch, target_batch, masks in mean_std_loader:
@@ -131,19 +131,19 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
           for channel in range(input_batch.shape[1]):
              inputs_dfm[channel]  = inputs_dfm[channel] + np.nansum( np.square( input_batch[:,channel,:,:]-inputs_mean[channel] ) )
           for channel in range(target_batch.shape[1]):
-             targets_dfm[channel]  = targets_dfm[channel] + np.sum( np.square( target_batch[:,channel,:,:]-targets_mean[channel] ) )
+             targets_dfm[channel]  = targets_dfm[channel] + np.nansum( np.square( target_batch[:,channel,:,:]-targets_mean[channel] ) )
           #count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]
-          count = count + np.sum(~np.isnan(input_batch))   # Same number of Nans in inputs and targets
+          count = count + np.sum(~np.isnan(input_batch[:,0,:,:]))   # Calc number of non-Nan entries per channel
    
-      ## sum across all depth levels in each field and calc std
+      ## sum across all depth levels in each field and divide by number of entries
       for i in range(3):  # Temp, U, V. Sal not included in model as const. Eta already 2d channel.
-         inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels])
+         inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.nansum(inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels])/(no_depth_levels*count)
+         targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.nansum(targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels])/(no_depth_levels*count)
+      inputs_dfm[3*no_depth_levels]  = np.nansum(inputs_dfm[3*no_depth_levels])/count
+      targets_dfm[3*no_depth_levels] = np.nansum(targets_dfm[3*no_depth_levels])/count
 
-      inputs_var = inputs_dfm / (no_depth_levels*count)
-      inputs_std = np.sqrt(inputs_var)
-      targets_var = targets_dfm / (no_depth_levels*count)
-      targets_std = np.sqrt(targets_var)
+      inputs_std = np.sqrt(inputs_dfm)
+      targets_std = np.sqrt(targets_dfm)
    
       #-------------------------
 
@@ -222,6 +222,64 @@ def ReadMeanStd(MeanStd_prefix):
 def my_loss(output, target):
    loss = torch.mean( (output - target)**2 )
    return loss
+
+def trainGAN_fn(train_loader, val_loader, disc, gen, loader, opt_disc, opt_gen, l1_loss, bce, g_scaler, d_scaler):
+
+    disc = Discriminator(in_channels=no_in_channels).to(config.DEVICE)
+    gen = Generator(in_channels=no_in_channels).to(config.DEVICE)
+    opt_disc = optim.Adam(disc.parameters(), lr=config.LEARNING_RATE, betas=(0.5, 0.999),)
+    opt_gen = optim.Adam(gen.parameters(), lr=config.LEARNING_RATE, betas=(0.5, 0.999))
+    BCE = nn.BCEWithLogitsLoss()
+    L1_LOSS = nn.L1Loss()
+
+    #if config.LOAD_MODEL:
+    #    load_checkpoint(
+    #        config.CHECKPOINT_GEN, gen, opt_gen, config.LEARNING_RATE,
+    #    )
+    #    load_checkpoint(
+    #        config.CHECKPOINT_DISC, disc, opt_disc, config.LEARNING_RATE,
+    #    )
+
+    g_scaler = torch.cuda.amp.GradScaler()
+    d_scaler = torch.cuda.amp.GradScaler()
+
+    for epoch in range(config.NUM_EPOCHS):
+
+        for input_batch, target_batch, masks in train_loader:
+            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
+            target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * masks
+    
+            # Train Discriminator
+            with torch.cuda.amp.autocast():
+                fake_target_batch = gen(input_batch)
+                D_real = disc(input_batch, target_batch)
+                D_real_loss = bce(D_real, torch.ones_like(D_real))
+                D_fake = disc(input_batch, fake_target_batch.detach())
+                D_fake_loss = bce(D_fake, torch.zeros_like(D_fake))
+                D_loss = (D_real_loss + D_fake_loss) / 2
+    
+            disc.zero_grad()
+            d_scaler.scale(D_loss).backward()
+            d_scaler.step(opt_disc)
+            d_scaler.update()
+    
+            # Train generator
+            with torch.cuda.amp.autocast():
+                D_fake = disc(input_batch, fake_target_batch)
+                G_fake_loss = bce(D_fake, torch.ones_like(D_fake))
+                L1 = l1_loss(fake_target_batch, target_batch) * config.L1_LAMBDA
+                G_loss = G_fake_loss + L1
+    
+            opt_gen.zero_grad()
+            g_scaler.scale(G_loss).backward()
+            g_scaler.step(opt_gen)
+            g_scaler.update()
+
+        #if config.SAVE_MODEL and epoch % 5 == 0:
+        #    save_checkpoint(gen, opt_gen, filename=config.CHECKPOINT_GEN)
+        #    save_checkpoint(disc, opt_disc, filename=config.CHECKPOINT_DISC)
+
+        #save_some_examples(gen, val_loader, epoch, folder="evaluation")
 
 def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_samples, save_freq, train_loader, val_loader,
                h, optimizer, num_epochs, seed_value, losses, no_in_channels, no_out_channels, start_epoch=1, current_best_loss=0.1):
@@ -410,7 +468,7 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
                        }, pkl_filename)
            current_best_loss = losses['val'][-1]
 
-       # Save model if this is the best version of the model 
+       # Save model if its been a while 
        if ( epoch%save_freq == 0 or epoch == num_epochs+start_epoch-1 ) and epoch != start_epoch :
            ### Save Model ###
            pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'

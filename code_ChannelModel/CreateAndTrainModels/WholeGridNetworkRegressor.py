@@ -152,9 +152,9 @@ if __name__ == "__main__":
     if args.land == 'Spits':
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
        if args.test: 
-          MITGCM_filename = DIR+'12hrly_small_set.nc'
+          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
        else:
-          MITGCM_filename = DIR+'12hrly_data.nc'
+          MITGCM_filename = DIR +'12hrly_data.nc'
        grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
     else:
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     #-----------------------------------
     if args.calculatemeanstd:
        CalcMeanStd(args.land+'_'+args.dim, MITGCM_filename, train_end_ratio, subsample_rate,
-                   args.batchsize, args.land, args.dim, args.bdyweight, args.histlen, tic)
+                   args.batchsize, args.land, args.dim, args.bdyweight, args.histlen, grid_filename, tic)
 
     inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.land+'_'+args.dim)
 

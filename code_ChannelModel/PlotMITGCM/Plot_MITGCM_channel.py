@@ -84,7 +84,7 @@ plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level), bbox_inches = 'tight', pad_in
 
 fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanVVel'][level,:,:], 'Mean V Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=None, max_value=None)
+                                   title=None, min_value=-0.1, max_value=0.1, extend='both')
 plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanEta'][:,:], 'Mean Eta', level,

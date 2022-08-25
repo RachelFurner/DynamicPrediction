@@ -20,7 +20,7 @@ plt.rcParams.update({'font.size': 14})
 point = [ 2, 8, 6]
 
 epochs = '200'
-dir_name = 'CSpline_Spits_UNet2dtransp_histlen1_seed30475'
+dir_name = 'TEST_Spits_UNet2dtransp_histlen1_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
 trainorval='training'
 #trainorval='validation'
