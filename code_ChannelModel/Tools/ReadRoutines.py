@@ -1,13 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Code developed by Rachel Furner to contain modules used in developing stats/nn based versions of GCMs.
-# Routines contained here include:
-# ReadMITGCM - Routine to read in MITGCM data into input and output arrays of single data points (plus halos), split into test and train
-#                        portions of code, and normalise. The arrays are passed back on return but not saved - no disc space!
-# ReadMITGCMfield - Routine to read in MITGCM data into input and output arrays of whole fields, split into test and train
-#                        portions of code, and normalise. The arrays are saved, and also passed back on return. 
-
 import numpy as np
 import xarray as xr
 from torch.utils import data
@@ -25,21 +18,15 @@ import sys
 sys.path.append('../NNregression')
 #from WholeGridNetworkRegressorModules import TimeCheck 
 
-
-
 # Create Dataset, which inherits the data.Dataset class
 class MITGCM_Dataset_2d(data.Dataset):
 
    '''
          MITGCM dataset
-        
-         Note data not normalised here - needs to be done in network training routine
 
-         Note currently code is set up so that the data is 2-d with different channels for each level of 
+         This code is set up so that the data is 2-d with different channels for each level of 
          each variable. This solves issues with eta being 2-d and other inputs being 3-d. This matches 
          what is done in Scher paper.
-         The alternative is to have 3-d fields, with each channel being separate variables. Potentially 
-         worth assessing impact of this at some stage
    '''
 
    def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, land_values, grid_filename, transform=None):
@@ -68,7 +55,7 @@ class MITGCM_Dataset_2d(data.Dataset):
           self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[1] 
           self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[2]
 
-          # Here mask is ones everywhere
+          # Here mask is ones (ocean) everywhere
           self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
   
        else:
@@ -104,7 +91,7 @@ class MITGCM_Dataset_2d(data.Dataset):
           da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,:,:]
           da_U_in      = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
           da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,:,:]
-          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
+          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) - da_U_in[-1,:,:,:] # average to get onto same grid as T points
 
           da_V_in  = ds_InputSlice['VVEL'].values[:,:,:-1,:]                           #ignore last land point to get to same as T grid
           da_V_out = ds_OutputSlice['VVEL'].values[:,:,:-1,:] - da_V_in[-1,:,:,:]      #ignore last land point to get to same as T grid 
@@ -171,7 +158,10 @@ class MITGCM_Dataset_2d(data.Dataset):
                                        da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
 
        # mask values
-       sample_input = np.where( self.masks==1, sample_input, np.expand_dims( self.land_values, axis=(1,2)) )
+       for time in range(self.hist_len):
+           sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.masks==1, 
+                                                                                         sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:],
+                                                                                         np.expand_dims( self.land_values, axis=(1,2)) )
 
        del da_T_in
        del da_T_out
@@ -198,13 +188,11 @@ class MITGCM_Dataset_3d(data.Dataset):
    '''
          MITGCM dataset
         
-         Note data not normalised here - needs to be done in network training routine
-
          Here we have 3-d fields, with each channel being separate variables.
          This is a problem for Eta which is only 2d... for now just filled out to a 3-d field, but this isn't ideal...
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, land_values, grid_filename, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -215,44 +203,36 @@ class MITGCM_Dataset_3d(data.Dataset):
  
        self.ds        = xr.open_dataset(MITGCM_filename, lock=False)
        self.ds        = self.ds.isel( T=slice( int(start_ratio*self.ds.dims['T']), int(end_ratio*self.ds.dims['T']) ) )
-       #self.start   = int(start_ratio * dataset_end_index)
-       #self.end     = int(end_ratio * dataset_end_index)
        self.stride    = stride
        self.hist_len  = hist_len
        self.transform = transform
        self.land      = land
        self.tic       = tic 
-       
-       # For now, manually set masks - eventually set to read in from MITgcm
-       if self.land == 'IncLand':
-          # Set dims based on T grid
-          self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
-          self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
-          self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
+       no_depth_levels = 38
+       self.land_Values = land.values
+       self.mask_ds   = xr.open_dataser(grid_filename, lock=False)       
 
-          # Use T mask for U and Eta
-          self.T_mask          = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.T_mask[:,:3,:]  = 0.0
-          self.T_mask[:,-3:,:] = 0.0
    
-          # Later we cut off top row of V data, as this has an extra point and need dimensions to match
-          # Note v-mask extends one point above and below t, but cutting off top row deals with top boundary
-          self.V_mask          = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.V_mask[:,:4,:]  = 0.0
-          self.V_mask[:,-3:,:] = 0.0
-   
-       elif self.land == 'ExcLand':
+       if self.land == 'ExcLand':
           # Set dims based on V grid
           self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[0]
           self.y_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[1] 
           self.x_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[2]
 
-          self.T_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.V_mask              = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.masks = np.ones((4, self.z_dim, self.y_dim, self.x_dim ))
 
-       elif self.land == 'Spits':
-          logging.info("Code Not set up for Land spits in 3d")
-          sys.exit()
+       else:
+          # Set dims based on T grid
+          self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
+          self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
+          self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
+
+          # set up masks
+          self.masks = np.ones((4, self.z_dim, self.y_dim, self.x_dim))
+ 
+          HfacC = self.mask_ds['HFacC'].values
+          for i in range(4);
+             self.masks[i,:,:,:] = np.where( HfacC>0., 1, 0)
    
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
@@ -262,7 +242,7 @@ class MITGCM_Dataset_3d(data.Dataset):
        ds_InputSlice  = self.ds.isel(T=slice(idx*self.stride,idx*self.stride+self.hist_len))
        ds_OutputSlice = self.ds.isel(T=[idx*self.stride+self.hist_len])
 
-       if self.land == 'IncLand':
+       if self.land == 'IncLand' or self.land == 'Spits':
           # Read in the data
           da_T_in      = ds_InputSlice['THETA'].values[:,:,:,:] 
           da_T_out     = ds_OutputSlice['THETA'].values[:,:,:,:] - da_T_in[-1,:,:,:]
@@ -306,20 +286,6 @@ class MITGCM_Dataset_3d(data.Dataset):
        del ds_OutputSlice
        gc.collect()
        torch.cuda.empty_cache()
-
-       ## Shouldn't need to mask the data, as land values set to zero in MITgcm output already
-       #da_T_in  = np.where(self.T_mask==0, 0, da_T_in)
-       #da_T_out = np.where(self.T_mask==0, 0, da_T_out)
-      
-       #da_U_in  = np.where(self.T_mask==0, 0, da_U_in)
-       #da_U_out = np.where(self.T_mask==0, 0, da_U_out)
-      
-       #da_V_in  = np.where(self.V_mask==0, 0, da_V_in)
-       #da_V_out = np.where(self.V_mask==0, 0, da_V_out)
-      
-       #da_Eta_in  = np.where(self.T_mask==0, 0, da_Eta_in)
-       #da_Eta_out = np.where(self.T_mask==0, 0, da_Eta_out)
-
 
        # Fill input and output arrays
        sample_input  = np.zeros(( 4*self.hist_len+2, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
@@ -402,10 +368,8 @@ class RF_Normalise_sample(object):
            for time in range(self.histlen):
               sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :] = \
                                        ( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :] -  
-                                         self.inputs_mean[:self.no_out_channels,:,:] ) / self.inputs_range[:self.no_out_channels,:,:]
-           sample['output'][:self.no_out_channels, :, :] = ( sample['output'][:self.no_out_channels, :, :] -
-                                                             self.targets_mean[:self.no_out_channels,:,:] ) /  \
-                                                             self.targets_range[:self.no_out_channels,:,:]
+                                         self.inputs_mean[:,:,:] ) / self.inputs_range[:,:,:]
+           sample['output'][:, :, :] = ( sample['output'][:,:,:] - self.targets_mean[:,:,:] ) / self.targets_range[:,:,:]
 
         elif self.dim == '3d':
 
@@ -413,8 +377,8 @@ class RF_Normalise_sample(object):
                sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :] = \
                           ( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :]
                             - self.inputs_mean[:self.no_out_channels,:,:,:]) / self.inputs_range[self.no_out_channels,:,:]
-           sample['output'][:, :, :, :] = ( sample['output'][:, :, :, :] - self.targets_mean[:self.no_out_channels,:,:,:]) \
-                                            / self.targets_range[self.no_out_channels,:,:,:]
+           sample['output'][:, :, :, :] = ( sample['output'][:, :, :, :] - self.targets_mean[:,:,:,:]) \
+                                            / self.targets_range[:,:,:,:]
 
         return sample['input'], sample['output']
 

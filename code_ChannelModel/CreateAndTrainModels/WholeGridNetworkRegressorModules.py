@@ -74,11 +74,11 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
              targets_max  = np.nanmax( target_batch, axis = (0,2,3) )
           else:
              inputs_mean = 1./(count+input_batch.shape[0]) * ( count*inputs_mean + input_batch.shape[0]*batch_inputs_mean )
-             inputs_min  = np.minimum( inputs_min, np.nanmin(input_batch) )
-             inputs_max  = np.maximum( inputs_max, np.nanmax(input_batch) )
+             inputs_min  = np.minimum( inputs_min, np.nanmin(input_batch, axis=(0,2,3) ) )
+             inputs_max  = np.maximum( inputs_max, np.nanmax(input_batch, axis=(0,2,3) ) )
              targets_mean = 1./(count+target_batch.shape[0]) * ( count*targets_mean + target_batch.shape[0]*batch_targets_mean )
-             targets_min  = np.minimum( targets_min, np.nanmin(target_batch) )
-             targets_max  = np.maximum( targets_max, np.nanmax(target_batch) )
+             targets_min  = np.minimum( targets_min, np.nanmin(target_batch, axis=(0,2,3) ) )
+             targets_max  = np.maximum( targets_max, np.nanmax(target_batch, axis=(0,2,3) ) )
 
           batch_no = batch_no+1
           count = count + input_batch.shape[0]
@@ -86,11 +86,11 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
       ## combine across all depth levels in each field (samples sizes are the same across all depths, so don't need to account for this)
       for i in range(3):  # Temp, U, V. No need to do for Eta as already 2-d/1 channel. Sal not included in model as const.
          inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels]  = 1./no_depth_levels * np.sum(inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_min[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmin(inputs_min[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_max[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmax(inputs_max[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_mean[i*no_depth_levels:(i+1)*no_depth_levels]  = 1./no_depth_levels * np.sum(targets_mean[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_min[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmin(targets_min[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_max[ i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmax(targets_max[i*no_depth_levels:(i+1)*no_depth_levels])
+         inputs_min [i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmin(inputs_min[i*no_depth_levels:(i+1)*no_depth_levels])
+         inputs_max [i*no_depth_levels:(i+1)*no_depth_levels]  = np.nanmax(inputs_max[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_mean[i*no_depth_levels:(i+1)*no_depth_levels] = 1./no_depth_levels * np.sum(targets_mean[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_min [i*no_depth_levels:(i+1)*no_depth_levels] = np.nanmin(targets_min[i*no_depth_levels:(i+1)*no_depth_levels])
+         targets_max [i*no_depth_levels:(i+1)*no_depth_levels] = np.nanmax(targets_max[i*no_depth_levels:(i+1)*no_depth_levels])
 
       inputs_range = inputs_max - inputs_min
       targets_range = targets_max - targets_min
@@ -613,6 +613,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    #  2. Store predictions and targets for a small number of smaples in an array
    #  3. Calculate the RMS of the dataset from the summed squared error
    #  4. Store the RMS and subset of samples in a netcdf file
+   logging.info('Outputting stats')
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -663,9 +664,9 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
                                             ), dim=1) ) 
           predicted_batch = predicted_batch.cpu().detach().numpy() 
 
-          # Denormalise and mask
-          target_batch = rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks.numpy()
-          predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension) * masks.numpy()
+          # Denormalise
+          target_batch = rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension)
+          predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, no_out_channels, dimension)
 
           # Add summed error of this batch
           if batch_no==0:
@@ -690,6 +691,14 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    no_samples = min(no_samples, count) # Reduce no_samples if this is bigger than total samples!
   
    rms_error = np.sqrt( np.divide(summed_sq_error, count) )
+   # mask rms error (for ease of viewing plots), leave othere variables so we can see what's happening
+   print('rms_error.shape')
+   print(rms_error.shape)
+   print('masks.shape')
+   print(masks.shape)
+   rms_error = np.where( masks[0,:,:,:]==1, rms_error, np.nan)
+   print('rms_error.shape')
+   print(rms_error.shape)
 
    # Set up netcdf files
    nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput_'+file_append+'.nc'
@@ -799,7 +808,8 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
 
 def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
-                       y_dim_used, land, dimension, histlen, no_in_channels, no_out_channels, landvalues):
+                       y_dim_used, land, dimension, histlen, no_in_channels, no_out_channels, landvalues, iterate_method):
+   logging.info('Iterating')
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -831,13 +841,25 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    # Read in first sample from MITgcm dataset and save as first entry in both arrays
    #input_sample, target_sample, masks, bdy_masks = Iterate_Dataset.__getitem__(start)
    input_sample, target_sample, masks = Iterate_Dataset.__getitem__(start)
-   # Give extra dimension at front (usually number of samples)
+   # Give extra dimension at front (as usually number of samples)
    input_sample = input_sample.unsqueeze(0)
    masks = masks.unsqueeze(0)
+   #### Above isn't the case - need to change to this shape!!
    if dimension == '2d':
-      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0),
+      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:(no_depth_levels*3+1),:,:].unsqueeze(0),
                                           inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
-      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:histlen*(no_depth_levels*3+1),:,:].unsqueeze(0)
+      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:no_depth_levels*3+1,:,:].unsqueeze(0)
+      for time in range(1,histlen):
+          iterated_fields = torch.cat( (iterated_fields,
+                                       rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0]
+                                                         [time*(no_depth_levels*3+1):(time+1)*(no_depth_levels*3+1),:,:].unsqueeze(0),
+                                                         inputs_mean, inputs_std, inputs_range, no_out_channels, dimension) ),
+                                     axis = 0)
+          MITgcm_data = torch.cat( (MITgcm_data, 
+                                   Iterate_Dataset.__getitem__(start)[0][time*(no_depth_levels*3+1):(time+1)*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
+                                   axis=0)
+      grid_predictions = torch.zeros(MITgcm_data.shape)
+      grid_norm_predictions = torch.zeros(MITgcm_data.shape)
    elif dimension == '3d':
       iterated_fields = rr.RF_DeNormalise(input_sample[:,:4,:,:], inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
       MITgcm_data = input_sample[:,:4,:,:]
@@ -852,6 +874,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       for time in range(for_len):
          # Make prediction
          # multi model ensemble, or single model predictions
+         print('')
          if isinstance(h, list):
             predicted = h[0]( torch.cat((input_sample, masks), axis=1)
                               .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
@@ -863,19 +886,60 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
          else:
             predicted = h( torch.cat( (input_sample, masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
                          ).cpu().detach()
+         print('predicted in norm space:'+str(predicted[:,2,10,10]))
+         grid_norm_predictions = torch.cat( (grid_norm_predictions, predicted), axis=0)
 
-         # Remask land on outputs ready for next iteration
-         # Denormalise and add to previous field
-         predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, no_out_channels, dimension) + iterated_fields[-1,:,:,:]
+         # Denormalise 
+         predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, no_out_channels, dimension)
+         print('predicted denormed:'+str(predicted[:,2,10,10]))
+         grid_predictions = torch.cat( (grid_predictions, predicted), axis=0)
+
+         # Calculate next field, by combining increment with field
+         if iterate_method == 'simple':
+            next_field = iterated_fields[-1,:,:,:] + predicted
+         elif iterate_method == 'AB2':
+            if time == 0:
+               next_field = iterated_fields[-1,:,:,:] + predicted
+            else: 
+               next_field = iterated_fields[-1,:,:,:] + 3./2. * predicted - 1./2. * old_predicted
+            old_predicted = predicted
+         elif iterate_method == 'RK4':
+            k1 = predicted
+            # (k1)/2 added to state, masked, then normalised, and finally masks catted on. And then passed through neural net)
+            k2 = h( torch.cat( (
+                       rr.RF_ReNormalise_predicted( 
+                          torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k1)/2. ), landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) ),
+                          inputs_mean, inputs_std, inputs_range, no_out_channels, dimension), 
+                       masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
+                  ).cpu().detach()
+            k3 = h( torch.cat( (
+                       rr.RF_ReNormalise_predicted( 
+                          torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k2)/2. ), landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) ),
+                          inputs_mean, inputs_std, inputs_range, no_out_channels, dimension), 
+                       masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
+                  ).cpu().detach()
+            k4 = h( torch.cat( (
+                       rr.RF_ReNormalise_predicted( 
+                          torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k3)    ), landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) ),
+                          inputs_mean, inputs_std, inputs_range, no_out_channels, dimension), 
+                       masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
+                  ).cpu().detach()
+            next_field = iterated_fields[-1,:,:,:] + (1./6.) * ( k1 + 2*k2 +2*k3 + k4 )         
+         print('iterated fields:'+str(iterated_fields[:,2,10,10]))
+         print('next field shape:'+str(next_field.shape))
+         print('next field:'+str(next_field[:,2,10,10]))
+
          # Mask field
-         predicted = torch.where( masks==1, predicted, landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) )
-         # Cat prediction onto existing predicted fields
-         iterated_fields = torch.cat( ( iterated_fields, predicted ), axis=0 )
+         next_field = torch.where( masks==1, next_field, landvalues.unsqueeze(0).unsqueeze(2).unsqueeze(3) )
+         # Cat prediction onto existing fields
+         iterated_fields = torch.cat( ( iterated_fields, next_field ), axis=0 )
          # Re-Normalise ready to use as inputs
-         predicted = rr.RF_ReNormalise_predicted(predicted, inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
+         print('iterated fields:'+str(iterated_fields[:,2,10,10]))
+         next_field = rr.RF_ReNormalise_predicted(next_field, inputs_mean, inputs_std, inputs_range, no_out_channels, dimension)
 
          # Get MITgcm data for relevant step, and prep new input sample
          if dimension == '2d':
+            # Plus one to time dimension as we want the next step, to match time stamp of prediction
             MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
                                        [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
                                        axis=0 )
@@ -883,7 +947,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
             for time in range(histlen-1):
                input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:] = \
                                  input_sample[0,(time+1)*(3*no_depth_levels+1):(time+2)*(3*no_depth_levels+1),:,:]
-            input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:]= predicted
+            input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:] = next_field
            
 
          elif dimension == '3d':
@@ -892,9 +956,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
                                        axis=0 )
             input_sample = torch.zeros((1, histlen*4, da_Z.shape[0], y_dim_used, da_X.shape[0]))
             for time in range(histlen):
-               input_sample[0,time*4:(time+1)*4,:,:,:]=predicted[:,:,:,:]
+               input_sample[0,time*4:(time+1)*4,:,:,:]=next_field[:,:,:,:]
 
-         del predicted
+         del next_field
+         del predicted 
          gc.collect()
          torch.cuda.empty_cache()
 
@@ -923,15 +988,35 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    nc_TrueV      = nc_file.createVariable( 'True_V'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueEta    = nc_file.createVariable( 'True_Eta'   , 'f4', ('T', 'Y', 'X')      )
 
+   nc_TrueTempInc = nc_file.createVariable( 'Tr_TInc'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueUInc    = nc_file.createVariable( 'Tr_UInc'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueVInc    = nc_file.createVariable( 'Tr_VInc'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_TrueEtaInc  = nc_file.createVariable( 'Tr_EInc'   , 'f4', ('T', 'Y', 'X')      )
+
    nc_TempMask   = nc_file.createVariable( 'Temp_Mask'  , 'f4', ('Z', 'Y', 'X') )
    nc_UMask      = nc_file.createVariable( 'U_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_VMask      = nc_file.createVariable( 'V_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_EtaMask    = nc_file.createVariable( 'Eta_Mask'   , 'f4', ('Y', 'X')      )
 
-   nc_PredTemp   = nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
-   nc_PredU      = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
-   nc_PredV      = nc_file.createVariable( 'Pred_V'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
-   nc_PredEta    = nc_file.createVariable( 'Pred_Eta'   , 'f4', ('T', 'Y', 'X')      )
+   nc_NormPredTempInc= nc_file.createVariable( 'Pr_T_NormInc'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_NormPredUInc   = nc_file.createVariable( 'Pr_U_NormInc'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_NormPredVInc   = nc_file.createVariable( 'Pr_V_NormInc'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
+   nc_NormPredEtaInc = nc_file.createVariable( 'Pr_E_NormInc'   , 'f4', ('T', 'Y', 'X')      )
+
+   nc_PredTempInc= nc_file.createVariable( 'Pr_T_Inc'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredUInc   = nc_file.createVariable( 'Pr_U_Inc'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredVInc   = nc_file.createVariable( 'Pr_V_Inc'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
+   nc_PredEtaInc = nc_file.createVariable( 'Pr_E_Inc'   , 'f4', ('T', 'Y', 'X')      )
+
+   nc_PredTempFld= nc_file.createVariable( 'Pred_Temp'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredUFld   = nc_file.createVariable( 'Pred_U'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_PredVFld   = nc_file.createVariable( 'Pred_V'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
+   nc_PredEtaFld = nc_file.createVariable( 'Pred_Eta'   , 'f4', ('T', 'Y', 'X')      )
+
+   nc_CalcTempInc= nc_file.createVariable( 'Calc_Temp_Inc'  , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_CalcUInc   = nc_file.createVariable( 'Calc_U_Inc'     , 'f4', ('T', 'Z', 'Y', 'X') )
+   nc_CalcVInc   = nc_file.createVariable( 'Calc_V_Inc'     , 'f4', ('T', 'Z', 'Y', 'X') ) 
+   nc_CalcEtaInc = nc_file.createVariable( 'Calc_Eta_Inc'   , 'f4', ('T', 'Y', 'X')      )
 
    nc_TempErrors = nc_file.createVariable( 'Temp_Errors', 'f4', ('T', 'Z', 'Y', 'X') )
    nc_UErrors    = nc_file.createVariable( 'U_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
@@ -955,11 +1040,31 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
       nc_TrueEta[:,:,:]    = MITgcm_data[:,3*no_depth_levels,:,:]
 
-      nc_PredTemp[:,:,:,:] = iterated_fields[:,0:no_depth_levels,:,:]
-      nc_PredU[:,:,:,:]    = iterated_fields[:,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_PredV[:,:,:,:]    = iterated_fields[:,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_PredEta[:,:,:]    = iterated_fields[:,3*no_depth_levels,:,:]
+      nc_NormPredTempInc[:,:,:,:] = grid_norm_predictions[:,0:no_depth_levels,:,:]
+      nc_NormPredUInc[:,:,:,:]    = grid_norm_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_NormPredVInc[:,:,:,:]    = grid_norm_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_NormPredEtaInc[:,:,:]    = grid_norm_predictions[:,3*no_depth_levels,:,:]
       
+      nc_PredTempInc[:,:,:,:] = grid_predictions[:,0:no_depth_levels,:,:]
+      nc_PredUInc[:,:,:,:]    = grid_predictions[:,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_PredVInc[:,:,:,:]    = grid_predictions[:,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_PredEtaInc[:,:,:]    = grid_predictions[:,3*no_depth_levels,:,:]
+      
+      nc_PredTempFld[:,:,:,:] = iterated_fields[:,0:no_depth_levels,:,:]
+      nc_PredUFld[:,:,:,:]    = iterated_fields[:,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_PredVFld[:,:,:,:]    = iterated_fields[:,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_PredEtaFld[:,:,:]    = iterated_fields[:,3*no_depth_levels,:,:]
+      
+      nc_CalcTempInc[1:,:,:,:] = iterated_fields[1:,0:no_depth_levels,:,:] - iterated_fields[:-1,0:no_depth_levels,:,:]
+      nc_CalcUInc[1:,:,:,:]    = iterated_fields[1:,1*no_depth_levels:2*no_depth_levels,:,:] - iterated_fields[:-1,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_CalcVInc[1:,:,:,:]    = iterated_fields[1:,2*no_depth_levels:3*no_depth_levels,:,:] - iterated_fields[:-1,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_CalcEtaInc[1:,:,:]    = iterated_fields[1:,3*no_depth_levels,:,:] - iterated_fields[:-1,3*no_depth_levels,:,:]
+
+      nc_TrueTempInc[1:,:,:,:] = MITgcm_data[1:,0:no_depth_levels,:,:] - MITgcm_data[:-1,0:no_depth_levels,:,:] 
+      nc_TrueUInc[1:,:,:,:]    = MITgcm_data[1:,1*no_depth_levels:2*no_depth_levels,:,:] - MITgcm_data[:-1,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_TrueVInc[1:,:,:,:]    = MITgcm_data[1:,2*no_depth_levels:3*no_depth_levels,:,:] - MITgcm_data[:-1,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_TrueEtaInc[1:,:,:]    = MITgcm_data[1:,3*no_depth_levels,:,:] - MITgcm_data[:-1,3*no_depth_levels,:,:]
+
       nc_TempErrors[:,:,:,:] = iterated_fields[:,0:no_depth_levels,:,:] - MITgcm_data[:,0:no_depth_levels,:,:]
       nc_UErrors[:,:,:,:]    = iterated_fields[:,1*no_depth_levels:2*no_depth_levels,:,:] - MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
       nc_VErrors[:,:,:,:]    = iterated_fields[:,2*no_depth_levels:3*no_depth_levels,:,:] - MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
@@ -976,10 +1081,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2,:,:,:]
       nc_TrueEta[:,:,:]    = MITgcm_data[:,3,0,:,:]
 
-      nc_PredTemp[:,:,:,:] = iterated_fields[:,0,:,:,:]
-      nc_PredU[:,:,:,:]    = iterated_fields[:,1,:,:,:]
-      nc_PredV[:,:,:,:]    = iterated_fields[:,2,:,:,:]
-      nc_PredEta[:,:,:]    = iterated_fields[:,3,0,:,:]
+      nc_PredTempFld[:,:,:,:] = iterated_fields[:,0,:,:,:]
+      nc_PredUFld[:,:,:,:]    = iterated_fields[:,1,:,:,:]
+      nc_PredVFld[:,:,:,:]    = iterated_fields[:,2,:,:,:]
+      nc_PredEtaFld[:,:,:]    = iterated_fields[:,3,0,:,:]
       
       nc_TempErrors[:,:,:,:] = iterated_fields[:,0,:,:,:] - MITgcm_data[:,0,:,:,:]
       nc_UErrors[:,:,:,:]    = iterated_fields[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]

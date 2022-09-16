@@ -55,6 +55,10 @@ z_size = da_T.shape[1]
 y_size = da_T.shape[2]
 x_size = da_T.shape[3]
 
+HFacC = ds_grid['HFacC'].values
+HFacW = ds_grid['HFacW'].values
+HFacS = ds_grid['HFacS'].values
+
 print('da_T.shape')
 print(da_T.shape)
 
@@ -62,7 +66,7 @@ print(da_T.shape)
 # Read in monitor file
 #----------------------
 ds_mon = xr.open_dataset(mon_file)
-nc_mon = Dataset(mon_file)
+ds_mon = Dataset(mon_file)
 
 #--------------------
 # Read in stats file
@@ -72,43 +76,44 @@ ds_stats = xr.open_dataset(stats_file)
 #-------------------------
 # Plot Mean and std plots
 #-------------------------
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanTemp'][level,:,:], 'Mean Temperature', level,
+
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanTemp'][level,:,:], np.nan), 'Mean Temperature', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanUVel'][level,:,:], 'Mean U Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean U Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanVVel'][level,:,:], 'Mean V Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean V Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=-0.1, max_value=0.1, extend='both')
 plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['MeanEta'][:,:], 'Mean Eta', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanEta'][:,:], np.nan), 'Mean Eta', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdTemp'][level,:,:], 'Std Temperature', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdTemp'][level,:,:], np.nan), 'Std Temperature', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdUVel'][level,:,:], 'Std U Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std U Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdVVel'][level,:,:], 'Std V Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std V Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(ds_stats['StdEta'][:,:], 'Std Eta', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdEta'][:,:], np.nan), 'Std Eta', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
@@ -166,7 +171,7 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_x'+str(x_coord),
 #-----------------------------------------
 print('plot min and max temp plots')
 fig = plt.figure(figsize=(15,3))
-plt.plot(nc_mon.variables['dynstat_theta_min'][0:])
+plt.plot(ds_mon.variables['dynstat_theta_min'][0:])
 plt.title('Minimum Temperature')
 plt.ylabel('Temperature (degrees C)')
 plt.xlabel('Time (years)')
@@ -174,7 +179,7 @@ fig.savefig(rootdir+'PLOTS/'+time_step+'_minT.png', bbox_inches = 'tight', pad_i
 plt.close()
 
 fig = plt.figure(figsize=(15,3))
-plt.plot(nc_mon.variables['dynstat_theta_max'][0:])
+plt.plot(ds_mon.variables['dynstat_theta_max'][0:])
 plt.title('Maximum Temperature')
 plt.ylabel('Temperature (degrees C)')
 plt.xlabel('Time (years)')
@@ -186,7 +191,7 @@ plt.close()
 #-------------------------------------
 print('plot max and mean KE plots')
 fig = plt.figure(figsize=(15,3))
-plt.plot(nc_mon.variables['ke_max'][0:])
+plt.plot(ds_mon.variables['ke_max'][0:])
 plt.title('Maximum KE over domain')
 plt.ylabel('KE')
 plt.xlabel('Time (years)')
@@ -194,7 +199,7 @@ fig.savefig(rootdir+'PLOTS/'+time_step+'_maxKE.png', bbox_inches = 'tight', pad_
 plt.close()
 
 fig = plt.figure(figsize=(15,3))
-plt.plot(nc_mon.variables['ke_mean'][0:])
+plt.plot(ds_mon.variables['ke_mean'][0:])
 plt.title('Mean KE over domain')
 plt.ylabel('KE')
 plt.xlabel('Time (years)')

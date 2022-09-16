@@ -69,7 +69,8 @@ def parse_args():
     a.add_argument("-ps", "--plotscatter", default=False, type=bool, action='store')
     a.add_argument("-a", "--assess", default=False, type=bool, action='store')
     a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
-    a.add_argument("-lv", "--landvalue", default=0, type=float, action='store')
+    a.add_argument("-im", "--iteratemethod", default='simple', type=str, action='store')
+    a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
 
     return a.parse_args()
 
@@ -100,8 +101,8 @@ if __name__ == "__main__":
     plot_freq = 10     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
-    for_len = 30*6   # How long to iteratively predict for
-    #for_len = 10     # How long to iteratively predict for
+    #for_len = 30*6   # How long to iteratively predict for
+    for_len = 5      # How long to iteratively predict for
     start = 5        #
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -151,10 +152,10 @@ if __name__ == "__main__":
     if args.land == 'Spits':
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
        if args.test: 
-          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
+          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/12hrly_small_set.nc'
        else:
           MITGCM_filename = DIR +'12hrly_data.nc'
-       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
+       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/grid.nc'
     else:
        DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
        if args.test: 
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     if args.landvalue == -999:
        landvalues = inputs_mean
     else:
-       landvalues = np.ones(( args.histlen*(3*38+1) ))
+       landvalues = np.ones(( 3*38+1 ))
        landvalues[:] = args.landvalue
     # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
     if args.dim == '2d':
@@ -307,5 +308,5 @@ if __name__ == "__main__":
     
     if args.iterate:
        IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
-                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues) 
+                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.iteratemethod) 
     
