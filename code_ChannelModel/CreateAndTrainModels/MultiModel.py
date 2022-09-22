@@ -156,21 +156,25 @@ if __name__ == "__main__":
     if args.dim == '2d':
        Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
                                              args.histlen, args.land, tic,
-                                             transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
-                                                                               args.histlen, no_out_channels, args.dim)] ) )
+        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                                                               args.histlen, args.dim)] ) )
        Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
                                              args.histlen, args.land, tic,
-                                             transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
-                                                                               args.histlen, no_out_channels, args.dim)] ) )
+        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                                                               args.histlen, args.dim)] ) )
     elif args.dim == '3d':
        Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
                                              args.histlen, args.land, tic,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
-                                                                                    args.histlen, no_out_channels, args.dim)] ) )
+        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
+                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                                                                    args.histlen, args.dim)] ) )
        Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
                                              args.histlen, args.land, tic,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
-                                                                                    args.histlen, no_out_channels, args.dim)] ) )
+        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
+                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
+                                                                                    args.histlen, args.dim)] ) )
     else:
        raise RuntimeError("ERROR!!! what's happening with dimensions?!")
 

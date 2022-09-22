@@ -1,4 +1,4 @@
-model_name='CSpline_Spits_UNet2dtransp_histlen1_seed30475'
+model_name='Spits_UNet2dtransp_histlen1_seed30475'
 epochs='200'
 dir='/data/hpcdata/users/racfur/DynamicPrediction/Channel_nn_Outputs/'$model_name'/ITERATED_FORECAST'
 

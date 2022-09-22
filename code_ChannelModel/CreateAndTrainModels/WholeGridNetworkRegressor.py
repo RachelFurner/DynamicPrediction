@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
     if args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + 1* ( 3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks & bdy_masks
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks
        no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
        no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
@@ -201,33 +201,19 @@ if __name__ == "__main__":
     if args.landvalue == -999:
        landvalues = inputs_mean
     else:
-       landvalues = np.ones(( 3*38+1 ))
+       landvalues = np.ones(inputs_mean.shape)
        landvalues[:] = args.landvalue
     # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
-    if args.dim == '2d':
-       Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+    Train_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
                                              transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
                                                                                targets_mean, targets_std, targets_range,
-                                                                               args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+                                                                               args.histlen, no_out_channels, args.dim)] ) )
+    Val_Dataset   = rr.MITGCM_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
                                              transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
                                                                                targets_mean, targets_std, targets_range,
-                                                                               args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
-    elif args.dim == '3d':
-       Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                               targets_mean, targets_std, targets_range,
-                                                                               args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
-                                             args.histlen, args.land, tic, args.bdyweight,
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                               targets_mean, targets_std, targets_range,
-                                                                               args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
-    else:
-       raise RuntimeError("ERROR!!! what's happening with dimensions?!")
+                                                                               args.histlen, no_out_channels, args.dim)] ) )
 
     no_tr_samples = len(Train_Dataset)
     no_val_samples = len(Val_Dataset)
@@ -259,20 +245,28 @@ if __name__ == "__main__":
     if args.loadmodel:
        if args.trainmodel:
           losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best)
-          losses, histogram_data = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, 
+          losses, histogram_inputs, histogram_targets = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, 
                                                              save_freq, train_loader, val_loader, h, optimizer,
                                                              args.epochs, args.seed, losses, 
                                                              no_in_channels, no_out_channels, start_epoch=start_epoch, current_best_loss=current_best_loss)
-          plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, histogram_data)
+          plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses )
+          #  Save histogram data to file and plot it
+          histogram_file = '../../../Channel_nn_Outputs/'+args.land+'_'+args.dim+'_norm_histogram.npz'
+          np.savez( histogram_file, histogram_inputs, histogram_targets )
+          plot_histograms(args.land+'_'+args.dim, histogram_inputs, histogram_targets, norm='norm')
        else:
           LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best)
     elif args.trainmodel:  # Training mode BUT NOT loading model
-       losses, histogram_data = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples,
+       losses, histogram_inputs, histogram_targets = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples,
                                                      save_freq, train_loader, val_loader, h, optimizer,
                                                      args.epochs, args.seed,
                                                      losses, no_in_channels, no_out_channels)
-       plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses, histogram_data)
-    
+       plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses)
+       #  Save histogram data to file and plot it
+       histogram_file = '../../../Channel_nn_Outputs/'+args.land+'_'+args.dim+'_norm_histogram.npz'
+       np.savez( histogram_file, histogram_inputs, histogram_targets )
+       plot_histograms(args.land+'_'+args.dim, histogram_inputs, histogram_targets, norm='norm')
+   
     #--------------------
     # Plot scatter plots
     #--------------------
@@ -295,16 +289,10 @@ if __name__ == "__main__":
     #---------------------
     # Iteratively predict 
     #---------------------
-    if args.dim == '2d':
-       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename,
+    Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
                                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
                                                                                     targets_mean, targets_std, targets_range,
-                                                                                    args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
-    elif args.dim == '3d':
-       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                                    targets_mean, targets_std, targets_range,
-                                                                                    args.histlen, no_in_channels, no_out_channels, args.dim)] ) )
+                                                                                    args.histlen, no_out_channels, args.dim)] ) )
     
     if args.iterate:
        IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
