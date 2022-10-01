@@ -19,8 +19,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '200'
-dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'
+epochs = '120'
+dir_name = 'Spits_UNet2dtransp_histlen3_seed30475'
 model_name = dir_name+'_'+epochs+'epochs'
 trainorval='training'
 #trainorval='validation'
@@ -58,24 +58,24 @@ masked_Eta_RMS  = np.where( da_Eta_mask.values==0, np.nan, da_Eta_RMS.values )
 #--------------------------
 fig, ax, im = ChnPlt.plot_depth_fld(masked_Temp_RMS[level,:,:], 'Temperature RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.028)
+                                   title=None, min_value=0.0, max_value=0.025, extend='max')
                                    #title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_Temp_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(masked_U_RMS[level,:,:], 'U Vel RMS Errors', level,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_U_RMS[level,:,:], 'East-West Velocity RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.023)
+                                   title=None, min_value=0.0, max_value=0.008, extend='max')
                                    #title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_U_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(masked_V_RMS[level,:,:], 'V Vel RMS Errors', level,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_V_RMS[level,:,:], 'North-South Velocity RMS Errors', level,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.016)
+                                   title=None, min_value=0.0, max_value=0.008, extend='max')
                                    #title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_V_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnPlt.plot_depth_fld(masked_Eta_RMS[:,:], 'Eta RMS Errors', 0,
+fig, ax, im = ChnPlt.plot_depth_fld(masked_Eta_RMS[:,:], 'Sea Surface Height RMS Errors', 0,
                                    da_X.values, da_Y.values, da_Z.values,
-                                   title=None, min_value=0.0, max_value=0.014)
+                                   title=None, min_value=0.0, max_value=0.0015, extend='max')
                                    #title=None, min_value=0.0)
 plt.savefig(rootdir+'/STATS/'+model_name+'_Eta_RMS_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)

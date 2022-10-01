@@ -61,7 +61,7 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
        extend='neither'
     ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
 
-    ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m depth')
+    ax.set_title(str(field_name)+' at depth level '+str(int(depth_labels[level])))
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend=extend)
@@ -75,7 +75,7 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
     return(fig, ax, im)
 
 def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_labels, y_labels, depth_labels, 
-                        title=None, flds_min_value=None, flds_max_value=None, diff_min_value=None, diff_max_value=None):
+                        title=None, flds_min_value=None, flds_max_value=None, diff_min_value=None, diff_max_value=None, extend=None):
 
     if flds_min_value == None: 
        flds_min_value = min( np.nanmin(field1[:,:]), np.nanmin(field2[:,:]) )
@@ -101,7 +101,10 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
 
     cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
     cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
-    cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
+    if extend:
+       cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes, extend=extend)
+    else:
+       cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
     cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes, extend='both')
  
     if title:
@@ -341,7 +344,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None):
    ax.legend(my_legend)
    if y_label:
       ax.set_ylabel(y_label)
-   ax.set_xlabel('No of days')
+   #ax.set_xlabel('No of days')
    #ax.set_title(str(int(length/30))+' months')
    if ylim:
       ax.set_ylim(ylim)

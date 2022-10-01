@@ -101,8 +101,7 @@ if __name__ == "__main__":
     plot_freq = 10     # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
-    #for_len = 30*6   # How long to iteratively predict for
-    for_len = 5      # How long to iteratively predict for
+    for_len = 120    # How long to iteratively predict for
     start = 5        #
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -164,6 +163,7 @@ if __name__ == "__main__":
           MITGCM_filename = DIR+'12hrly_data.nc'
        grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
     
+    print(MITGCM_filename)
     ds = xr.open_dataset(MITGCM_filename)
     
     ds.close()

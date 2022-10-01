@@ -38,6 +38,8 @@ import logging
 
 import multiprocessing as mp
 
+from scipy.ndimage import gaussian_filter
+
 def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
                 batch_size, land, dimension, bdy_weight, histlen, grid_filename, tic):
 
@@ -92,14 +94,6 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
              targets_min  = np.minimum( targets_min, np.amin(target_batch, axis=(0,2,3) ) )
              targets_max  = np.maximum( targets_max, np.amax(target_batch, axis=(0,2,3) ) )
 
-          print('')
-          print(batch_inputs_mean)
-          print(np.amin(input_batch, axis=(0,2,3) ) )
-          print(np.amax(input_batch, axis=(0,2,3) ) )
-          print(inputs_mean)
-          print(inputs_min )
-          print(inputs_max )
- 
           batch_no = batch_no+1
           count = count + input_batch.shape[0]
 
@@ -112,9 +106,6 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
          targets_min [i*no_depth_levels:(i+1)*no_depth_levels] = np.amin(targets_min[i*no_depth_levels:(i+1)*no_depth_levels])
          targets_max [i*no_depth_levels:(i+1)*no_depth_levels] = np.amax(targets_max[i*no_depth_levels:(i+1)*no_depth_levels])
 
-      print(inputs_mean)
-      print(inputs_min )
-      print(inputs_max )
       inputs_range = inputs_max - inputs_min
       targets_range = targets_max - targets_min
 
@@ -193,20 +184,12 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
              targets_mean = 1./(count+target_batch.shape[0]) * ( count*targets_mean + target_batch.shape[0]*batch_targets_mean )
              targets_min  = np.minimum( targets_min, np.amin(target_batch, axis=(0,2,3,4) ) )
              targets_max  = np.maximum( targets_max, np.amax(target_batch, axis=(0,2,3,4) ) )
-          print('')
-          print(inputs_min)
-          print(inputs_max)
    
           batch_no = batch_no+1
           count = count + input_batch.shape[0]
    
       inputs_range = inputs_max - inputs_min
       targets_range = targets_max - targets_min
-      print('')
-      print('')
-      print(inputs_min)
-      print(inputs_max)
-      print(inputs_range)
    
       #-------------------------
       # Next calculate the std 
@@ -238,7 +221,7 @@ def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate
    plot_histograms(MeanStd_prefix, histogram_inputs, histogram_targets, norm='RealSpace')
    
    ## Save to file
-   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd_TEST.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
    np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range )
    
    histogram_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_RealSpace_histogram.npz'
@@ -515,6 +498,7 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
 def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_channels, MeanStd_prefix):
 
    logging.info('Making scatter plots')
+   plt.rcParams.update({'font.size': 14})
 
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
 
@@ -600,6 +584,8 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_chan
    ax_Eta.set_xlim(bottom, top)
    ax_Eta.set_ylim(bottom, top)
    ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1, color='black')
+
+   plt.tight_layout()
 
    plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/PLOTS/'+model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
@@ -723,7 +709,9 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
           # get prediction from the model, given the inputs
           if isinstance(h, list):
-             predicted_batch = h[0](input_batch) 
+             predicted_batch = h[0]( torch.cat((input_batch,
+                                             masks.to(device, non_blocking=True, dtype=torch.float)
+                                            ), dim=1) ) 
              for i in range(1, len(h)):
                 predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, 
                                                                       masks.to(device, non_blocking=True, dtype=torch.float)
@@ -942,9 +930,9 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
    with torch.no_grad():
       for time in range(for_len):
+         print(time)
          # Make prediction
          # multi model ensemble, or single model predictions
-         print('')
          if isinstance(h, list):
             predicted = h[0]( torch.cat((input_sample, masks), axis=1)
                               .to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
@@ -965,9 +953,20 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
          # Calculate next field, by combining increment with field
          if iterate_method == 'simple':
             next_field = iterated_fields[-1] + predicted[0]
+         elif iterate_method == 'smooth01':
+            next_field = iterated_fields[-1] + predicted[0]
+            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.1) )
+         elif iterate_method == 'smooth001':
+            next_field = iterated_fields[-1] + predicted[0]
+            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.01) )
+         elif iterate_method == 'smooth0001':
+            next_field = iterated_fields[-1] + predicted[0]
+            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.001) )
          elif iterate_method == 'AB2':
             if time == 0:
-               next_field = iterated_fields[-1] + predicted
+               next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start+time+1)[0]
+                                       [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0),
+                                          inputs_mean, inputs_std, inputs_range, dimension)
             else: 
                next_field = iterated_fields[-1] + 3./2. * predicted - 1./2. * old_predicted
             old_predicted = predicted
@@ -1016,9 +1015,9 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
                           masks),axis=1 ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
                next_field = iterated_fields[-1,:,:,:,:] + (1./6.) * ( k1 + 2*k2 +2*k3 + k4 )         
+         else:
+            sys.exit('no suitable iteration method chosen')
 
-         print('next_field.shape') 
-         print(next_field.shape) 
          # Mask field
          if dimension == '2d':
             next_field = torch.where( masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2) )
@@ -1064,7 +1063,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    MITgcm_data          = rr.RF_DeNormalise(MITgcm_data, inputs_mean, inputs_std, inputs_range, dimension) 
 
    # Set up netcdf files
-   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_Forecast'+str(for_len)+'.nc'
+   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_'+iterate_method+'_Forecast'+str(for_len)+'.nc'
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
    nc_file.createDimension('T', MITgcm_data.shape[0])

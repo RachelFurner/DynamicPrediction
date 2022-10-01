@@ -46,16 +46,29 @@ def parse_args():
     a.add_argument('modelseeds', metavar='N', type=int, nargs='+',
                    help='list of random seeds from the models')
     a.add_argument("-n", "--name", default="", action='store')
-    a.add_argument("-d", "--dim", default='2d', type=str, action='store')
-    a.add_argument("-la", "--land", default='ExcLand', type=str, action='store')
-    a.add_argument("-k", "--kernsize", default=3, type=int, action='store')
-    a.add_argument("-p", "--padding", default='None', type=str, action='store')
-    a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
+    a.add_argument("-te", "--test", default=False, type=bool, action='store')
+    a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
-    a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
+    a.add_argument("-d", "--dim", default='2d', type=str, action='store')
+    a.add_argument("-la", "--land", default='Spits', type=str, action='store')
+    a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
+    a.add_argument("-p", "--padding", default='None', type=str, action='store')
+    a.add_argument("-k", "--kernsize", default=3, type=int, action='store')
+    a.add_argument("-b", "--batchsize", default=16, type=int, action='store')
+    a.add_argument("-bw", "--bdyweight", default=1., type=float, action='store')
+    a.add_argument("-lr", "--learningrate", default=0.000003, type=float, action='store')
+    a.add_argument("-wd", "--weightdecay", default=0., type=float, action='store')
     a.add_argument("-w", "--numworkers", default=8, type=int, action='store')
-    a.add_argument("-s", "--seed", default=30475, type=int, action='store') 
-    a.add_argument("-b", "--batchsize", default=8, type=int, action='store')
+    a.add_argument("-lo", "--loadmodel", default=False, type=bool, action='store')
+    a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
+    a.add_argument("-be", "--best", default=False, type=bool, action='store')
+    a.add_argument("-tr", "--trainmodel", default=False, type=bool, action='store')
+    a.add_argument("-e", "--epochs", default=200, type=int, action='store')
+    a.add_argument("-ps", "--plotscatter", default=False, type=bool, action='store')
+    a.add_argument("-a", "--assess", default=False, type=bool, action='store')
+    a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
+    a.add_argument("-im", "--iteratemethod", default='simple', type=str, action='store')
+    a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
 
     return a.parse_args()
 
@@ -83,108 +96,96 @@ if __name__ == "__main__":
     for_len = 30*6   # How long to iteratively predict for
     start = 5        #    a.add_argument("-se", "--savedepochs", default=0, type=int, action='    a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')store')
     
-    os.environ['PYTHONHASHSEED'] = str(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    rand_seed = 30475
+    os.environ['PYTHONHASHSEED'] = str(rand_seed)
+    np.random.seed(rand_seed)
+    torch.manual_seed(rand_seed)
+    torch.cuda.manual_seed(rand_seed)
+    torch.cuda.manual_seed_all(rand_seed)
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
    
     MeanStd_prefix = args.land+'_'+args.dim
 
-    model_dir = '../../../Channel_nn_Outputs/'+args.name
+    base_name = args.name+args.land+'_'+args.modelstyle+'_histlen'+str(args.histlen)
+    model_name = 'MultiModel_'+base_name
+    model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
        os.system("mkdir %s" % (model_dir))
        os.system("mkdir %s" % (model_dir+'/STATS'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
  
-    if args.land == 'IncLand':
+    if args.land == 'IncLand' or args.land == 'Spits':
        y_dim_used = 104
     elif args.land == 'ExcLand':
-       y_dim_used = 96
+       y_dim_used = 97
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
-    
-    DIR =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_106x240Domain/runs/100yrs/'
-    #DIR = '/nfs/st01/hpc-cmih-cbs31/raf59/MITgcm_Channel_Data/'
-    MITGCM_filename = DIR+'daily_ave_50yrs.nc'
+ 
+    if args.land == 'Spits':
+       DIR =  '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+       if args.test:
+          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/12hrly_small_set.nc'
+       else:
+          MITGCM_filename = DIR +'12hrly_data.nc'
+       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/grid.nc'
+    else:
+       DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
+       if args.test:
+          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
+       else:
+          MITGCM_filename = DIR+'12hrly_data.nc'
+       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
+    ds = xr.open_dataset(MITGCM_filename)
 
-    dataset_end_index = 50*360  # Look at 50 yrs of data
     subsample_rate = 5      # number of time steps to skip over when creating training and test data
     train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
     val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
  
-    ds       = xr.open_dataset(MITGCM_filename)
-    tr_start = 0
-    tr_end   = int(train_end_ratio * dataset_end_index)
-    val_end  = int(val_end_ratio * dataset_end_index)
-    x_dim    = ( ds.isel( T=slice(0) ) ).sizes['X']
-    y_dim    = ( ds.isel( T=slice(0) ) ).sizes['Y']
-    z_dim    = ( ds.isel( T=slice(0) ) ).sizes['Zld000038']
+    z_dim    = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038']
     ds.close()
-
-    logging.info('Model ; '+args.name+'\n')
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     logging.info('Using device: '+device+'\n')
     
-    TimeCheck(tic, 'setting variables')
-    logging.info( GPUtil.showUtilization() )
-    
     #-----------------------------------
     # Read in mean and std
     #-----------------------------------
-    data_mean, data_std, data_range = ReadMeanStd(MeanStd_prefix)
-    
-    TimeCheck(tic, 'getting mean & std')
-    logging.info( GPUtil.showUtilization() )
-   
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.land+'_'+args.dim)
+
     if args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + 3*z_dim +1  # Eta field, plus Temp, U, V through depth, for each past time, plus masks
-       no_out_channels = 3*z_dim + 1                                # Eta field, plus Temp, U, V through depth, just once
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks
+       no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
        no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
-       no_out_channels = 4                    # Eta, Temp, U, V just once
+       no_out_channels = 4                # Eta, Temp, U, V just once
  
-    #-------------------------------------------------------------------------------------
-    # Create training and valdiation Datsets and dataloaders with normalisation
-    #-------------------------------------------------------------------------------------
-    # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
-    if args.dim == '2d':
-       Train_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
-                                             args.histlen, args.land, tic,
-        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
-                                                                               args.histlen, args.dim)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_2d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
-                                             args.histlen, args.land, tic,
-        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
-                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
-                                                                               args.histlen, args.dim)] ) )
-    elif args.dim == '3d':
-       Train_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, dataset_end_index,
-                                             args.histlen, args.land, tic,
-        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
-                                                                                    args.histlen, args.dim)] ) )
-       Val_Dataset   = rr.MITGCM_Dataset_3d( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate, dataset_end_index,
-                                             args.histlen, args.land, tic,
-        ####### NEED TO UPDATE THIS FOR INPUT AND OUTPUT stats separetely!!
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(data_mean, data_std, data_range,
-                                                                                    args.histlen, args.dim)] ) )
+    #--------------------------------------------------------
+    # Create training and validation datsets and dataloaders
+    #--------------------------------------------------------
+    if args.landvalue == -999:
+       landvalues = inputs_mean
     else:
-       raise RuntimeError("ERROR!!! what's happening with dimensions?!")
+       landvalues = np.ones(inputs_mean.shape)
+       landvalues[:] = args.landvalue
+
+    Train_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
+                                                                               args.histlen, no_out_channels, args.dim)] ) )
+    Val_Dataset   = rr.MITGCM_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
+                                             args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                               targets_mean, targets_std, targets_range,
+                                                                               args.histlen, no_out_channels, args.dim)] ) )
 
     train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
                                                num_workers=args.numworkers, pin_memory=True )
     val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True,
                                                num_workers=args.numworkers, pin_memory=True )
-
-    TimeCheck(tic, 'reading training & validation data')
-    logging.info( GPUtil.showUtilization() )
 
     #---------------
     # Set up models
@@ -192,60 +193,44 @@ if __name__ == "__main__":
     h=[]
     optimizer=[]
     for i in range(len(args.modelseeds)):
-       h_temp, optimizer_temp = CreateModel(args.modelstyle, no_in_channels, no_out_channels, 0.0001,
-                                args.seed, args.padding, x_dim, y_dim_used, z_dim, args.kernsize)
+       h_temp, optimizer_temp = CreateModel( args.modelstyle, no_in_channels, no_out_channels, args.learningrate, rand_seed, args.padding,
+                                ds.isel(T=slice(0)).sizes['X'], y_dim_used, z_dim, args.kernsize, args.weightdecay )
        h.append(h_temp)
        optimizer.append(optimizer_temp)
    
-    TimeCheck(tic, 'setting up model')
-    logging.info( GPUtil.showUtilization() )
-    
     #-----------------
     # Load the models
     #-----------------
-    # define dictionary to store losses at each epoch
-    losses=[]
     for i in range(len(args.modelseeds)):
-       losses.append({'train'     : [],
-                      'train_Temp': [],
-                      'train_U'   : [],
-                      'train_V'   : [],
-                      'train_Eta' : [],
-                      'val'       : [] })
+       losses = {'train'     : [],            
+                  'train_Temp': [],            
+                  'train_U'   : [],
+                  'train_V'   : [],
+                  'train_Eta' : [],
+                  'val'       : [] } 
 
-       model_name = args.land+'_ksize'+str(args.kernsize)+'_'+args.modelstyle+'_lr0.0001_seed'+str(args.modelseeds[i]) 
- 
-       LoadModel(model_name, h[i], optimizer[i], args.savedepochs, 'inf', losses[i])
-    
-    TimeCheck(tic, 'loading/training model')
-    logging.info( GPUtil.showUtilization() )
+       model_i_name = base_name+'_seed'+str(args.modelseeds[i])
+       LoadModel(model_i_name, h[i], optimizer[i], args.savedepochs, 'inf', losses, args.best) 
     
     #-------------------------------
     # Assess the multi-model set up 
     #-------------------------------
 
-    OutputStats(args.name, MeanStd_prefix, MITGCM_filename, train_loader, h, args.savedepochs, y_dim_used, args.dim, no_in_channels, no_out_channels)
+    OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, train_loader, h, args.savedepochs, y_dim_used, args.dim,
+                   args.histlen, no_in_channels, no_out_channels, args.land, 'training')
 
-    TimeCheck(tic, 'assessing model')
-    logging.info( GPUtil.showUtilization() )
+    OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, args.savedepochs, y_dim_used, args.dim,
+                   args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
 
     #---------------------
     # Iteratively predict 
     #---------------------
-    if args.dim == '2d':
-       Iterate_Dataset = rr.MITGCM_Dataset_2d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.histlen, args.land, tic, 
-                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
+    Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                    targets_mean, targets_std, targets_range,
                                                                                     args.histlen, no_out_channels, args.dim)] ) )
-    elif args.dim == '3d':
-       Iterate_Dataset = rr.MITGCM_Dataset_3d( MITGCM_filename, 0.0, train_end_ratio, 1, dataset_end_index, args.histlen, args.land, tic, 
-                                                  transform = transforms.Compose( [ rr.RF_Normalise(data_mean, data_std, data_range,
-                                                                                    args.histlen, no_out_channels, args.dim)] ) )
+
+    IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, args.savedepochs,
+                       y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.iteratemethod)
     
-    IterativelyPredict(args.name, MeanStd_prefix, MITGCM_filename, Iterate_Dataset, h, start, for_len, args.savedepochs, y_dim_used, args.land, args.dim, no_in_channels, no_out_channels) 
-    
-    TimeCheck(tic, 'iteratively forecasting')
-    logging.info( GPUtil.showUtilization() )
-    
-    TimeCheck(tic, 'script')
-    logging.info( GPUtil.showUtilization() )
 

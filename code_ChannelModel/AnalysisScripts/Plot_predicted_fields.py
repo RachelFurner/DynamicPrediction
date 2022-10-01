@@ -19,11 +19,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name = '3e6Spits_UNet2dtransp_histlen1_seed30475'    
+dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'    
 epochs = '200'
-iteration_len = 180
+iteration_len = 60  
 
-animation_end = 50   
+animation_end = 60   
 
 #-----------
 
@@ -82,21 +82,21 @@ for time in range(50,51):
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_Pred_U[time,level,:,:], 'U',
+   fig = ChnPlt.plot_depth_fld(masked_Pred_U[time,level,:,:], 'East-West Velocity',
                                level, da_X.values, da_Y.values, da_Z.values,
                                min_value=-1.2, max_value=1.2)
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+model_name+'_U_level'+str(level)+'_time'+f'{time:03}'+'.eps',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_Pred_V[time,level,:,:], 'V',
+   fig = ChnPlt.plot_depth_fld(masked_Pred_V[time,level,:,:], 'North-South Velocity',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
                                min_value=-1.2, max_value=1.2)
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+model_name+'_V_level'+str(level)+'_time'+f'{time:03}'+'.eps',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_Pred_Eta[time,:,:], 'SSH',
+   fig = ChnPlt.plot_depth_fld(masked_Pred_Eta[time,:,:], 'Sea Surface Height',
                                0, da_X.values, da_Y.values, da_Z.values, title=None,
                                min_value=-1, max_value=1)
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+model_name+'_Eta_level'+str(level)+'_time'+f'{time:03}'+'.eps', 

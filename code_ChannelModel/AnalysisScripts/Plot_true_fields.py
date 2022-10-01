@@ -19,11 +19,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name = 'lre6_LandSpits_Spits_UNet2dtransp_histlen1_seed30475'    
+dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'    
 epochs = '200'
-iteration_len = 180
+iteration_len = 60 
 
-animation_end = 50   
+animation_end = 60   
 
 #-----------
 
@@ -38,7 +38,7 @@ x_coord = point[2]
 #------------------------
 print('reading in data')
 #------------------------
-iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forecast'+str(iteration_len)+'.nc'
+iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_simple_Forecast'+str(iteration_len)+'.nc'
 iter_ds = xr.open_dataset(iter_data_filename)
 da_true_Temp = iter_ds['True_Temp']
 da_true_U    = iter_ds['True_U']
@@ -72,34 +72,36 @@ masked_Pred_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_pred_Eta.values )
 #-------------------------------
 # Plot spatial plots to animate
 #-------------------------------
-#for time in range(0,animation_end):
-for time in range(50,51):
+for time in range(0,animation_end):
 
    fig = ChnPlt.plot_depth_fld(masked_True_Temp[time,level,:,:], 'Temperature',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
-                               min_value=0., max_value=6.5)
-   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_Temp_level'+str(level)+'_time'+f'{time:03}'+'.eps',
+                               min_value=0., max_value=6.5, extend='max')
+                               #min_value=0., max_value=0.04, extend='max')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_Temp_level'+str(level)+'_time'+f'{time:03}'+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_True_U[time,level,:,:], 'U',
+   fig = ChnPlt.plot_depth_fld(masked_True_U[time,level,:,:], 'East-West Velocity',
                                level, da_X.values, da_Y.values, da_Z.values,
-                               min_value=-1.2, max_value=1.2)
-   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_U_level'+str(level)+'_time'+f'{time:03}'+'.eps',
+                               min_value=-1.2, max_value=1.2, extend='both')
+                               #min_value=-0.3, max_value=0.3, extend='both')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_U_level'+str(level)+'_time'+f'{time:03}'+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_True_V[time,level,:,:], 'V',
+   fig = ChnPlt.plot_depth_fld(masked_True_V[time,level,:,:], 'North-South Velocity',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
-                               min_value=-1.2, max_value=1.2)
-   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_V_level'+str(level)+'_time'+f'{time:03}'+'.eps',
+                               min_value=-1.2, max_value=1.2, extend = 'both')
+                               #min_value=-0.3, max_value=0.3, extend = 'both')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_V_level'+str(level)+'_time'+f'{time:03}'+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_True_Eta[time,:,:], 'SSH',
+   fig = ChnPlt.plot_depth_fld(masked_True_Eta[time,:,:], 'Sea Surface Height',
                                0, da_X.values, da_Y.values, da_Z.values, title=None,
-                               min_value=-1, max_value=1)
-   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_Eta_level'+str(level)+'_time'+f'{time:03}'+'.eps', 
+                               min_value=-1., max_value=1., extend = 'both')
+   plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/truefields_'+model_name+'_Eta_level'+str(level)+'_time'+f'{time:03}'+'.png', 
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 

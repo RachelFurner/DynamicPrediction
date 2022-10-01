@@ -19,8 +19,8 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '99'
-dir_name = 'ExcLand_ksize3_UNet2dtransp_lr0.0001_seed30475'
+epochs = '200'
+dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'
 
 model_name = dir_name+'_'+epochs+'epochs'
 
@@ -56,17 +56,17 @@ fig = ChnPlt.plot_depth_fld_diff(da_True_Temp.values[time,level,:,:], 'True Temp
                                  level, da_X.values, da_Y.values, da_Z.values, title=None)
 plt.savefig(rootdir+'/PLOTS/'+model_name+'_Temp_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = ChnPlt.plot_depth_fld_diff(da_True_U.values[time,level,:,:], 'True U', 
-                                 da_Pred_U.values[time,level,:,:], 'Predicted U',
+fig = ChnPlt.plot_depth_fld_diff(da_True_U.values[time,level,:,:], 'True East-West Velocity', 
+                                 da_Pred_U.values[time,level,:,:], 'Predicted East-West Velocity',
                                  level, da_X.values, da_Y.values, da_Z.values)
 plt.savefig(rootdir+'/PLOTS/'+model_name+'_U_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = ChnPlt.plot_depth_fld_diff(da_True_V.values[time,level,:,:], 'True V',
-                                 da_Pred_V.values[time,level,:,:], 'Predicted V',
+fig = ChnPlt.plot_depth_fld_diff(da_True_V.values[time,level,:,:], 'True North-South Velocity',
+                                 da_Pred_V.values[time,level,:,:], 'Predicted North-South Velocity',
                                  level, da_X.values, da_Y.values, da_Z.values, title=None)
 plt.savefig(rootdir+'/PLOTS/'+model_name+'_V_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-fig = ChnPlt.plot_depth_fld_diff(da_True_Eta.values[time,:,:], 'True Eta',
-                                 da_Pred_Eta.values[time,:,:], 'Predicted Eta',
+fig = ChnPlt.plot_depth_fld_diff(da_True_Eta.values[time,:,:], 'True Sea Surface Height',
+                                 da_Pred_Eta.values[time,:,:], 'Predicted Sea Surface Height',
                                  0, da_X.values, da_Y.values, da_Z.values, title=None)
 plt.savefig(rootdir+'/PLOTS/'+model_name+'_Eta_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)

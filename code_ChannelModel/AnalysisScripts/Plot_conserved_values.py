@@ -19,13 +19,14 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-model_dir_name = 'lr1e5IncLand_UNet2dtransp_histlen1_seed30475'
+model_dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'
 epochs = '200'
-for_len = '180'
+for_len = '120'
+iteration_method = 'simple'
 
 #-----------
 
-model_name = model_dir_name+'_'+epochs+'epochs'
+model_name = model_dir_name+'_'+epochs+'epochs_'+iteration_method
 
 rootdir = '../../../Channel_nn_Outputs/'+model_dir_name
 
@@ -52,7 +53,8 @@ ax.plot(np.nansum(da_True_Eta.values, axis=(1,2)), label='Truth')
 ax.plot(np.nansum(da_Pred_Eta.values, axis=(1,2)), label='Predicted')
 ax.set_xlabel('No days')
 ax.set_ylabel('SSH change')
-ax.set_title('Change in total SSH over entire domain')
+ax.set_title('Change in total SSH')
+ax.set_ylim(ymin=-50,ymax=50)
 ax.legend()
 plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_Eta.png', bbox_inches = 'tight', pad_inches = 0.1)
 
@@ -63,7 +65,8 @@ ax.plot(np.nansum( np.add(np.square(da_True_U.values), np.square(da_True_V.value
 ax.plot(np.nansum( np.add(np.square(da_Pred_U.values), np.square(da_Pred_V.values)), axis=(1,2,3) ), label='Predicted')
 ax.set_xlabel('No days')
 ax.set_ylabel('TKE change')
-ax.set_title('Change in total kinetic energy over entire domain')
+ax.set_ylim(ymin=35000,ymax=45000)
+ax.set_title('Total kinetic energy')
 ax.legend()
 plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_TKE.png', bbox_inches = 'tight', pad_inches = 0.1)
 
