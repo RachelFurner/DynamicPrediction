@@ -27,9 +27,9 @@ time_step = '24hrs'
 
 #----------------------
 
-datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
-#data_filename=datadir + '12hrly_data.nc'
-data_filename=datadir + '12hrly_small_set.nc'
+datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/'
+data_filename=datadir + '12hrly_data.nc'
+#data_filename=datadir + '12hrly_small_set.nc'
 grid_filename=datadir + 'grid.nc'
 mon_file = datadir + 'monitor.nc'
 stats_file = datadir + 'stats.nc'
@@ -82,17 +82,17 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['Mea
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean U Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean East-West Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean V Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean North-South Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=-0.1, max_value=0.1, extend='both')
 plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanEta'][:,:], np.nan), 'Mean Eta', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanEta'][:,:], np.nan), 'Mean Sea Surface Height', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/MeanEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
@@ -103,17 +103,17 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['Std
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std U Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std East-West Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std V Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std North-South Velocity', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdVVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdEta'][:,:], np.nan), 'Std Eta', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdEta'][:,:], np.nan), 'Std Sea Surface Height', level,
                                    da_X.values, da_Y.values, da_Z.values,
                                    title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdEta_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)

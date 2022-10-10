@@ -19,8 +19,9 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-epochs = '120'
-dir_name = 'Spits_UNet2dtransp_histlen3_seed30475'
+epochs = '200'
+#dir_name = 'Spits_UNet2dtransp_histlen3_seed30475'
+dir_name = 'MultiModel_Spits_UNet2dtransp_histlen1'
 model_name = dir_name+'_'+epochs+'epochs'
 trainorval='training'
 #trainorval='validation'

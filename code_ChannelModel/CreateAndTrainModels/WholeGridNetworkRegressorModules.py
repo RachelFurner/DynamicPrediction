@@ -12,6 +12,7 @@
 import sys
 sys.path.append('../Tools')
 import ReadRoutines as rr
+import Channel_Model_Plotting as ChnPlt
 
 import numpy as np
 import os
@@ -40,195 +41,11 @@ import multiprocessing as mp
 
 from scipy.ndimage import gaussian_filter
 
-def CalcMeanStd(MeanStd_prefix, MITGCM_filename, train_end_ratio, subsample_rate,
-                batch_size, land, dimension, bdy_weight, histlen, grid_filename, tic):
-
-   histogram_inputs=[ np.zeros((0)),np.zeros((0)),np.zeros((0)),np.zeros((0)) ]
-   histogram_targets=[ np.zeros((0)),np.zeros((0)),np.zeros((0)),np.zeros((0)) ]
-
-   no_depth_levels = 38 ## Note this is hard coded!!
-
-   if dimension == '2d':
-      mean_std_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic, bdy_weight,
-                                               np.zeros(( histlen*(3*no_depth_levels+1) )), grid_filename, dimension, transform=None) # Use histlen=1 for this, shouldn't impact it
-      mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
-      #------------------------------------
-      # First calculate the mean and range
-      #------------------------------------
-      batch_no = 0
-      count = 0.
-      for input_batch, target_batch, masks in mean_std_loader:
-      
-          input_batch = input_batch.cpu().detach().numpy()
-          target_batch = target_batch.cpu().detach().numpy()
-
-          # Save data for histograms of un-normed data
-          if batch_no == 0:
-             for var in range(3):
-                histogram_inputs[var] = np.concatenate(( histogram_inputs[var], 
-                    input_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:].reshape(-1) ))
-                histogram_targets[var] = np.concatenate(( histogram_targets[var],
-                    target_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:].reshape(-1) ))
-             histogram_inputs[3] = np.concatenate(( histogram_inputs[3], input_batch[:,no_depth_levels*3,:,:].reshape(-1) ))
-             histogram_targets[3] = np.concatenate(( histogram_targets[3], target_batch[:,no_depth_levels*3,:,:].reshape(-1) ))
-
-          # SHAPE: (batch_size, channels, y, x)
-
-          # Calc mean of this batch
-          batch_inputs_mean  = np.mean(input_batch, axis=(0,2,3) )
-          batch_targets_mean  = np.mean(target_batch, axis=(0,2,3) )
-
-          #combine with previous mean and calc min and max
-          if batch_no==0:
-             inputs_mean = batch_inputs_mean  
-             inputs_min  = np.amin( input_batch, axis = (0,2,3) )
-             inputs_max  = np.amax( input_batch, axis = (0,2,3) )
-             targets_mean = batch_targets_mean  
-             targets_min  = np.amin( target_batch, axis = (0,2,3) )
-             targets_max  = np.amax( target_batch, axis = (0,2,3) )
-          else:
-             inputs_mean = 1./(count+input_batch.shape[0]) * ( count*inputs_mean + input_batch.shape[0]*batch_inputs_mean )
-             inputs_min  = np.minimum( inputs_min, np.amin(input_batch, axis=(0,2,3) ) )
-             inputs_max  = np.maximum( inputs_max, np.amax(input_batch, axis=(0,2,3) ) )
-             targets_mean = 1./(count+target_batch.shape[0]) * ( count*targets_mean + target_batch.shape[0]*batch_targets_mean )
-             targets_min  = np.minimum( targets_min, np.amin(target_batch, axis=(0,2,3) ) )
-             targets_max  = np.maximum( targets_max, np.amax(target_batch, axis=(0,2,3) ) )
-
-          batch_no = batch_no+1
-          count = count + input_batch.shape[0]
-
-      ## combine across all depth levels in each field (samples sizes are the same across all depths, so don't need to account for this)
-      for i in range(3):  # Temp, U, V. No need to do for Eta as already 2-d/1 channel. Sal not included in model as const.
-         inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels]  = 1./no_depth_levels * np.sum(inputs_mean[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_min [i*no_depth_levels:(i+1)*no_depth_levels]  = np.amin(inputs_min[i*no_depth_levels:(i+1)*no_depth_levels])
-         inputs_max [i*no_depth_levels:(i+1)*no_depth_levels]  = np.amax(inputs_max[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_mean[i*no_depth_levels:(i+1)*no_depth_levels] = 1./no_depth_levels * np.sum(targets_mean[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_min [i*no_depth_levels:(i+1)*no_depth_levels] = np.amin(targets_min[i*no_depth_levels:(i+1)*no_depth_levels])
-         targets_max [i*no_depth_levels:(i+1)*no_depth_levels] = np.amax(targets_max[i*no_depth_levels:(i+1)*no_depth_levels])
-
-      inputs_range = inputs_max - inputs_min
-      targets_range = targets_max - targets_min
-
-      #------------------------
-      # Next calculate the std 
-      #------------------------
-      count = 0.
-      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
-      for input_batch, target_batch, masks in mean_std_loader:
-          
-          input_batch = input_batch.cpu().detach().numpy()
-          target_batch = target_batch.cpu().detach().numpy()
-
-          # SHAPE: (batch_size, channels, y, x)
-   
-          inputs_dfm = np.zeros((input_batch.shape[1]))
-          targets_dfm = np.zeros((target_batch.shape[1]))
-          # Calc diff from mean for this batch
-          for channel in range(input_batch.shape[1]):
-             inputs_dfm[channel]  = inputs_dfm[channel] + np.sum( np.square( input_batch[:,channel,:,:]-inputs_mean[channel] ) )
-          for channel in range(target_batch.shape[1]):
-             targets_dfm[channel]  = targets_dfm[channel] + np.sum( np.square( target_batch[:,channel,:,:]-targets_mean[channel] ) )
-          count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]
-   
-      ## sum across all depth levels in each field and divide by number of entries
-      for i in range(3):  # Temp, U, V. Sal not included in model as const. Eta already 2d channel.
-         inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(inputs_dfm[i*no_depth_levels:(i+1)*no_depth_levels])/(no_depth_levels*count)
-         targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels]  = np.sum(targets_dfm[i*no_depth_levels:(i+1)*no_depth_levels])/(no_depth_levels*count)
-      inputs_dfm[3*no_depth_levels]  = np.sum(inputs_dfm[3*no_depth_levels])/count
-      targets_dfm[3*no_depth_levels] = np.sum(targets_dfm[3*no_depth_levels])/count
-
-      inputs_std = np.sqrt(inputs_dfm)
-      targets_std = np.sqrt(targets_dfm)
-   
-   elif dimension == '3d':
-      mean_std_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, 1, land, tic, dimension,
-                                            np.zeros(( histlen*4 )), grid_filename, dimension,  transform=None)    # Use histlen=1 for this, as doesn't make much impact
-      mean_std_loader = data.DataLoader(mean_std_Dataset, batch_size=batch_size, shuffle=False, num_workers=0)
-      
-      #------------------------------------
-      # First calculate the mean and range
-      #------------------------------------
-      batch_no = 0
-      count = 0.
-      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
-      for input_batch, target_batch, masks in mean_std_loader:
- 
-          input_batch = input_batch.cpu().detach().numpy()
-          target_batch = target_batch.cpu().detach().numpy()
-
-          if batch_no == 0:
-             for var in range(3):
-                histogram_inputs[var] = np.concatenate(( histogram_inputs[var], input_batch[:,var,:,:,:].reshape(-1) ))
-                histogram_targets[var] = np.concatenate(( histogram_targets[var], target_batch[:,var,:,:,:].reshape(-1) ))
-             histogram_inputs[3] = np.concatenate(( histogram_inputs[3], input_batch[:,3,0,:,:].reshape(-1) ))
-             histogram_targets[3] = np.concatenate(( histogram_targets[3], target_batch[:,3,0,:,:].reshape(-1) ))
-
-          # SHAPE: (batch_size, channels, z, y, x)
- 
-          # Calc mean of this batch
-          batch_inputs_mean  = np.mean(input_batch, axis = (0,2,3,4))
-          batch_targets_mean  = np.mean(target_batch, axis = (0,2,3,4))
-    
-          #combine with previous mean and calc min and max
-          if batch_no==0:
-             inputs_mean = batch_inputs_mean  
-             inputs_min  = np.amin( input_batch, axis = (0,2,3,4) )
-             inputs_max  = np.amax( input_batch, axis = (0,2,3,4) )
-             targets_mean = batch_targets_mean  
-             targets_min  = np.amin( target_batch, axis = (0,2,3,4) )
-             targets_max  = np.amax( target_batch, axis = (0,2,3,4) )
-          else:
-             inputs_mean = 1./(count+input_batch.shape[0]) * ( count*inputs_mean + input_batch.shape[0]*batch_inputs_mean )
-             inputs_min  = np.minimum( inputs_min, np.amin(input_batch, axis=(0,2,3,4) ) )
-             inputs_max  = np.maximum( inputs_max, np.amax(input_batch, axis=(0,2,3,4) ) )
-             targets_mean = 1./(count+target_batch.shape[0]) * ( count*targets_mean + target_batch.shape[0]*batch_targets_mean )
-             targets_min  = np.minimum( targets_min, np.amin(target_batch, axis=(0,2,3,4) ) )
-             targets_max  = np.maximum( targets_max, np.amax(target_batch, axis=(0,2,3,4) ) )
-   
-          batch_no = batch_no+1
-          count = count + input_batch.shape[0]
-   
-      inputs_range = inputs_max - inputs_min
-      targets_range = targets_max - targets_min
-   
-      #-------------------------
-      # Next calculate the std 
-      #-------------------------
-      count = 0.
-      #for input_batch, target_batch, masks, bdy_masks in mean_std_loader:
-      for input_batch, target_batch, masks in mean_std_loader:
-
-          input_batch = input_batch.cpu().detach().numpy()
-          target_batch = target_batch.cpu().detach().numpy()
-
-          # SHAPE: (batch_size, channels, z, y, x)
-   
-          inputs_dfm = np.zeros((input_batch.shape[1]))
-          targets_dfm = np.zeros((target_batch.shape[1]))
-          # Calc diff from mean for this batch
-          for channel in range(input_batch.shape[1]):
-             inputs_dfm[channel]  = inputs_dfm[channel] + np.sum( np.square( input_batch[:,channel,:,:,:]-inputs_mean[channel] ) )
-          for channel in range(target_batch.shape[1]):
-             targets_dfm[channel]  = targets_dfm[channel] + np.sum( np.square( target_batch[:,channel,:,:,:]-targets_mean[channel] ) )
-          count = count + input_batch.shape[0]*input_batch.shape[2]*input_batch.shape[3]*input_batch.shape[4]
-   
-      inputs_var = inputs_dfm / count
-      targets_var = targets_dfm / count
-       
-      inputs_std = np.sqrt(inputs_var)
-      targets_std = np.sqrt(targets_var)
-
-   plot_histograms(MeanStd_prefix, histogram_inputs, histogram_targets, norm='RealSpace')
-   
-   ## Save to file
-   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
-   np.savez( mean_std_file, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range )
-   
-   histogram_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_RealSpace_histogram.npz'
-   np.savez( histogram_file, histogram_inputs, histogram_targets )
-   
-def ReadMeanStd(MeanStd_prefix):
-   mean_std_file = '../../../Channel_nn_Outputs/'+MeanStd_prefix+'_MeanStd.npz'
+def ReadMeanStd(dim, no_levels):
+   if dim =='2d':
+      mean_std_file = '../../../Channel_nn_Outputs/Spits_2d_MeanStd.npz'
+   elif dim =='3d':
+      mean_std_file = '../../../Channel_nn_Outputs/Spits_3d_MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
@@ -236,6 +53,36 @@ def ReadMeanStd(MeanStd_prefix):
    targets_mean  = mean_std_data['arr_3']
    targets_std   = mean_std_data['arr_4']
    targets_range = mean_std_data['arr_5']
+
+   ## Expand arrays to multiple levels for 2d approach
+   #if dim =='2d':
+   #   tmp_inputs_mean  = np.zeros((3*no_levels+1))
+   #   tmp_inputs_std   = np.zeros((3*no_levels+1))
+   #   tmp_inputs_range = np.zeros((3*no_levels+1))
+   #   tmp_targets_mean  = np.zeros((3*no_levels+1))
+   #   tmp_targets_std   = np.zeros((3*no_levels+1))
+   #   tmp_targets_range = np.zeros((3*no_levels+1))
+
+   #   for var in range(3):
+   #      tmp_inputs_mean[var*no_levels:(var+1)*no_levels] = tmp_inputs_mean[var]
+   #      tmp_inputs_std[var*no_levels:(var+1)*no_levels] = tmp_inputs_std[var]
+   #      tmp_inputs_range[var*no_levels:(var+1)*no_levels] = tmp_inputs_range[var]
+   #      tmp_targets_mean[var*no_levels:(var+1)*no_levels] = tmp_targets_mean[var]
+   #      tmp_targets_std[var*no_levels:(var+1)*no_levels] = tmp_targets_std[var]
+   #      tmp_targets_range[var*no_levels:(var+1)*no_levels] = tmp_targets_range[var]
+   #   tmp_inputs_mean[3*no_levels] = tmp_inputs_mean[3]
+   #   tmp_inputs_std[3*no_levels] = tmp_inputs_std[3]
+   #   tmp_inputs_range[3*no_levels] = tmp_inputs_range[3]
+   #   tmp_targets_mean[3*no_levels] = tmp_targets_mean[3]
+   #   tmp_targets_std[3*no_levels] = tmp_targets_std[3]
+   #   tmp_targets_range[3*no_levels] = tmp_targets_range[3]
+
+   #   inputs_mean  = tmp_inputs_mean
+   #   inputs_std   = tmp_inputs_std 
+   #   inputs_range = tmp_inputs_range
+   #   targets_mean  = tmp_targets_mean
+   #   targets_std   = tmp_targets_std 
+   #   targets_range = tmp_targets_range
 
    return(inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range)
 
@@ -318,9 +165,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
    torch.backends.cudnn.deterministic = True
    torch.backends.cudnn.benchmark = False
 
-   histogram_inputs=[ np.zeros((0)),np.zeros((0)),np.zeros((0)),np.zeros((0)) ]
-   histogram_targets=[ np.zeros((0)),np.zeros((0)),np.zeros((0)),np.zeros((0)) ]
-
    logging.info('###### TRAINING MODEL ######')
    for epoch in range( start_epoch, num_epochs+start_epoch ):
 
@@ -394,26 +238,6 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
            # update parameters
            optimizer.step()
    
-           ## Doesn't work in current form with histlen changes to ordering of data - need to redo.
-           if epoch == start_epoch and batch_no == 0:
-              # Save info to plot histogram of data
-              # ignoring histlen and just taking first time stamp of inputs
-              if dimension == '2d':
-                 for var in range(3):
-                    histogram_inputs[var] = np.concatenate(( histogram_inputs[var], 
-                        input_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:].cpu().detach().numpy().reshape(-1) ))
-                    histogram_targets[var] = np.concatenate(( histogram_targets[var],
-                        target_batch[:,no_depth_levels*var:no_depth_levels*(var+1),:,:].cpu().detach().numpy().reshape(-1) ))
-                 histogram_inputs[3] = np.concatenate(( histogram_inputs[3],
-                        input_batch[:,no_depth_levels*3,:,:].cpu().detach().numpy().reshape(-1) ))
-                 histogram_targets[3] = np.concatenate(( histogram_targets[3],
-                        target_batch[:,no_depth_levels*3,:,:].cpu().detach().numpy().reshape(-1) ))
-              elif dimension == '3d':
-                 for var in range(3):
-                    histogram_inputs[var] = np.concatenate(( histogram_inputs[var], input_batch[:,var,:,:,:].cpu().detach().numpy().reshape(-1) ))
-                    histogram_targets[var] = np.concatenate(( histogram_targets[var], target_batch[:,var,:,:,:].cpu().detach().numpy().reshape(-1) ))
-                 histogram_inputs[3] = np.concatenate(( histogram_inputs[3], input_batch[:,3,0,:,:].cpu().detach().numpy().reshape(-1) ))
-                 histogram_targets[3] = np.concatenate(( histogram_targets[3], target_batch[:,3,0,:,:].cpu().detach().numpy().reshape(-1) ))
            del input_batch
            del target_batch
            del predicted_batch
@@ -493,16 +317,16 @@ def TrainModel(model_name, dimension, histlen, tic, TEST, no_tr_samples, no_val_
        #TimeCheck(tic, 'Epoch '+str(epoch))
 
    logging.info('End of train model')
-   return(losses, histogram_inputs, histogram_targets)
+   return(losses)
 
 def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_channels, MeanStd_prefix):
 
    logging.info('Making scatter plots')
    plt.rcParams.update({'font.size': 14})
 
-   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
-
    no_depth_levels = 38  # Hard coded...perhaps should change...?
+
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, no_depth_levels)
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -597,6 +421,7 @@ def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses, best):
       pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedBESTModel.pt'
    else:
       pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
+   print(pkl_filename)
    checkpoint = torch.load(pkl_filename)
    h.load_state_dict(checkpoint['model_state_dict'])
    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -634,32 +459,6 @@ def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losse
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
-def plot_histograms(data_name, histogram_inputs, histogram_targets, norm='norm'):
-   plt.rcParams.update({'font.size': 22})
-   var_name=['Temperature', 'U velocity', 'V velocity', 'Eta']
-   x_label=['Temperature', 'U velocity', 'V velocity', 'Eta']
-   y_top = [100, 100, 100, 100] 
-   # plotting histograms of data
-   #no_bins = 500
-   no_bins = 50
-   labels = ['Temp', 'U_vel', 'V_vel', 'Eta']
-   for var in range(4):
-       fig_histogram = plt.figure(figsize=(10, 8))
-       ax1 = fig_histogram.add_subplot(111)
-       ax1.hist(histogram_inputs[var], bins = no_bins)
-       ax1.set_title('Histogram of '+var_name[var]+' input data')
-       #ax1.set_ylim(top=y_top[var])
-       plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+data_name+'_histogram_'+str(labels[var])+'_inputs_'+norm+'.png', 
-                   bbox_inches = 'tight', pad_inches = 0.1)
-       plt.close()
-       fig_histogram = plt.figure(figsize=(10, 8))
-       ax1 = fig_histogram.add_subplot(111)
-       ax1.hist(histogram_targets[var], bins = no_bins)
-       ax1.set_title('Histogram of '+var_name[var]+' target data')
-       plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+data_name+'_histogram_'+str(labels[var])+'_targets_'+norm+'.png', 
-                   bbox_inches = 'tight', pad_inches = 0.1)
-       plt.close()
-
 def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
                 histlen, no_in_channels, no_out_channels, land, file_append):
    #-------------------------------------------------------------
@@ -674,13 +473,13 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
-
    # Read in grid data from MITgcm file
    mitgcm_ds = xr.open_dataset(mitgcm_filename)
    da_X = mitgcm_ds['X']
    da_Y = mitgcm_ds['Yp1']
    da_Z = mitgcm_ds['Zmd000038'] 
+
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z)
 
    if land == 'ExcLand':
       da_Y = da_Y[3:]
@@ -726,6 +525,11 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
           # Denormalise
           target_batch = rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, dimension)
           predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, dimension)
+          input_batch = rr.RF_DeNormalise(input_batch.cpu().detach().numpy(), inputs_mean, inputs_std, inputs_range, dimension)
+
+          # Convert from increments to fields for outputting
+          target_batch = input_batch + target_batch
+          predicted_batch = input_batch + predicted_batch
 
           # Add summed error of this batch
           if batch_no==0:
@@ -866,17 +670,15 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
 
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(MeanStd_prefix)
-
-   no_depth_levels = 38  # Hard coded...perhaps should change...?
-
-   landvalues = torch.tensor(landvalues)
-
    # Read in grid data from MITgcm file
    mitgcm_ds = xr.open_dataset(mitgcm_filename)
    da_X = mitgcm_ds['X']
    da_Y = mitgcm_ds['Yp1']
    da_Z = mitgcm_ds['Zmd000038'] 
+   no_depth_levels = 38   #Unesseccary duplication, could use with da_Z shape , should change...
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z)
+
+   landvalues = torch.tensor(landvalues)
 
    if land == 'ExcLand':
       da_Y = da_Y[3:]
@@ -892,7 +694,6 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
          h = h.cuda()
 
    # Read in first sample from MITgcm dataset and save as first entry in both arrays
-   #input_sample, target_sample, masks, bdy_masks = Iterate_Dataset.__getitem__(start)
    input_sample, target_sample, masks = Iterate_Dataset.__getitem__(start)
    # Give extra dimension at front (as usually number of samples)
    input_sample = input_sample.unsqueeze(0)
@@ -930,7 +731,6 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    # Make iterative forecast, saving predictions as we go, and pull out MITgcm data
    with torch.no_grad():
       for time in range(for_len):
-         print(time)
          # Make prediction
          # multi model ensemble, or single model predictions
          if isinstance(h, list):
@@ -952,16 +752,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
 
          # Calculate next field, by combining increment with field
          if iterate_method == 'simple':
-            next_field = iterated_fields[-1] + predicted[0]
-         elif iterate_method == 'smooth01':
-            next_field = iterated_fields[-1] + predicted[0]
-            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.1) )
-         elif iterate_method == 'smooth001':
-            next_field = iterated_fields[-1] + predicted[0]
-            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.01) )
-         elif iterate_method == 'smooth0001':
-            next_field = iterated_fields[-1] + predicted[0]
-            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.001) )
+            next_field = iterated_fields[-1] + predicted
+         elif iterate_method == 'smooth':
+            next_field = iterated_fields[-1] + predicted
+            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.44 ) )
          elif iterate_method == 'AB2':
             if time == 0:
                next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start+time+1)[0]
@@ -1034,11 +828,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
             MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
                                        [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
                                        axis=0 )
-            input_sample = torch.zeros((1, histlen*(3*no_depth_levels+1), y_dim_used, da_X.shape[0]))
             for time in range(histlen-1):
                input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:] = \
                                  input_sample[0,(time+1)*(3*no_depth_levels+1):(time+2)*(3*no_depth_levels+1),:,:]
-            input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:] = next_field
+            input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:] = next_field[0,:,:,:]
 
          elif dimension == '3d':
             # Plus one to time dimension as we want the next step, to match time stamp of prediction
@@ -1070,6 +863,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    nc_file.createDimension('Z', da_Z.values.shape[0])
    nc_file.createDimension('Y', y_dim_used)
    nc_file.createDimension('X', da_X.values.shape[0])
+   
    # Create variables
    nc_T = nc_file.createVariable('T', 'i4', 'T')
    nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
@@ -1183,3 +977,91 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_UErrors[:,:,:,:]    = iterated_fields[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]
       nc_VErrors[:,:,:,:]    = iterated_fields[:,2,:,:,:] - MITgcm_data[:,2,:,:,:]
       nc_EtaErrors[:,:,:]    = iterated_fields[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]
+
+
+def PlotTrainingEvolution(model_name, MeanStd_prefix, mitgcm_filename, Evolution_Dataset, h, optimizer, epochs_list,
+                          dimension, histlen, no_in_channels, no_out_channels, landvalues):
+
+   level = 2
+   time = 5
+   
+   rootdir = '../../../Channel_nn_Outputs/'+model_name
+   
+   device = 'cuda' if torch.cuda.is_available() else 'cpu'
+   mitgcm_ds = xr.open_dataset(mitgcm_filename)
+   da_X = mitgcm_ds['X']
+   da_Y = mitgcm_ds['Y']
+   da_Z = mitgcm_ds['Zmd000038']
+   no_levels = da_Z.shape[0]
+   
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, no_levels)
+
+   input_sample, target_sample, masks = Evolution_Dataset.__getitem__(time)
+   input_sample = input_sample.unsqueeze(0)
+   target_sample = target_sample.unsqueeze(0)
+
+   prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension)[0]
+   target_tend = rr.RF_DeNormalise(target_sample, targets_mean, targets_std, targets_range, dimension)[0]
+   target_field = prev_field + target_tend
+   target_tend = np.where( masks.numpy()==1., target_tend.numpy(), np.nan )
+   target_field = np.where( masks.numpy()==1., target_field.numpy(), np.nan )
+   
+   for epochs in epochs_list:
+   
+      # Load model
+      losses = {'train' : [], 'train_Temp': [], 'train_U' : [], 'train_V' : [], 'train_Eta' : [], 'val' : [] }
+      losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, epochs, 'inf', losses, False)  
+      h.train(False)
+      if torch.cuda.is_available():
+         h = h.cuda()
+   
+      # Make prediction
+      with torch.no_grad():
+         predicted_tend = h( torch.cat( (input_sample, masks.unsqueeze(0)), dim=1 ).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
+         predicted_tend = rr.RF_DeNormalise(predicted_tend, targets_mean, targets_std, targets_range, dimension)[0]
+         predicted_field = prev_field + predicted_tend
+   
+      # Make plot
+      predicted_field = np.where( masks.numpy()==1., predicted_field.numpy(), np.nan )
+      predicted_tend = np.where( masks.numpy()==1., predicted_tend.numpy(), np.nan )
+      # Need to add code for 3d options here and make sure it works for histlen>1
+      if dimension == '2d':
+         fig = ChnPlt.plot_depth_fld_diff(target_field[level,:,:], 'True Temperature',
+                                          predicted_field[level,:,:], 'Predicted Temperature',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Temp_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[no_levels+level,:,:], 'True East-West Velocity', 
+                                          predicted_field[no_levels+level,:,:], 'Predicted East-West Velocity',
+                                          level, da_X.values, da_Y.values, da_Z.values)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_U_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels+level,:,:], 'True North-South Velocity',
+                                          predicted_field[2*no_levels+level,:,:], 'Predicted North-South Velocity',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_V_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels,:,:], 'True Sea Surface Height',
+                                          predicted_field[2*no_levels,:,:], 'Predicted Sea Surface Height',
+                                          0, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[level,:,:], 'True Temperature Change',
+                                          predicted_tend[level,:,:], 'Predicted Temperature Change',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Temp_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[no_levels+level,:,:], 'True East-West Velocity Change', 
+                                          predicted_tend[no_levels+level,:,:], 'Predicted East-West Velocity Change',
+                                          level, da_X.values, da_Y.values, da_Z.values)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_U_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[2*no_levels+level,:,:], 'True North-South Velocity Change',
+                                          predicted_tend[2*no_levels+level,:,:], 'Predicted North-South Velocity Change',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_V_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[2*no_levels,:,:], 'True Sea Surface Height Change',
+                                          predicted_tend[2*no_levels,:,:], 'Predicted Sea Surface Height Change',
+                                          0, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)

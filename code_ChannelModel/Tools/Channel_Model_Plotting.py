@@ -61,7 +61,8 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
        extend='neither'
     ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
 
-    ax.set_title(str(field_name)+' at depth level '+str(int(depth_labels[level])))
+    #ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]+'m deep')))
+    ax.set_title(str(field_name)+' at depth level '+str(level))
 
     # Add a color bar
     cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend=extend)

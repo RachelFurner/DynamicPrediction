@@ -93,7 +93,7 @@ if __name__ == "__main__":
     logging.info('args')
     logging.info(args)
     
-    for_len = 30*6   # How long to iteratively predict for
+    for_len = 120    # How long to iteratively predict for
     start = 5        #    a.add_argument("-se", "--savedepochs", default=0, type=int, action='    a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')store')
     
     rand_seed = 30475
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     #-----------------------------------
     # Read in mean and std
     #-----------------------------------
-    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.land+'_'+args.dim)
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.dim, z_dim)
 
     if args.dim == '2d':
        no_in_channels = args.histlen * ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks
@@ -197,6 +197,7 @@ if __name__ == "__main__":
                                 ds.isel(T=slice(0)).sizes['X'], y_dim_used, z_dim, args.kernsize, args.weightdecay )
        h.append(h_temp)
        optimizer.append(optimizer_temp)
+    print(len(h))
    
     #-----------------
     # Load the models
@@ -210,27 +211,32 @@ if __name__ == "__main__":
                   'val'       : [] } 
 
        model_i_name = base_name+'_seed'+str(args.modelseeds[i])
+       print(model_i_name)
        LoadModel(model_i_name, h[i], optimizer[i], args.savedepochs, 'inf', losses, args.best) 
     
     #-------------------------------
     # Assess the multi-model set up 
     #-------------------------------
 
-    OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, train_loader, h, args.savedepochs, y_dim_used, args.dim,
-                   args.histlen, no_in_channels, no_out_channels, args.land, 'training')
+    if args.assess:
 
-    OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, args.savedepochs, y_dim_used, args.dim,
-                   args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
+       print(len(h))
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, train_loader, h, args.savedepochs, y_dim_used, args.dim,
+                      args.histlen, no_in_channels, no_out_channels, args.land, 'training')
+   
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, args.savedepochs, y_dim_used, args.dim,
+                      args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
 
     #---------------------
     # Iteratively predict 
     #---------------------
-    Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                                    targets_mean, targets_std, targets_range,
-                                                                                    args.histlen, no_out_channels, args.dim)] ) )
-
-    IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, args.savedepochs,
-                       y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.iteratemethod)
-    
-
+    if args.iterate:
+       Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                                     transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                       targets_mean, targets_std, targets_range,
+                                                                                       args.histlen, no_out_channels, args.dim)] ) )
+   
+       IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, args.savedepochs,
+                          y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.iteratemethod)
+       
+   

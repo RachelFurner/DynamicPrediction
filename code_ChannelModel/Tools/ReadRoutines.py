@@ -52,7 +52,6 @@ class MITGCM_Dataset(data.Dataset):
        self.mask_ds   = xr.open_dataset(grid_filename, lock=False)
        self.dim       = dim
 
-  
        if self.land == 'ExcLand':
           # Set dims based on V grid
           self.z_dim = (self.ds['VVEL'].isel(T=0).values[:,4:101,:]).shape[0]
@@ -76,7 +75,7 @@ class MITGCM_Dataset(data.Dataset):
           for i in range(3):
              self.masks[i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
           self.masks[3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
-       elif self.dim == '2d':
+       elif self.dim == '3d':
           for i in range(4):
              self.masks[i,:,:,:] = np.where( HfacC > 0., 1, 0 )
        self.masks = torch.from_numpy(self.masks)
@@ -144,13 +143,13 @@ class MITGCM_Dataset(data.Dataset):
           sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
    
           for time in range(self.hist_len):
-             sample_input[ self.z_dim*3*time+time:self.z_dim*3*time+time+self.z_dim, :, : ]  = \
+             sample_input[ self.z_dim*3*time+time : self.z_dim*3*time+time+self.z_dim, :, : ]  = \
                                              da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
       
-             sample_input[ self.z_dim*3*time+time+self.z_dim:self.z_dim*3*time+time+2*self.z_dim, :, : ]  = \
+             sample_input[ self.z_dim*3*time+time+self.z_dim : self.z_dim*3*time+time+2*self.z_dim, :, : ]  = \
                                              da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim) 
       
-             sample_input[ self.z_dim*3*time+time+2*self.z_dim:self.z_dim*3*time+time+3*self.z_dim, :, : ]  = \
+             sample_input[ self.z_dim*3*time+time+2*self.z_dim : self.z_dim*3*time+time+3*self.z_dim, :, : ]  = \
                                              da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
       
              sample_input[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \

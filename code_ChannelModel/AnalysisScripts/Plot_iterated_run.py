@@ -20,7 +20,8 @@ plt.rcParams.update({'font.size': 14})
 point = [ 2, 48, 120]
 
 dir_name = 'Spits_UNet2dtransp_histlen3_seed30475'
-epochs = '120'
+#dir_name = 'MultiModel_Spits_UNet2dtransp_histlen1'
+epochs = '200'
 iteration_len = 120
 iteration_method = 'simple'
 
@@ -110,6 +111,7 @@ if make_animation_plots:
                                        masked_Pred_Temp[time,level,:,:], 'Predicted Temperature',
                                        level, da_X.values, da_Y.values, da_Z.values, title=None,
                                        flds_min_value=0., flds_max_value=6.5, diff_min_value=-1, diff_max_value=1, extend='max' )
+                                       #flds_min_value=0., flds_max_value=6.5, diff_min_value=-1, diff_max_value=1, extend='max' )
       plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/'+model_name+'_Temp_level'+str(level)+'_time'+f'{time:03}'+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
       plt.close()
@@ -117,7 +119,8 @@ if make_animation_plots:
       fig = ChnPlt.plot_depth_fld_diff(masked_True_U[time,level,:,:], 'True East-West Velocity',
                                        masked_Pred_U[time,level,:,:], 'Predicted East-West Velocity',
                                        level, da_X.values, da_Y.values, da_Z.values,
-                                       flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
+                                       flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-1. , diff_max_value=1. , extend='both' )
+                                       #flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
       plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/'+model_name+'_U_level'+str(level)+'_time'+f'{time:03}'+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
       plt.close()
@@ -125,7 +128,8 @@ if make_animation_plots:
       fig = ChnPlt.plot_depth_fld_diff(masked_True_V[time,level,:,:], 'True North-South Velocity',
                                        masked_Pred_V[time,level,:,:], 'Predicted North-South Velocity',
                                        level, da_X.values, da_Y.values, da_Z.values, title=None,
-                                       flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
+                                       flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-1.0, diff_max_value=1.0, extend='both' )
+                                       #flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
       plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/'+model_name+'_V_level'+str(level)+'_time'+f'{time:03}'+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
       plt.close()
@@ -133,7 +137,8 @@ if make_animation_plots:
       fig = ChnPlt.plot_depth_fld_diff(masked_True_Eta[time,:,:], 'True Sea Surface Height',
                                        masked_Pred_Eta[time,:,:], 'Predicted Sea Surface Height',
                                        0, da_X.values, da_Y.values, da_Z.values, title=None,
-                                       flds_min_value=-1, flds_max_value=1, diff_min_value=-0.3, diff_max_value=0.3 )
+                                       flds_min_value=-1, flds_max_value=1, diff_min_value=-1.0, diff_max_value=1.0 )
+                                       #flds_min_value=-1, flds_max_value=1, diff_min_value=-0.3, diff_max_value=0.3 )
       plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/'+model_name+'_Eta_level'+str(level)+'_time'+f'{time:03}'+'.png', 
                   bbox_inches = 'tight', pad_inches = 0.1)
       plt.close()

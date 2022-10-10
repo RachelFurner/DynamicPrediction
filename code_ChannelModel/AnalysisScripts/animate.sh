@@ -1,12 +1,12 @@
-model_name='Spits_UNet2dtransp_histlen1_seed30475'
+model_name='Spits_UNet2dtransp_histlen3_seed30475'
+#model_name='MultiModel_Spits_UNet2dtransp_histlen1'
 epochs='200'
+iteration_method='simple'
 dir='/data/hpcdata/users/racfur/DynamicPrediction/Channel_nn_Outputs/'$model_name'/ITERATED_FORECAST'
+plot_name=${model_name}_${epochs}epochs_$iteration_method
+#plot_name=truefields_${model_name}_${epochs}epochs
 
-convert -resize 90% -delay 20 $dir/PLOTS/${model_name}_${epochs}epochs_Temp_level2_time0[012]*.png $dir/${model_name}_${epochs}epochs_Temp_level2.gif
-convert -resize 90% -delay 20 $dir/PLOTS/${model_name}_${epochs}epochs_U_level2_time0[012]*.png $dir/${model_name}_${epochs}epochs_U_level2.gif
-convert -resize 90% -delay 20 $dir/PLOTS/${model_name}_${epochs}epochs_V_level2_time0[012]*.png $dir/${model_name}_${epochs}epochs_V_level2.gif
-convert -resize 90% -delay 20 $dir/PLOTS/${model_name}_${epochs}epochs_Eta_level2_time0[012]*.png $dir/${model_name}_${epochs}epochs_Eta_level2.gif
-#convert -resize 90% -delay 20 $dir/PLOTS/truefields_${model_name}_${epochs}epochs_Temp_level2_time0[012]*.png $dir/truefields_${model_name}_${epochs}epochs_Temp_level2.gif
-#convert -resize 90% -delay 20 $dir/PLOTS/truefields_${model_name}_${epochs}epochs_U_level2_time0[012]*.png $dir/truefields_${model_name}_${epochs}epochs_U_level2.gif
-#convert -resize 90% -delay 20 $dir/PLOTS/truefields_${model_name}_${epochs}epochs_V_level2_time0[012]*.png $dir/truefields_${model_name}_${epochs}epochs_V_level2.gif
-#convert -resize 90% -delay 20 $dir/PLOTS/truefields_${model_name}_${epochs}epochs_Eta_level2_time0[012]*.png $dir/truefields_${model_name}_${epochs}epochs_Eta_level2.gif
+convert -resize 90% -delay 20 $dir/PLOTS/${plot_name}_Temp_level2_time0[012]*.png $dir/${plot_name}_Temp_level2.gif
+convert -resize 90% -delay 20 $dir/PLOTS/${plot_name}_U_level2_time0[012]*.png $dir/${plot_name}_U_level2.gif
+convert -resize 90% -delay 20 $dir/PLOTS/${plot_name}_V_level2_time0[012]*.png $dir/${plot_name}_V_level2.gif
+convert -resize 90% -delay 20 $dir/PLOTS/${plot_name}_Eta_level2_time0[012]*.png $dir/${plot_name}_Eta_level2.gif

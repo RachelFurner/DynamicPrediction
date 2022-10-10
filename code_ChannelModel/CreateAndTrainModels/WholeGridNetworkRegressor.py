@@ -48,7 +48,6 @@ def parse_args():
 
     a.add_argument("-n", "--name", default="", action='store')
     a.add_argument("-te", "--test", default=False, type=bool, action='store')
-    a.add_argument("-cm", "--calculatemeanstd", default=False, type=bool, action='store')
     a.add_argument("-m", "--modelstyle", default='UNet2dtransp', type=str, action='store')
     a.add_argument("-d", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='Spits', type=str, action='store')
@@ -70,6 +69,8 @@ def parse_args():
     a.add_argument("-a", "--assess", default=False, type=bool, action='store')
     a.add_argument("-i", "--iterate", default=False, type=bool, action='store')
     a.add_argument("-im", "--iteratemethod", default='simple', type=str, action='store')
+    a.add_argument("-pe", "--plotevolution", default=False, type=bool, action='store')
+    a.add_argument("-ee", "--evolutionepochs", default='10,50,100,150,200', type=str, action='store')
     a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
 
     return a.parse_args()
@@ -80,6 +81,8 @@ if __name__ == "__main__":
 
     args = parse_args()
   
+    ev_epoch_ls = [int(item) for item in args.evolutionepochs.split(',')]
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') 
 
     logging.info('packages imported')
@@ -129,6 +132,8 @@ if __name__ == "__main__":
        os.system("mkdir %s" % (model_dir+'/STATS'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
+       os.system("mkdir %s" % (model_dir+'/TRAIN_EVOLUTION'))
+       os.system("mkdir %s" % (model_dir+'/STATS'))
     
     if args.trainmodel:
        if args.loadmodel: 
@@ -161,7 +166,7 @@ if __name__ == "__main__":
           MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
        else:
           MITGCM_filename = DIR+'12hrly_data.nc'
-       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
+       #grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
     
     print(MITGCM_filename)
     ds = xr.open_dataset(MITGCM_filename)
@@ -175,16 +180,13 @@ if __name__ == "__main__":
     
     #TimeCheck(tic, 'setting variables')
     
-    #-----------------------------------
-    # Calulate, or read in mean and std
-    #-----------------------------------
-    if args.calculatemeanstd:
-       CalcMeanStd(args.land+'_'+args.dim, MITGCM_filename, train_end_ratio, subsample_rate,
-                   args.batchsize, args.land, args.dim, args.bdyweight, args.histlen, grid_filename, tic)
-
-    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.land+'_'+args.dim)
-
+    #----------------------------------------
+    # Read in mean and std, and set channels
+    #----------------------------------------
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
+
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.dim, z_dim)
+
     if args.dim == '2d':
        no_in_channels = args.histlen * ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks
        no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
@@ -245,27 +247,17 @@ if __name__ == "__main__":
     if args.loadmodel:
        if args.trainmodel:
           losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best)
-          losses, histogram_inputs, histogram_targets = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, 
-                                                             save_freq, train_loader, val_loader, h, optimizer,
-                                                             args.epochs, args.seed, losses, 
-                                                             no_in_channels, no_out_channels, start_epoch=start_epoch, current_best_loss=current_best_loss)
+          losses = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples, 
+                              save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, 
+                              no_in_channels, no_out_channels, start_epoch=start_epoch, current_best_loss=current_best_loss)
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses )
-          #  Save histogram data to file and plot it
-          histogram_file = '../../../Channel_nn_Outputs/'+args.land+'_'+args.dim+'_norm_histogram.npz'
-          np.savez( histogram_file, histogram_inputs, histogram_targets )
-          plot_histograms(args.land+'_'+args.dim, histogram_inputs, histogram_targets, norm='norm')
        else:
           LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best)
     elif args.trainmodel:  # Training mode BUT NOT loading model
-       losses, histogram_inputs, histogram_targets = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples,
-                                                     save_freq, train_loader, val_loader, h, optimizer,
-                                                     args.epochs, args.seed,
-                                                     losses, no_in_channels, no_out_channels)
+       losses = TrainModel(model_name, args.dim, args.histlen, tic, args.test, no_tr_samples, no_val_samples,
+                           save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed,
+                           losses, no_in_channels, no_out_channels)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses)
-       #  Save histogram data to file and plot it
-       histogram_file = '../../../Channel_nn_Outputs/'+args.land+'_'+args.dim+'_norm_histogram.npz'
-       np.savez( histogram_file, histogram_inputs, histogram_targets )
-       plot_histograms(args.land+'_'+args.dim, histogram_inputs, histogram_targets, norm='norm')
    
     #--------------------
     # Plot scatter plots
@@ -280,21 +272,39 @@ if __name__ == "__main__":
     #------------------
     if args.assess:
     
-       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
+       stats_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
+                                                  num_workers=args.numworkers, pin_memory=True )
+       stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
+                                               num_workers=args.numworkers, pin_memory=True )
+    
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, no_in_channels, no_out_channels, args.land, 'training')
     
-       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, no_in_channels, no_out_channels, args.land, 'validation')
     
     #---------------------
     # Iteratively predict 
     #---------------------
-    Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
-                                                  transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                                    targets_mean, targets_std, targets_range,
-                                                                                    args.histlen, no_out_channels, args.dim)] ) )
-    
     if args.iterate:
+
+       Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                                     transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                       targets_mean, targets_std, targets_range,
+                                                                                       args.histlen, no_out_channels, args.dim)] ) )
+    
        IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
                           y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.iteratemethod) 
     
+    #------------------------------------------------------
+    # Plot fields from various training steps of the model
+    #------------------------------------------------------
+    if args.plotevolution:
+
+       Evolve_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim,
+                                                     transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                                       targets_mean, targets_std, targets_range,
+                                                                                       args.histlen, no_out_channels, args.dim)] ) )
+
+       PlotTrainingEvolution(model_name, args.land+'_'+args.dim, MITGCM_filename, Evolve_Dataset, h, optimizer, ev_epoch_ls,
+                             args.dim, args.histlen, no_in_channels, no_out_channels, landvalues)
