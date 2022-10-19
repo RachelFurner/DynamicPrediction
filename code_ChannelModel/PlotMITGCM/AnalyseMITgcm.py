@@ -13,7 +13,6 @@ import xarray as xr
 import netCDF4 as nc4
 import gc as gc
 
-
 init=True
 var_range=range(4)
 plot_histograms = True 
@@ -30,7 +29,7 @@ def plot_histograms(data_name, histogram_inputs, varname, file_varname):
    ax1.hist(histogram_inputs, bins = no_bins)
    ax1.set_title(varname+' Histogram')
    # ax1.set_ylim(top=y_top[var])
-   plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+data_name+'_histogram_'+file_varname+'_inputs.png', 
+   plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+data_name+'_histogram_'+file_varname+'.png', 
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -38,26 +37,26 @@ def plot_histograms(data_name, histogram_inputs, varname, file_varname):
 datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/'
 data_filename=datadir + '12hrly_data.nc'
 out_filename = datadir+'/stats.nc'
-#data_filename=datadir + '12hrly_small_set.nc'
-#out_filename = datadir+'/stats_small.nc'
+grid_filename = datadir+'grid.nc'
 
-mean_std_file = '../../../Channel_nn_Outputs/MeanStd_TEST.npz'
+mean_std_file = '../../../Channel_nn_Outputs/MeanStd.npz'
    
 VarName = ['Temperature', 'U Velocity', 'V Velocity', 'Sea Surface Height']
 ShortVarName = ['Temp', 'UVel', 'VVel', 'Eta']
 ncVarName = ['THETA', 'UVEL', 'VVEL', 'ETAN']
+MaskVarName = ['HFacC', 'HFacW', 'HFacS', 'HFacC']
 
 if init:
    if calc_stats:
-       input_mean  = np.zeros((4))
-       input_std   = np.zeros((4))
-       input_range = np.zeros((4))
-       target_mean  = np.zeros((4))
-       target_std   = np.zeros((4))
-       target_range = np.zeros((4))
+       inputs_mean  = np.zeros((4))
+       inputs_std   = np.zeros((4))
+       inputs_range = np.zeros((4))
+       targets_mean  = np.zeros((4))
+       targets_std   = np.zeros((4))
+       targets_range = np.zeros((4))
        np.savez( mean_std_file, 
-                 input_mean, input_std, input_range,
-                 target_mean, target_std, target_range,
+                 inputs_mean, inputs_std, inputs_range,
+                 targets_mean, targets_std, targets_range,
                ) 
    
    if nc_stats:
@@ -76,6 +75,7 @@ if init:
       out_file.createDimension('Yp1', da_Yp1.shape[0])
       out_file.createDimension('X', da_X.shape[0])
       out_file.createDimension('Xp1', da_Xp1.shape[0])
+      out_file.createDimension('Z1', 1)
       
       # Create dimension variables
       nc_Z = out_file.createVariable('Z', 'i4', 'Z')
@@ -105,8 +105,16 @@ for var in var_range:
    print(var)
    print(ncVarName[var])
 
+   ds_grid = xr.open_dataset(grid_filename)
+   da_mask = ds_grid[MaskVarName[var]]
+
    ds_inputs = xr.open_dataset(data_filename)
+   ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
    da = ds_inputs[ncVarName[var]]
+   if var == 3:
+      da.values[:,:,:,:] = np.where( da_mask.values[0:1,:,:] > 0., da.values[:,:,:,:], np.nan )
+   else:
+      da.values[:,:,:,:] = np.where( da_mask.values[:,:,:] > 0., da.values[:,:,:,:], np.nan )
    print(da.shape)
 
    if nc_stats:
@@ -127,10 +135,10 @@ for var in var_range:
          nc_Mean[:,:,:] = np.nanmean(da, 0)
          nc_Std[:,:,:] = np.nanstd(da, 0)
       elif var == 3:
-         nc_Mean = out_file.createVariable( 'Mean'+ShortVarName[var]  , 'f4', ('Y', 'X') )
-         nc_Std = out_file.createVariable( 'Std'+ShortVarName[var]  , 'f4', ('Y', 'X') )
-         nc_Mean[:,:] = np.nanmean(da, 0)
-         nc_Std[:,:] = np.nanstd(da, 0)
+         nc_Mean = out_file.createVariable( 'Mean'+ShortVarName[var]  , 'f4', ('Z1', 'Y', 'X') )
+         nc_Std = out_file.createVariable( 'Std'+ShortVarName[var]  , 'f4', ('Z1', 'Y', 'X') )
+         nc_Mean[:,:,:] = np.nanmean(da, 0)
+         nc_Std[:,:,:] = np.nanstd(da, 0)
       out_file.close()
       del nc_Mean
       del nc_Std
@@ -150,19 +158,38 @@ for var in var_range:
       targets_std   = mean_std_data['arr_4']
       targets_range = mean_std_data['arr_5']
 
-      input_mean[var]  = np.nanmean(da.values)
-      input_std[var]   = np.nanstd(da.values)
-      input_range[var] = np.amax(da.values) - np.amin(da.values)
-      target_mean[var]  = np.nanmean(targets)
-      target_std[var]   = np.nanstd(targets)
-      target_range[var] = np.amax(targets) - np.amin(targets)
+      inputs_mean[var]  = np.nanmean(da.values)
+      inputs_std[var]   = np.nanstd(da.values)
+      inputs_range[var] = np.nanmax(da.values) - np.nanmin(da.values)
+      targets_mean[var]  = np.nanmean(targets)
+      targets_std[var]   = np.nanstd(targets)
+      targets_range[var] = np.nanmax(targets) - np.nanmin(targets)
 
       np.savez( mean_std_file, 
-                input_mean, input_std, input_range,
-                target_mean, target_std, target_range,
+                inputs_mean, inputs_std, inputs_range,
+                targets_mean, targets_std, targets_range,
               ) 
 
    del da
    del targets
    gc.collect()
+
+mean_std_data = np.load(mean_std_file)
+inputs_mean  = mean_std_data['arr_0']
+inputs_std   = mean_std_data['arr_1']
+inputs_range = mean_std_data['arr_2']
+targets_mean  = mean_std_data['arr_3']
+targets_std   = mean_std_data['arr_4']
+targets_range = mean_std_data['arr_5']
+print('inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range')
+print(inputs_mean)
+print(inputs_std)
+print(inputs_range)
+print(targets_mean)
+print(targets_std)
+print(targets_range)
+
+
+
+
 

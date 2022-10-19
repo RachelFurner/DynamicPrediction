@@ -30,6 +30,8 @@ make_animation_plots = True
 animation_end = 120
 ts_end = 120
 
+pert_list = ['Cntrl_orig', 'Pert0', 'Pert1', 'Pert2', 'Pert3', 'Pert4']
+#pert_list = ['Cntrl_orig', 'Pert0']
 #-----------
 
 model_name = dir_name+'_'+epochs+'epochs_'+iteration_method
@@ -74,31 +76,57 @@ masked_Pred_V    = np.where( da_V_mask.values==0, np.nan, da_pred_V.values )
 masked_True_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_true_Eta.values )
 masked_Pred_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_pred_Eta.values )
 
+#-----------------------------------------------
+# Read in data from perturbed runs for plotting
+#-----------------------------------------------
+Temp_dict = {'True Temperature':masked_True_Temp[:ts_end], 'Predicted Temperature':masked_Pred_Temp[:ts_end] }
+UVel_dict = {'True East-West Velocity':masked_True_U[:ts_end], 'Predicted East-West Velocity':masked_Pred_U[:ts_end] }
+VVel_dict = {'True North-South Velocity':masked_True_V[:ts_end], 'Predicted North-South Velocity':masked_Pred_V[:ts_end] }
+Eta_dict  = {'True Sea Surface Height':masked_True_Eta[:ts_end], 'Predicted Sea Surface Height':masked_Pred_Eta[:ts_end] }
+
+print(masked_True_Eta[:ts_end].shape)
+print(masked_Pred_Eta[:ts_end].shape)
+for pert in pert_list:
+   print(pert)
+   filename =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_'+pert+'/12hrly_data.nc'
+   MITgcm_ds = xr.open_dataset(filename).isel( T=slice( 0, int(ts_end) ) )
+
+   da_MITgcmTemp = MITgcm_ds['THETA']
+   masked_MITgcmTemp = np.where( da_Temp_mask.values==0, np.nan, da_MITgcmTemp.values )
+   Temp_dict[pert] = masked_MITgcmTemp[:ts_end]
+
+   da_MITgcmUvel = MITgcm_ds['UVEL']
+   MITgcmUvel = 0.5 * (da_MITgcmUvel.values[:,:,:,:-1]+da_MITgcmUvel.values[:,:,:,1:])   
+   masked_MITgcmUvel = np.where( da_U_mask.values==0, np.nan, MITgcmUvel )
+   UVel_dict[pert] = masked_MITgcmUvel[:ts_end]
+
+   da_MITgcmVvel = MITgcm_ds['VVEL']
+   MITgcmVvel = 0.5 * (da_MITgcmVvel.values[:,:,:-1,:]+da_MITgcmVvel.values[:,:,1:,:])   
+   masked_MITgcmVvel = np.where( da_V_mask.values==0, np.nan, MITgcmVvel )
+   VVel_dict[pert] = masked_MITgcmVvel[:ts_end]
+
+   da_MITgcmEta = MITgcm_ds['ETAN']
+   masked_MITgcmEta = np.where( da_Eta_mask.values==0, np.nan, da_MITgcmEta.values[:,0,:,:] )
+   Eta_dict[pert] = masked_MITgcmEta[:ts_end]
+   print(masked_MITgcmEta[:ts_end].shape)
+
 #----------------------------
 # Plot timeseries at a point
 #----------------------------
 if plot_timeseries:
-   fig = ChnPlt.plt_timeseries( point, ts_end, 
-                                {'True Temperature':masked_True_Temp[:ts_end], 'Predicted Temperature':masked_Pred_Temp[:ts_end] },
-                                y_label='Temperature ('+u'\xb0'+'C)' )
+   fig = ChnPlt.plt_timeseries( point, ts_end, Temp_dict, y_label='Temperature ('+u'\xb0'+'C)' )
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=3., max_value=4.)
 
-   fig = ChnPlt.plt_timeseries( point, ts_end, 
-                                {'True East-West Velocity':masked_True_U[:ts_end], 'Predicted East-West Velocity':masked_Pred_U[:ts_end] },
-                                y_label='East-West Velocity $(m s^{-1})$' )
+   fig = ChnPlt.plt_timeseries( point, ts_end, UVel_dict, y_label='East-West Velocity $(m s^{-1})$' ) 
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=0., max_value=0.5 )
 
-   fig = ChnPlt.plt_timeseries( point, ts_end, 
-                                {'True North-South Velocity':masked_True_V[:ts_end], 'Predicted North-South Velocity':masked_Pred_V[:ts_end] },
-                                y_label='North-South Velocity $(m s^{-1})$')
+   fig = ChnPlt.plt_timeseries( point, ts_end, VVel_dict, y_label='North-South Velocity $(m s^{-1})$') 
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.5, max_value=0.5)
-
-   fig = ChnPlt.plt_timeseries( point[1:], ts_end, 
-                                {'True Sea Surface Height':masked_True_Eta[:ts_end], 'Predicted Sea Surface Height':masked_Pred_Eta[:ts_end] },
-                                y_label='SSH $(m)$')
+   
+   fig = ChnPlt.plt_timeseries( point[1:], ts_end, Eta_dict, y_label='SSH $(m)$') 
    plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Eta_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1, min_value=-0.3, max_value=0.3)
 

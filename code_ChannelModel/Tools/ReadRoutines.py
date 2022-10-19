@@ -22,7 +22,7 @@ sys.path.append('../NNregression')
 class MITGCM_Dataset(data.Dataset):
 
    '''
-         MITGCM dataset
+        MITGCM dataset
 
          This code is set up in '2d' mode so that the data is 2-d with different channels for each level of 
          each variable. This solves issues with eta being 2-d and other inputs being 3-d. This matches 
@@ -31,7 +31,7 @@ class MITGCM_Dataset(data.Dataset):
          Eta only having one depth level - we get around this by providing 38 identical fields... far from perfect!
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, land_values, grid_filename, dim, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, land_values, grid_filename, dim, model_style, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -51,6 +51,7 @@ class MITGCM_Dataset(data.Dataset):
        self.land_values = land_values
        self.mask_ds   = xr.open_dataset(grid_filename, lock=False)
        self.dim       = dim
+       self.model_style = model_style
 
        if self.land == 'ExcLand':
           # Set dims based on V grid
@@ -65,19 +66,31 @@ class MITGCM_Dataset(data.Dataset):
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
    
        # set mask, initialise as ocean (ones) everywhere
-       if self.dim == '2d':
-          self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
-       elif self.dim == '3d':
-          self.masks = np.ones(( 4, self.z_dim, self.y_dim, self.x_dim ))
-    
+       ###################################################################
+       ## Can we just add histlen dim always, not just for conv set up? ##
+       ###################################################################
+
        HfacC = self.mask_ds['HFacC'].values
-       if self.dim == '2d':
-          for i in range(3):
-             self.masks[i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
-          self.masks[3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
-       elif self.dim == '3d':
-          for i in range(4):
-             self.masks[i,:,:,:] = np.where( HfacC > 0., 1, 0 )
+
+       if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
+          if self.dim == '2d':
+             self.masks = np.ones((self.hist_len, 3*self.z_dim+1, self.y_dim, self.x_dim ))
+             for i in range(3):
+                self.masks[:,i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
+             self.masks[:,3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
+          elif self.dim == '3d':
+             print('not set up ConvLSTM for 3d set up yet')
+       else:
+          if self.dim == '2d':
+             self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
+             for i in range(3):
+                self.masks[i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
+             self.masks[3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
+          elif self.dim == '3d':
+             self.masks = np.ones(( 4, self.z_dim, self.y_dim, self.x_dim ))
+             for i in range(4):
+                self.masks[i,:,:,:] = np.where( HfacC > 0., 1, 0 )
+
        self.masks = torch.from_numpy(self.masks)
 
    def __len__(self):
@@ -137,58 +150,90 @@ class MITGCM_Dataset(data.Dataset):
        #TimeCheck(self.tic, 'Read in data')
 
        # Set up sample arrays and then fill (better for memory than concatenating)
-       if self.dim == '2d':
-          # Dims are channels,y,x
-          sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim), self.y_dim, self.x_dim ))
-          sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
-   
-          for time in range(self.hist_len):
-             sample_input[ self.z_dim*3*time+time : self.z_dim*3*time+time+self.z_dim, :, : ]  = \
-                                             da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-      
-             sample_input[ self.z_dim*3*time+time+self.z_dim : self.z_dim*3*time+time+2*self.z_dim, :, : ]  = \
-                                             da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim) 
-      
-             sample_input[ self.z_dim*3*time+time+2*self.z_dim : self.z_dim*3*time+time+3*self.z_dim, :, : ]  = \
-                                             da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-      
-             sample_input[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
-                                             da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
-      
-          sample_output[ :1*self.z_dim, :, : ] = \
-                                          da_T_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-          sample_output[ 1*self.z_dim:2*self.z_dim, :, : ] = \
-                                          da_U_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-          sample_output[ 2*self.z_dim:3*self.z_dim, :, : ] = \
-                                          da_V_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-          sample_output[ 3*self.z_dim, :, : ] = \
-                                          da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
-   
-          # mask values
-          for time in range(self.hist_len):
-              sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.masks==1, 
-                                                                                            sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:],
-                                                                                            np.expand_dims( self.land_values, axis=(1,2)) )
+       # Ammend here so ConvLSTM option with seqtime as a dimension
+       if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
+          if self.dim == '2d':
+             sample_input  = np.zeros(( self.hist_len, 1+3*self.z_dim, self.y_dim, self.x_dim ))
+             sample_output = np.zeros(( 1+3*self.z_dim, self.y_dim, self.x_dim ))
+             for time in range(self.hist_len):
+                sample_input[ time, :self.z_dim, :, : ]  = \
+                                                da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_input[ time, self.z_dim:2*self.z_dim, :, : ]  = \
+                                                da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim) 
+                sample_input[ time, 2*self.z_dim:3*self.z_dim, :, : ]  = \
+                                                da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_input[ time, 3*self.z_dim, :, : ] = \
+                                                da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
+         
+             sample_output[ :self.z_dim, :, : ] = \
+                                             da_T_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ self.z_dim:2*self.z_dim, :, : ] = \
+                                             da_U_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ 2*self.z_dim:3*self.z_dim, :, : ] = \
+                                             da_V_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ 3*self.z_dim, :, : ] = \
+                                             da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
 
-       elif self.dim == '3d':
-          # Dims are channels,z,y,x
-          sample_input  = np.zeros(( 4 * self.hist_len, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
-          sample_output = np.zeros(( 4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
-   
-          for time in range(self.hist_len):
-             sample_input[time*4,:,:,:]   = da_T_in[time, :, :, :]
-             sample_input[time*4+1,:,:,:] = da_U_in[time, :, :, :]
-             sample_input[time*4+2,:,:,:] = da_V_in[time, :, :, :]
-             sample_input[time*4+3,:,:,:] = np.broadcast_to(da_Eta_in[time, :, :], (1, self.z_dim, self.y_dim, self.x_dim))
-   
-          sample_output[0,:,:,:] = da_T_out[:, :, :, :]
-          sample_output[1,:,:,:] = da_U_out[:, :, :, :]
-          sample_output[2,:,:,:] = da_V_out[:, :, :, :]
-          sample_output[3,:,:,:] = np.broadcast_to(da_Eta_out[:, :, :], (1, self.z_dim, self.y_dim, self.x_dim))
-   
-          # mask values
-          for time in range(self.hist_len):
-              sample_input[time*4:(time+1)*4,:,:,:] = np.where( self.masks==1, sample_input[time*4:(time+1)*4,:,:,:], np.expand_dims( self.land_values, axis=(1,2,3)) )
+             # Mask inputs
+             sample_input[:,:,:,:] = np.where( self.masks==1, sample_input[:,:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
+
+       else:
+          if self.dim == '2d':
+             # Dims are channels,y,x
+             sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim), self.y_dim, self.x_dim ))
+             sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
+      
+             for time in range(self.hist_len):
+                sample_input[ self.z_dim*3*time+time : self.z_dim*3*time+time+self.z_dim, :, : ]  = \
+                                                da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+         
+                sample_input[ self.z_dim*3*time+time+self.z_dim : self.z_dim*3*time+time+2*self.z_dim, :, : ]  = \
+                                                da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim) 
+         
+                sample_input[ self.z_dim*3*time+time+2*self.z_dim : self.z_dim*3*time+time+3*self.z_dim, :, : ]  = \
+                                                da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+         
+                sample_input[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
+                                                da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
+         
+             sample_output[ :1*self.z_dim, :, : ] = \
+                                             da_T_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ 1*self.z_dim:2*self.z_dim, :, : ] = \
+                                             da_U_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ 2*self.z_dim:3*self.z_dim, :, : ] = \
+                                             da_V_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+             sample_output[ 3*self.z_dim, :, : ] = \
+                                             da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
+      
+             # mask values
+             for time in range(self.hist_len):
+                 sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.masks==1, 
+                                                                                               sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:],
+                                                                                               np.expand_dims( self.land_values, axis=(1,2)) )
+             ###############################################
+             #### I THINK WE SHOULD MASK OUTPUTS??!?!?! ####
+             ###############################################
+
+          elif self.dim == '3d':
+             # Dims are channels,z,y,x
+             sample_input  = np.zeros(( 4 * self.hist_len, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
+             sample_output = np.zeros(( 4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
+      
+             for time in range(self.hist_len):
+                sample_input[time*4,:,:,:]   = da_T_in[time, :, :, :]
+                sample_input[time*4+1,:,:,:] = da_U_in[time, :, :, :]
+                sample_input[time*4+2,:,:,:] = da_V_in[time, :, :, :]
+                sample_input[time*4+3,:,:,:] = np.broadcast_to(da_Eta_in[time, :, :], (1, self.z_dim, self.y_dim, self.x_dim))
+      
+             sample_output[0,:,:,:] = da_T_out[:, :, :, :]
+             sample_output[1,:,:,:] = da_U_out[:, :, :, :]
+             sample_output[2,:,:,:] = da_V_out[:, :, :, :]
+             sample_output[3,:,:,:] = np.broadcast_to(da_Eta_out[:, :, :], (1, self.z_dim, self.y_dim, self.x_dim))
+      
+             # mask values
+             for time in range(self.hist_len):
+                 sample_input[time*4:(time+1)*4,:,:,:] = np.where( self.masks==1, sample_input[time*4:(time+1)*4,:,:,:], 
+                                                                   np.expand_dims( self.land_values, axis=(1,2,3)) )
 
        del da_T_in
        del da_T_out
@@ -212,7 +257,7 @@ class MITGCM_Dataset(data.Dataset):
 
 class RF_Normalise_sample(object):
 
-    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, histlen, no_out_channels, dim):
+    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, histlen, no_out_channels, dim, norm_method):
         self.inputs_mean   = inputs_mean
         self.inputs_std    = inputs_std
         self.inputs_range  = inputs_range
@@ -222,6 +267,7 @@ class RF_Normalise_sample(object):
         self.histlen       = histlen
         self.no_out_channels = no_out_channels
         self.dim           = dim
+        self.norm_method   = norm_method
 
     def __call__(self, sample):
 
@@ -236,18 +282,18 @@ class RF_Normalise_sample(object):
            for time in range(self.histlen):
               sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :] =                   \
                                    RF_Normalise( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :],
-                                                             self.inputs_mean, self.inputs_std, self.inputs_range, self.dim )
+                                                             self.inputs_mean, self.inputs_std, self.inputs_range, self.dim, self.norm_method )
         elif self.dim == '3d':
            for time in range(self.histlen):
               sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :] =                   \
                                    RF_Normalise( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :],
-                                                             self.inputs_mean, self.inputs_std, self.inputs_range,self.dim )
+                                                             self.inputs_mean, self.inputs_std, self.inputs_range,self.dim, self.norm_method )
 
-        sample['output'] = RF_Normalise( sample['output'], self.targets_mean, self.targets_mean, self.targets_range, self.dim)
+        sample['output'] = RF_Normalise( sample['output'], self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method )
 
         return sample['input'], sample['output']
 
-def RF_Normalise(data, d_mean, d_std, d_range, dim):
+def RF_Normalise(data, d_mean, d_std, d_range, dim, norm_method ):
     """Normalise data based on training means and std (given)
 
        ReNormalises prediction for use in iteration
@@ -257,16 +303,24 @@ def RF_Normalise(data, d_mean, d_std, d_range, dim):
        TBD
     """
 
-    if dim == '2d':
-       data[:,:,:] = ( data[:,:,:] - d_mean[:, np.newaxis, np.newaxis] )                      \
-                                    / d_range[:, np.newaxis, np.newaxis]
-    elif dim == '3d':
-       data[:,:,:,:] = ( data[:,:,:,:] - d_mean[:, np.newaxis, np.newaxis, np.newaxis] )    \
-                                    / d_range[:, np.newaxis, np.newaxis, np.newaxis]
-
+    if norm_method == 'range':
+       if dim == '2d':
+          data[:,:,:] = ( data[:,:,:] - d_mean[:, np.newaxis, np.newaxis] )                      \
+                                       / d_range[:, np.newaxis, np.newaxis]
+       elif dim == '3d':
+          data[:,:,:,:] = ( data[:,:,:,:] - d_mean[:, np.newaxis, np.newaxis, np.newaxis] )    \
+                                       / d_range[:, np.newaxis, np.newaxis, np.newaxis]
+    elif norm_method == 'std':
+       if dim == '2d':
+          data[:,:,:] = ( data[:,:,:] - d_mean[:, np.newaxis, np.newaxis] )                      \
+                                       / d_std[:, np.newaxis, np.newaxis]
+       elif dim == '3d':
+          data[:,:,:,:] = ( data[:,:,:,:] - d_mean[:, np.newaxis, np.newaxis, np.newaxis] )    \
+                                       / d_std[:, np.newaxis, np.newaxis, np.newaxis]
+   
     return data
 
-def RF_DeNormalise(samples, data_mean, data_std, data_range, dim):
+def RF_DeNormalise(samples, data_mean, data_std, data_range, dim, norm_method):
     """de-Normalise data based on training means and std (given)
 
     Args:
@@ -274,14 +328,25 @@ def RF_DeNormalise(samples, data_mean, data_std, data_range, dim):
        Training output mean
        Training output std
     """
-    if dim == '2d':
-       samples[:,:,:,:]  = ( samples[:,:,:,:] * 
-                                               data_range[np.newaxis, :, np.newaxis, np.newaxis] ) + \
-                                               data_mean[np.newaxis, :, np.newaxis, np.newaxis]
-    elif dim == '3d':
-       samples[:,:,:,:,:]  = ( samples[:,:,:,:,:] * 
-                                                  data_range[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis] ) + \
-                                                  data_mean[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
+
+    if norm_method == 'range':
+       if dim == '2d':
+          samples[:,:,:,:]  = ( samples[:,:,:,:] * 
+                                                  data_range[np.newaxis, :, np.newaxis, np.newaxis] ) + \
+                                                  data_mean[np.newaxis, :, np.newaxis, np.newaxis]
+       elif dim == '3d':
+          samples[:,:,:,:,:]  = ( samples[:,:,:,:,:] * 
+                                                     data_range[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis] ) + \
+                                                     data_mean[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
+    elif norm_method == 'std':
+       if dim == '2d':
+          samples[:,:,:,:]  = ( samples[:,:,:,:] * 
+                                                  data_std[np.newaxis, :, np.newaxis, np.newaxis] ) + \
+                                                  data_mean[np.newaxis, :, np.newaxis, np.newaxis]
+       elif dim == '3d':
+          samples[:,:,:,:,:]  = ( samples[:,:,:,:,:] * 
+                                                     data_std[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis] ) + \
+                                                     data_mean[np.newaxis, :, np.newaxis, np.newaxis, np.newaxis]
 
     return (samples)
 
