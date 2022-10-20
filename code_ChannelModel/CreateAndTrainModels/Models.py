@@ -113,40 +113,40 @@ class UNet2dTransp(nn.Module):
       self.kern_size = kern_size
 
    def forward(self, x):
-      print('input.shape; '+str(x.shape))
+      #print('input.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
-      print('enc1.shape; '+str(enc1.shape))
+      #print('enc1.shape; '+str(enc1.shape))
       enc2 = self.pool1(enc1)
-      print('enc2a.shape; '+str(enc2.shape))
+      #print('enc2a.shape; '+str(enc2.shape))
       enc2 = self.encoder2(enc2)
-      print('enc2b.shape; '+str(enc2.shape))
+      #print('enc2b.shape; '+str(enc2.shape))
 
       tmp = self.pool2(enc2)
-      print('bottlenecka.shape; '+str(tmp.shape))
+      #print('bottlenecka.shape; '+str(tmp.shape))
       tmp = self.bottleneck(tmp)
-      print('bottleneckb.shape; '+str(tmp.shape))
+      #print('bottleneckb.shape; '+str(tmp.shape))
 
       tmp = self.upsample2(tmp)
-      print('tmp.shape; '+str(tmp.shape))
+      #print('tmp.shape; '+str(tmp.shape))
       cust_pad = CustomPad2dTransp(self.kern_size)
       tmp = cust_pad.forward(tmp)
-      print('tmpb.shape; '+str(tmp.shape))
+      #print('tmpb.shape; '+str(tmp.shape))
       tmp = self.upconv2(tmp)
-      print('tmpc.shape; '+str(tmp.shape))
+      #print('tmpc.shape; '+str(tmp.shape))
       tmp = torch.cat((tmp, enc2), dim=1)
-      print('tmpd.shape; '+str(tmp.shape))
+      #print('tmpd.shape; '+str(tmp.shape))
       tmp = self.decoder2(tmp)
-      print('tmpe.shape; '+str(tmp.shape))
+      #print('tmpe.shape; '+str(tmp.shape))
       tmp = self.upsample1(tmp)
-      print('dec1a.shape; '+str(tmp.shape))
+      #print('dec1a.shape; '+str(tmp.shape))
       tmp = cust_pad.forward(tmp)
-      print('dec1b.shape; '+str(tmp.shape))
+      #print('dec1b.shape; '+str(tmp.shape))
       tmp = self.upconv1(tmp)
-      print('dec1c.shape; '+str(tmp.shape))
+      #print('dec1c.shape; '+str(tmp.shape))
       tmp = torch.cat((tmp, enc1), dim=1)
-      print('dec1d.shape; '+str(tmp.shape))
+      #print('dec1d.shape; '+str(tmp.shape))
       tmp = self.decoder1(tmp)
-      print('dec1e.shape; '+str(tmp.shape))
+      #print('dec1e.shape; '+str(tmp.shape))
 
       # manually delete as this doesn't seem to be working...
       del x
@@ -820,30 +820,31 @@ class ConvLSTMCell(nn.Module):
         self.hidden_dim = hidden_dim
 
         self.kernel_size = kernel_size
-        self.padding = kernel_size[0] // 2, kernel_size[1] // 2
 
         self.conv = nn.Conv2d(in_channels=self.input_dim + self.hidden_dim,
                               out_channels=4 * self.hidden_dim,
                               kernel_size=self.kernel_size,
-                              padding=self.padding,
+                              padding=(kernel_size[0] // 2, kernel_size[1] // 2),
                               bias=False)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
  
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
-        print('h_cur.shape; '+str(h_cur.shape))
-        print('c_cur.shape; '+str(c_cur.shape))
-        print('input_tensor.shape; '+str(input_tensor.shape))
+        #print('')
+        #print('in ConvLSTMCell')
+        #print('h_cur.shape; '+str(h_cur.shape))
+        #print('c_cur.shape; '+str(c_cur.shape))
+        #print('input_tensor.shape; '+str(input_tensor.shape))
 
         h_cur = h_cur.to(self.device)
         c_cur = c_cur.to(self.device)
 
         combined = torch.cat([input_tensor, h_cur], dim=1)  # concatenate along channel axis
 
-        print('combined.shape; '+str(combined.shape))
+        #print('combined.shape; '+str(combined.shape))
         combined_conv = self.conv(combined)
-        print('combined_conv.shape; '+str(combined_conv.shape))
+        #print('combined_conv.shape; '+str(combined_conv.shape))
         cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim=1)
         i = torch.sigmoid(cc_i)
         f = torch.sigmoid(cc_f)
@@ -853,12 +854,23 @@ class ConvLSTMCell(nn.Module):
         c_next = f * c_cur + i * g
         h_next = o * torch.tanh(c_next)
 
+        del input_tensor
+        del cur_state
+        del h_cur
+        del c_cur
         del combined
         del combined_conv 
-        del cc_i, cc_f, cc_o, cc_g
-        del i, f, o, g
+        del cc_i
+        del cc_f
+        del cc_o
+        del cc_g
+        del i
+        del f
+        del o
+        del g
         gc.collect()
         torch.cuda.empty_cache()
+        
         return h_next, c_next
 
     def init_hidden(self, batch_size, image_size):
@@ -920,6 +932,13 @@ class ConvLSTM(nn.Module):
         
         self.cell_list = nn.ModuleList(cell_list)
 
+        del kernel_size
+        del hidden_dim
+        del cell_list
+        del cur_input_dim
+        gc.collect()
+        torch.cuda.empty_cache()
+
     def forward(self, input_tensor):
         """
         Parameters
@@ -960,16 +979,19 @@ class ConvLSTM(nn.Module):
             layer_output_list = layer_output_list[-1:]
             last_state_list = last_state_list[-1:]
 
+        del b
+        del w
         del hidden_state
         del layer_output_list
         del last_state_list
         del seq_len
-        del layer_output
         del cur_layer_input
         del c
         del output_inner
+        del layer_output
         gc.collect()
         torch.cuda.empty_cache()
+
         #return layer_output_list, last_state_list
         return h
 
@@ -1023,22 +1045,10 @@ class UNetConvLSTM(nn.Module):
         self.kernel_size = (kernel_size, kernel_size)
         self.features = 2**(in_channels-1).bit_length()  # nearest power of two to input channels
 
-        #cell_list = []
-        #for i in range(0, self.num_layers):
-        #    cur_input_dim = self.input_dim if i == 0 else self.hidden_dim[i - 1]
-        #
-        #    cell_list.append(ConvLSTMCell(input_dim=cur_input_dim,
-        #                                  hidden_dim=self.hidden_dim[i],
-        #                                  kernel_size=self.kernel_size[i]
-        #                                  ))
-        # 
-        #self.cell_list = nn.ModuleList(cell_list)
-
         # My orginal UNet has 2 convuolutions per 'block/cell', along with ReLu and batch Norm. And the upcells are
         # different to the downcells...could try to move closer to that set up.
 
         self.ConvLSTMCell1 = ConvLSTMCell(input_dim=self.in_channels, hidden_dim=self.features, kernel_size=self.kernel_size)
-        #self.ConvLSTMCell1 = ConvLSTMCell(input_dim=self.in_channels, hidden_dim=self.in_channels, kernel_size=self.kernel_size)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.ConvLSTMCell2 = ConvLSTMCell(input_dim=self.features, hidden_dim=self.features*2, kernel_size=self.kernel_size)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -1046,9 +1056,9 @@ class UNetConvLSTM(nn.Module):
         self.ConvLSTMCell3 = ConvLSTMCell(input_dim=self.features*2, hidden_dim=self.features*4, kernel_size=self.kernel_size)
 
         self.upsample2 = nn.Upsample(size=(int(ydim/2),int(xdim/2)), mode='bilinear')
-        self.ConvLSTMCell4 = ConvLSTMCell(input_dim=self.features*4, hidden_dim=self.features*2, kernel_size=self.kernel_size)
+        self.ConvLSTMCell4 = ConvLSTMCell(input_dim=self.features*4+self.features*2, hidden_dim=self.features*2, kernel_size=self.kernel_size)
         self.upsample1 = nn.Upsample(size=(int(ydim),int(xdim)), mode='bilinear')
-        self.ConvLSTMCell5 = ConvLSTMCell(input_dim=self.features*2, hidden_dim=self.features, kernel_size=self.kernel_size)
+        self.ConvLSTMCell5 = ConvLSTMCell(input_dim=self.features*2+self.features, hidden_dim=self.features, kernel_size=self.kernel_size)
 
         self.ConvLSTMCell6 = ConvLSTMCell(input_dim=self.features, hidden_dim=out_channels, kernel_size=self.kernel_size)
 
@@ -1066,103 +1076,96 @@ class UNetConvLSTM(nn.Module):
         """
         b, _, _, ydim, xdim = input_tensor.size()
 
-        layer_output_list = []
-        #last_state_list = []
-
         seq_len = input_tensor.size(1)
-        cur_layer_input = input_tensor
-
-        #for layer_idx in range(self.num_layers):
-        #    
-        #    h, c = hidden_state[layer_idx]
-        #    output_inner = []
-        #    for t in range(seq_len):
-        #        h, c = self.cell_list[layer_idx](input_tensor=cur_layer_input[:, t, :, :, :],
-        #                                         cur_state=[h, c])
-        #        output_inner.append(h)
-
-        #    layer_output = torch.stack(output_inner, dim=1)
-        #    cur_layer_input = layer_output
-
-        #    layer_output_list.append(layer_output)
-        #    #last_state_list.append([h, c])
 
         h = torch.zeros((b, self.features, ydim, xdim), device=self.device)
         c = torch.zeros((b, self.features, ydim, xdim), device=self.device)
         output_enc1 = []
        
         for t in range(seq_len):
-            print('t ; '+str(t))
-            h, c = self.ConvLSTMCell1(input_tensor=cur_layer_input[:, t, :, :, :], cur_state=[h, c])
+            #print('t ; '+str(t))
+            h, c = self.ConvLSTMCell1(input_tensor=input_tensor[:, t, :, :, :], cur_state=[h, c])
             output_enc1.append(h)
         enc1 = torch.stack(output_enc1, dim=1)
-        print('enc1.shape; '+str(enc1.shape))
+        #print('enc1.shape; '+str(enc1.shape))
 
         h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
         c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
         output_enc2 = []
         for t in range(seq_len):
-            print('t ; '+str(t))
+            #print('t ; '+str(t))
             pooled_enc1 = self.pool1(enc1[:, t, :, :, :])
             h, c = self.ConvLSTMCell2(input_tensor=pooled_enc1, cur_state=[h, c])
             output_enc2.append(h)
         enc2 = torch.stack(output_enc2, dim=1)
-        print('enc2.shape; '+str(enc2.shape))
+        #print('enc2.shape; '+str(enc2.shape))
 
         h = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ))
         c = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ))
         output_bottleneck = []
         for t in range(seq_len):
-            print('t ; '+str(t))
+            #print('t ; '+str(t))
             pooled_enc2 = self.pool2(enc2[:, t, :, :, :])
             h, c = self.ConvLSTMCell3(input_tensor=pooled_enc2, cur_state=[h, c])
             output_bottleneck.append(h)
         bottleneck = torch.stack(output_bottleneck, dim=1)
-        print('bottleneck.shape; '+str(bottleneck.shape))
+        #print('bottleneck.shape; '+str(bottleneck.shape))
 
         h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
         c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
         output_dec2 = []
         for t in range(seq_len):
-            print('t ; '+str(t))
+            #print('t ; '+str(t))
             upsampled_bottleneck = self.upsample2(bottleneck[:, t, :, :, :])
-            h, c = self.ConvLSTMCell4(input_tensor=torch.cat((upsampled_bottleneck, enc2[:, t, :, :, :]),dim=2), cur_state=[h, c])
+            #print('upsampled_bottleneck.shape '+str(upsampled_bottleneck.shape))
+            #print('enc2[:, t, :, :, :].shape '+str(enc2[:, t, :, :, :].shape))
+            h, c = self.ConvLSTMCell4(input_tensor=torch.cat((upsampled_bottleneck, enc2[:, t, :, :, :]),dim=1), cur_state=[h, c])
             output_dec2.append(h)
         dec2 = torch.stack(output_dec2, dim=1)
-        print('dec2.shape; '+str(dec2.shape))
+        #print('dec2.shape; '+str(dec2.shape))
 
         h = torch.zeros((b, self.features, ydim, xdim))
         c = torch.zeros((b, self.features, ydim, xdim))
         output_dec1 = []
         for t in range(seq_len):
-            print('t ; '+str(t))
+            #print('t ; '+str(t))
             upsampled_dec2 = self.upsample1(dec2[:, t, :, :, :])
-            h, c = self.ConvLSTMCell5(input_tensor=torch.cat((upsampled_dec2, enc1[:, t, :, :, :]),dim=2), cur_state=[h, c])
+            h, c = self.ConvLSTMCell5(input_tensor=torch.cat((upsampled_dec2, enc1[:, t, :, :, :]),dim=1), cur_state=[h, c])
             output_dec1.append(h)
         dec1 = torch.stack(output_dec1, dim=1)
-        print('dec1.shape; '+str(dec1.shape))
+        #print('dec1.shape; '+str(dec1.shape))
 
         h = torch.zeros((b, self.out_channels, ydim, xdim))
         c = torch.zeros((b, self.out_channels, ydim, xdim))
         output_final = []
         for t in range(seq_len):
-            print('t ; '+str(t))
+            #print('t ; '+str(t))
             h, c = self.ConvLSTMCell6(input_tensor=dec1[:, t, :, :, :], cur_state=[h, c])
             output_final.append(h)
         final = torch.stack(output_final, dim=1)
-        print('final.shape; '+str(final.shape))
+        #print('final.shape; '+str(final.shape))
 
-
+        del b
+        del xdim
+        del ydim 
+        del seq_len
+        del h
+        del c
         del output_enc1
         del enc1
+        del pooled_enc1
         del output_enc2
         del enc2
+        del pooled_enc2
         del output_bottleneck
         del bottleneck
+        del upsampled_bottleneck
         del output_dec2
         del dec2
+        del upsampled_dec2
         del output_dec1
         del dec1
+        del output_final
         gc.collect()
         torch.cuda.empty_cache()
 

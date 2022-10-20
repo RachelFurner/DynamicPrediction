@@ -42,10 +42,7 @@ import multiprocessing as mp
 from scipy.ndimage import gaussian_filter
 
 def ReadMeanStd(dim, no_levels):
-   if dim =='2d':
-      mean_std_file = '../../../Channel_nn_Outputs/Spits_2d_MeanStd.npz'
-   elif dim =='3d':
-      mean_std_file = '../../../Channel_nn_Outputs/Spits_3d_MeanStd.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
@@ -77,12 +74,12 @@ def ReadMeanStd(dim, no_levels):
       tmp_targets_std[3*no_levels] = targets_std[3]
       tmp_targets_range[3*no_levels] = targets_range[3]
 
-      inputs_mean  = inputs_mean
-      inputs_std   = inputs_std 
-      inputs_range = inputs_range
-      targets_mean  = targets_mean
-      targets_std   = targets_std 
-      targets_range = targets_range
+      inputs_mean  = tmp_inputs_mean
+      inputs_std   = tmp_inputs_std 
+      inputs_range = tmp_inputs_range
+      targets_mean  = tmp_targets_mean
+      targets_std   = tmp_targets_std 
+      targets_range = tmp_targets_range
 
    return(inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range)
 
@@ -181,18 +178,13 @@ def TrainModel(model_name, model_style, dimension, histlen, tic, TEST, no_tr_sam
        h.train(True)
 
        #for input_batch, target_batch, masks, bdy_masks in train_loader:
-       for input_batch, target_batch, masks in train_loader:
+       for input_batch, target_batch, masks, out_masks in train_loader:
 
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
-           if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-              out_masks = masks[:,0,:,:,:]
-           else:
-              out_masks = masks
-           # multiply by masks, to give 0 at land values, to circumvent issues with normalisation!
-           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * out_masks
-           # input_batch SHAPE: (no_samples, no_channels, z, y, x) if 3d, (no_samples, no_channels, y, x) if 2d.
-   
+           out_masks = out_masks.to(device, non_blocking=True, dtype=torch.float)
+           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
+
            # Clear gradient buffers because we don't want any gradient from previous epoch to carry forward, dont want to cummulate gradients
            optimizer.zero_grad()
        
@@ -284,19 +276,15 @@ def TrainModel(model_name, model_style, dimension, histlen, tic, TEST, no_tr_sam
        h.train(False)
 
        #for input_batch, target_batch, masks, bdy_masks in val_loader:
-       for input_batch, target_batch, masks in val_loader:
+       for input_batch, target_batch, masks, out_masks in val_loader:
    
            # Send inputs and labels to GPU if available
            input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
            masks = masks.to(device, non_blocking=True, dtype=torch.float)
-           if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-              out_masks = masks[:,0,:,:,:]
-           else:
-              out_masks = masks
-           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float) * out_masks
-           
+           out_masks = out_masks.to(device, non_blocking=True, dtype=torch.float)
+           target_batch = target_batch.to(device, non_blocking=True, dtype=torch.float)
+
            # get prediction from the model, given the inputs
-           #predicted_batch = h( torch.cat((input_batch, masks, bdy_masks), dim=1) ) * masks
            predicted_batch = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks
        
            # get loss for the predicted_batch output
@@ -361,17 +349,15 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, no_out_chan
 
    with torch.no_grad():
       #input_batch, target_batch, masks, bdy_masks = next(iter(data_loader))
-      input_batch, target_batch, masks = next(iter(data_loader))
+      input_batch, target_batch, masks, out_masks = next(iter(data_loader))
       input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
-      predicted_batch = h( torch.cat(
-                           ( input_batch,
-                           masks.to(device, non_blocking=True, dtype=torch.float)
-                           ), dim=channel_dim)
+      masks  = masks.to(device, non_blocking=True, dtype=torch.float)
+      predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )
                          ).cpu().detach().double()
 
    # Denormalise and mask
-   target_batch = torch.where(masks==1, rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
-   predicted_batch = torch.where(masks==1, rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
+   target_batch = torch.where(out_masks==1, rr.RF_DeNormalise(target_batch, targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
+   predicted_batch = torch.where(out_masks==1, rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
 
    if dimension == '2d':
       # reshape to give each variable its own dimension
@@ -486,7 +472,7 @@ def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losse
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
-def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
+def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
                 histlen, no_in_channels, no_out_channels, land, file_append, norm_method, channel_dim):
    #-------------------------------------------------------------
    # Output the rms and correlation coefficients over a dataset
@@ -506,7 +492,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    da_Y = mitgcm_ds['Yp1']
    da_Z = mitgcm_ds['Zmd000038'] 
 
-   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z)
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z.shape[0])
 
    if land == 'ExcLand':
       da_Y = da_Y[3:]
@@ -528,25 +514,19 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
          h = h.cuda()
 
    with torch.no_grad():
-      for input_batch, target_batch, masks in data_loader:
-          
+      for input_batch, target_batch, masks, out_masks in data_loader:
           input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
           target_batch = target_batch.cpu().detach().numpy()
+          masks = masks.to(device, non_blocking=True, dtype=torch.float)
 
           # get prediction from the model, given the inputs
           if isinstance(h, list):
-             predicted_batch = h[0]( torch.cat((input_batch,
-                                             masks.to(device, non_blocking=True, dtype=torch.float)
-                                            ), dim=channel_dim) ) 
+             predicted_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ) 
              for i in range(1, len(h)):
-                predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, 
-                                                                      masks.to(device, non_blocking=True, dtype=torch.float)
-                                                                     ), dim=channel_dim) )
+                predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) )
              predicted_batch = predicted_batch / len(h)
           else:
-             predicted_batch = h( torch.cat((input_batch,
-                                             masks.to(device, non_blocking=True, dtype=torch.float)
-                                            ), dim=channel_dim) ) 
+             predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
           predicted_batch = predicted_batch.cpu().detach().numpy() 
 
           # Denormalise
@@ -555,8 +535,15 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
           input_batch = rr.RF_DeNormalise(input_batch.cpu().detach().numpy(), inputs_mean, inputs_std, inputs_range, dimension, norm_method)
 
           # Convert from increments to fields for outputting
-          target_batch = input_batch + target_batch
-          predicted_batch = input_batch + predicted_batch
+          if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
+             target_batch = input_batch[:,-1,:,:,:] + target_batch
+             predicted_batch = input_batch[:,-1,:,:,:] + predicted_batch
+          elif dimension == '2d':
+             target_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + target_batch
+             predicted_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + predicted_batch
+          elif dimension == '3d':
+             target_batch = input_batch[:,-4:,:,:,:] + target_batch
+             predicted_batch = input_batch[:,-4:,:,:,:] + predicted_batch
 
           # Add summed error of this batch
           if batch_no==0:
@@ -582,7 +569,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
   
    rms_error = np.sqrt( np.divide(summed_sq_error, count) )
    # mask rms error (for ease of viewing plots), leave othere variables so we can see what's happening
-   rms_error = np.where( masks[0,:,:,:]==1, rms_error, np.nan)
+   rms_error = np.where( out_masks[0]==1, rms_error, np.nan)
 
    # Set up netcdf files
    nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput_'+file_append+'.nc'
@@ -604,6 +591,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
    nc_TrueV      = nc_file.createVariable( 'True_V'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueEta    = nc_file.createVariable( 'True_Eta'   , 'f4', ('T', 'Y', 'X')      )
 
+   nc_Mask       = nc_file.createVariable( 'Mask'       , 'f4', ('Z', 'Y', 'X') )
    nc_TempMask   = nc_file.createVariable( 'Temp_Mask'  , 'f4', ('Z', 'Y', 'X') )
    nc_UMask      = nc_file.createVariable( 'U_Mask'     , 'f4', ('Z', 'Y', 'X') )
    nc_VMask      = nc_file.createVariable( 'V_Mask'     , 'f4', ('Z', 'Y', 'X') )
@@ -636,10 +624,11 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       nc_TrueV[:,:,:,:]    = targets[:no_samples,2*no_depth_levels:3*no_depth_levels,:,:]
       nc_TrueEta[:,:,:]    = targets[:no_samples,3*no_depth_levels,:,:]
 
-      nc_TempMask[:,:,:] = masks[0,0:no_depth_levels,:,:]
-      nc_UMask[:,:,:]    = masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_VMask[:,:,:]    = masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_EtaMask[:,:]    = masks[0,3*no_depth_levels,:,:]
+      nc_Mask[:,:,:]     = masks[0,:,:,:].cpu()
+      nc_TempMask[:,:,:] = out_masks[0,0:no_depth_levels,:,:]
+      nc_UMask[:,:,:]    = out_masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_VMask[:,:,:]    = out_masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_EtaMask[:,:]    = out_masks[0,3*no_depth_levels,:,:]
 
       nc_PredTemp[:,:,:,:] = predictions[:no_samples,0:no_depth_levels,:,:]
       nc_PredU[:,:,:,:]    = predictions[:no_samples,1*no_depth_levels:2*no_depth_levels,:,:]
@@ -666,10 +655,11 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       nc_TrueV[:,:,:,:]    = targets[:no_samples,2,:,:,:]
       nc_TrueEta[:,:,:]    = targets[:no_samples,3,0,:,:]
 
-      nc_TempMask[:,:,:] = masks[0,0,:,:,:]
-      nc_UMask[:,:,:]    = masks[0,1,:,:,:]
-      nc_VMask[:,:,:]    = masks[0,2,:,:,:]
-      nc_EtaMask[:,:]    = masks[0,3,0,:,:]
+      nc_Mask[:,:,:]     = masks[0,0,:,:,:].cpu()
+      nc_TempMask[:,:,:] = out_masks[0,0,:,:,:]
+      nc_UMask[:,:,:]    = out_masks[0,1,:,:,:]
+      nc_VMask[:,:,:]    = out_masks[0,2,:,:,:]
+      nc_EtaMask[:,:]    = out_masks[0,3,0,:,:]
 
       nc_PredTemp[:,:,:,:] = predictions[:no_samples,0,:,:,:]
       nc_PredU[:,:,:,:]    = predictions[:no_samples,1,:,:,:]
@@ -691,7 +681,7 @@ def OutputStats(model_name, MeanStd_prefix, mitgcm_filename, data_loader, h, no_
       nc_EtaRMS[:,:]    = rms_error[3,0,:,:]
 
 
-def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
+def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
                        y_dim_used, land, dimension, histlen, no_in_channels, no_out_channels, landvalues,
                        iterate_method, norm_method, channel_dim):
    logging.info('Iterating')
@@ -704,7 +694,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    da_Y = mitgcm_ds['Yp1']
    da_Z = mitgcm_ds['Zmd000038'] 
    no_depth_levels = 38   #Unesseccary duplication, could use with da_Z shape , should change...
-   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z)
+   inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z.shape[0])
 
    landvalues = torch.tensor(landvalues)
 
@@ -721,12 +711,19 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       if torch.cuda.is_available():
          h = h.cuda()
 
-   # Read in first sample from MITgcm dataset and save as first entry in both arrays
-   input_sample, target_sample, masks = Iterate_Dataset.__getitem__(start)
-   # Give extra dimension at front (as usually number of samples)
+   # Read in data from MITgcm dataset (take 0th entry, as others are target, masks etc) and save as first entry in both arrays
+   input_sample, target_sample, masks, out_masks = Iterate_Dataset.__getitem__(start)
+   # Give extra dimension at front (number of samples - here 1)
    input_sample = input_sample.unsqueeze(0)
    masks = masks.unsqueeze(0)
-   if dimension == '2d':
+   ################################################################################
+   # Should amend the below to use input_sample rather than doing another read?!? #
+   ################################################################################
+   if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
+      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:,:,:,:],
+                                          inputs_mean, inputs_std, inputs_range, dimension, norm_method)
+      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:,:,:,:]
+   elif dimension == '2d':
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:(no_depth_levels*3+1),:,:].unsqueeze(0),
                                           inputs_mean, inputs_std, inputs_range, dimension, norm_method)
       MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:no_depth_levels*3+1,:,:].unsqueeze(0)
@@ -752,7 +749,6 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
           MITgcm_data = torch.cat( (MITgcm_data, 
                                    Iterate_Dataset.__getitem__(start)[0][time*4:(time+1)*4,:,:].unsqueeze(0) ),
                                    axis=0)
-
    grid_predictions = torch.zeros(MITgcm_data.shape)
    grid_norm_predictions = torch.zeros(MITgcm_data.shape)
 
@@ -798,19 +794,19 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
                # (k1)/2 added to state, masked, then normalised, and finally masks catted on. And then passed through neural net)
                k2 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k1)/2. ), landvalues.unsqueeze(1).unsqueeze(2) ),
-                             inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
+                              torch.where( out_masks==1, ( iterated_fields[-1,:,:,:] + (k1)/2. ), landvalues.unsqueeze(1).unsqueeze(2) ),
+                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
                k3 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k2)/2. ), landvalues.unsqueeze(1).unsqueeze(2) ),
-                             inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
+                              torch.where( out_masks==1, ( iterated_fields[-1,:,:,:] + (k2)/2. ), landvalues.unsqueeze(1).unsqueeze(2) ),
+                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
                k4 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:] + (k3)    ), landvalues.unsqueeze(1).unsqueeze(2) ),
+                             torch.where( out_masks==1, ( iterated_fields[-1,:,:,:] + (k3)    ), landvalues.unsqueeze(1).unsqueeze(2) ),
                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
@@ -820,19 +816,19 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
                # (k1)/2 added to state, masked, then normalised, and finally masks catted on. And then passed through neural net)
                k2 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:,:] + (k1)/2. ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
+                             torch.where( out_masks==1, ( iterated_fields[-1,:,:,:,:] + (k1)/2. ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
                k3 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:,:] + (k2)/2. ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
+                             torch.where( out_masks==1, ( iterated_fields[-1,:,:,:,:] + (k2)/2. ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
                k4 = h( torch.cat( (
                           rr.RF_Normalise( 
-                             torch.where( masks==1, ( iterated_fields[-1,:,:,:,:] + (k3)    ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
+                             torch.where( out_masks==1, ( iterated_fields[-1,:,:,:,:] + (k3)    ), landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) ),
                              inputs_mean, inputs_std, inputs_range, dimension, norm_method), 
                           masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                      ).cpu().detach()
@@ -842,17 +838,23 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
 
          # Mask field
          if dimension == '2d':
-            next_field = torch.where( masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2) )
+            next_field = torch.where(out_masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2) )
          if dimension == '3d':
-            next_field = torch.where( masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) )
+            next_field = torch.where( out_masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) )
          # Cat prediction onto existing fields
          iterated_fields = torch.cat( ( iterated_fields, next_field ), axis=0 )
          # Re-Normalise ready to use as inputs
          next_field = rr.RF_Normalise(next_field, inputs_mean, inputs_std, inputs_range, dimension, norm_method)
 
          # Get MITgcm data for relevant step, and prep new input sample
-         if dimension == '2d':
-            # Plus one to time dimension as we want the next step, to match time stamp of prediction
+         # Plus one to time dimension as we want the next step, to match time stamp of prediction
+         if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
+            MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start)[0][histlen-1:histlen,:,:,:] ), axis=0)
+            for time in range(histlen-1):
+               input_sample[0,time,:,:,:] = \
+                                 input_sample[0,time+1,:,:,:]
+            input_sample[0,histlen-1,:,:,:] = next_field[0,:,:,:]
+         elif dimension == '2d':
             MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
                                        [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
                                        axis=0 )
@@ -860,9 +862,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
                input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:] = \
                                  input_sample[0,(time+1)*(3*no_depth_levels+1):(time+2)*(3*no_depth_levels+1),:,:]
             input_sample[0,(histlen-1)*(3*no_depth_levels+1):(histlen)*(3*no_depth_levels+1),:,:] = next_field[0,:,:,:]
-
          elif dimension == '3d':
-            # Plus one to time dimension as we want the next step, to match time stamp of prediction
             MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
                                        [(histlen-1)*4:histlen*4,:,:,:].unsqueeze(0) ),
                                        axis=0 )
@@ -891,7 +891,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    nc_file.createDimension('Z', da_Z.values.shape[0])
    nc_file.createDimension('Y', y_dim_used)
    nc_file.createDimension('X', da_X.values.shape[0])
-   
+
    # Create variables
    nc_T = nc_file.createVariable('T', 'i4', 'T')
    nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
@@ -945,10 +945,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
    nc_X[:] = da_X.values
  
    if dimension == '2d':
-      nc_TempMask[:,:,:] = masks[0,0:no_depth_levels,:,:]
-      nc_UMask[:,:,:]    = masks[0,1*no_depth_levels:2*no_depth_levels,:,:]
-      nc_VMask[:,:,:]    = masks[0,2*no_depth_levels:3*no_depth_levels,:,:]
-      nc_EtaMask[:,:]    = masks[0,3*no_depth_levels,:,:]
+      nc_TempMask[:,:,:] = out_masks[0:no_depth_levels,:,:]
+      nc_UMask[:,:,:]    = out_masks[1*no_depth_levels:2*no_depth_levels,:,:]
+      nc_VMask[:,:,:]    = out_masks[2*no_depth_levels:3*no_depth_levels,:,:]
+      nc_EtaMask[:,:]    = out_masks[3*no_depth_levels,:,:]
 
       nc_TrueTemp[:,:,:,:] = MITgcm_data[:,0:no_depth_levels,:,:] 
       nc_TrueU[:,:,:,:]    = MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
@@ -986,10 +986,10 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_EtaErrors[:,:,:]    = iterated_fields[:,3*no_depth_levels,:,:] - MITgcm_data[:,3*no_depth_levels,:,:]
 
    elif dimension == '3d':
-      nc_TempMask[:,:,:] = masks[0,0,:,:,:]
-      nc_UMask[:,:,:]    = masks[0,1,:,:,:]
-      nc_VMask[:,:,:]    = masks[0,2,:,:,:]
-      nc_EtaMask[:,:]    = masks[0,3,0,:,:]
+      nc_TempMask[:,:,:] = out_masks[0,:,:,:]
+      nc_UMask[:,:,:]    = out_masks[1,:,:,:]
+      nc_VMask[:,:,:]    = out_masks[2,:,:,:]
+      nc_EtaMask[:,:]    = out_masks[3,0,:,:]
 
       nc_TrueTemp[:,:,:,:] = MITgcm_data[:,0,:,:,:] 
       nc_TrueU[:,:,:,:]    = MITgcm_data[:,1,:,:,:]
@@ -1007,7 +1007,7 @@ def IterativelyPredict(model_name, MeanStd_prefix, mitgcm_filename, Iterate_Data
       nc_EtaErrors[:,:,:]    = iterated_fields[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]
 
 
-def PlotTrainingEvolution(model_name, MeanStd_prefix, mitgcm_filename, Evolution_Dataset, h, optimizer, epochs_list,
+def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filename, Evolution_Dataset, h, optimizer, epochs_list,
                           dimension, histlen, no_in_channels, no_out_channels, landvalues, norm_method,channel_dim):
 
    logging.info('Plotting Training Evolution')
@@ -1026,16 +1026,19 @@ def PlotTrainingEvolution(model_name, MeanStd_prefix, mitgcm_filename, Evolution
    
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, no_levels)
 
-   input_sample, target_sample, masks = Evolution_Dataset.__getitem__(time)
+   input_sample, target_sample, masks, out_masks = Evolution_Dataset.__getitem__(time)
    input_sample = input_sample.unsqueeze(0)
    target_sample = target_sample.unsqueeze(0)
 
-   prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0]
-   target_tend = rr.RF_DeNormalise(target_sample, targets_mean, targets_std, targets_range, dimension, norm_method)[0]
+   if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
+      prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,-1,:,:,:]
+   elif dimension == '2d':
+      prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,-(3*no_levels+1):,:,:]
+   target_tend = rr.RF_DeNormalise(target_sample, targets_mean, targets_std, targets_range, dimension, norm_method)[0,:,:,:]
    target_field = prev_field + target_tend
-   target_tend = np.where( masks.numpy()==1., target_tend.numpy(), np.nan )
-   target_field = np.where( masks.numpy()==1., target_field.numpy(), np.nan )
-   
+   target_tend = np.where( out_masks.numpy()==1., target_tend.numpy(), np.nan )
+   target_field = np.where( out_masks.numpy()==1., target_field.numpy(), np.nan )
+
    for epochs in epochs_list:
    
       # Load model
@@ -1052,10 +1055,10 @@ def PlotTrainingEvolution(model_name, MeanStd_prefix, mitgcm_filename, Evolution
          predicted_field = prev_field + predicted_tend
    
       # Make plot
-      predicted_field = np.where( masks.numpy()==1., predicted_field.numpy(), np.nan )
-      predicted_tend = np.where( masks.numpy()==1., predicted_tend.numpy(), np.nan )
+      predicted_field = np.where( out_masks.numpy()==1., predicted_field.numpy(), np.nan )
+      predicted_tend = np.where( out_masks.numpy()==1., predicted_tend.numpy(), np.nan )
       # Need to add code for 3d options here and make sure it works for histlen>1
-      if dimension == '2d':
+      if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
          fig = ChnPlt.plot_depth_fld_diff(target_field[level,:,:], 'True Temperature',
                                           predicted_field[level,:,:], 'Predicted Temperature',
                                           level, da_X.values, da_Y.values, da_Z.values, title=None)
@@ -1095,3 +1098,44 @@ def PlotTrainingEvolution(model_name, MeanStd_prefix, mitgcm_filename, Evolution
                                           predicted_tend[2*no_levels,:,:], 'Predicted Sea Surface Height Change',
                                           0, da_X.values, da_Y.values, da_Z.values, title=None)
          plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+      elif dimension == '2d':
+         fig = ChnPlt.plot_depth_fld_diff(target_field[level,:,:], 'True Temperature',
+                                          predicted_field[level,:,:], 'Predicted Temperature',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Temp_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[no_levels+level,:,:], 'True East-West Velocity', 
+                                          predicted_field[no_levels+level,:,:], 'Predicted East-West Velocity',
+                                          level, da_X.values, da_Y.values, da_Z.values)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_U_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels+level,:,:], 'True North-South Velocity',
+                                          predicted_field[2*no_levels+level,:,:], 'Predicted North-South Velocity',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_V_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels,:,:], 'True Sea Surface Height',
+                                          predicted_field[2*no_levels,:,:], 'Predicted Sea Surface Height',
+                                          0, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
+
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[level,:,:], 'True Temperature Change',
+                                          predicted_tend[level,:,:], 'Predicted Temperature Change',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Temp_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[no_levels+level,:,:], 'True East-West Velocity Change', 
+                                          predicted_tend[no_levels+level,:,:], 'Predicted East-West Velocity Change',
+                                          level, da_X.values, da_Y.values, da_Z.values)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_U_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[2*no_levels+level,:,:], 'True North-South Velocity Change',
+                                          predicted_tend[2*no_levels+level,:,:], 'Predicted North-South Velocity Change',
+                                          level, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_V_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+         
+         fig = ChnPlt.plot_depth_fld_diff(target_tend[2*no_levels,:,:], 'True Sea Surface Height Change',
+                                          predicted_tend[2*no_levels,:,:], 'Predicted Sea Surface Height Change',
+                                          0, da_X.values, da_Y.values, da_Z.values, title=None)
+         plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'_tend.png', bbox_inches = 'tight', pad_inches = 0.1)
+

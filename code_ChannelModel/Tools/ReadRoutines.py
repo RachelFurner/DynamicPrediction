@@ -72,26 +72,20 @@ class MITGCM_Dataset(data.Dataset):
 
        HfacC = self.mask_ds['HFacC'].values
 
+       self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+       self.masks[:,:,:] = np.where( HfacC > 0., 1, 0 )
+
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
-          if self.dim == '2d':
-             self.masks = np.ones((self.hist_len, 3*self.z_dim+1, self.y_dim, self.x_dim ))
-             for i in range(3):
-                self.masks[:,i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
-             self.masks[:,3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
-          elif self.dim == '3d':
-             print('not set up ConvLSTM for 3d set up yet')
-       else:
-          if self.dim == '2d':
-             self.masks = np.ones(( 3*self.z_dim+1, self.y_dim, self.x_dim ))
-             for i in range(3):
-                self.masks[i*self.z_dim:(i+1)*self.z_dim,:,:] = np.where( HfacC > 0., 1, 0 )
-             self.masks[3*self.z_dim,:,:] = np.where( HfacC[0,:,:] > 0., 1, 0 )
-          elif self.dim == '3d':
-             self.masks = np.ones(( 4, self.z_dim, self.y_dim, self.x_dim ))
-             for i in range(4):
-                self.masks[i,:,:,:] = np.where( HfacC > 0., 1, 0 )
+          self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
+          self.masks = np.broadcast_to( self.masks, (self.hist_len, self.z_dim, self.y_dim, self.x_dim) )
+       elif self.dim == '2d':
+          self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
+       elif self.dim == '3d':
+          self.out_masks = np.stack( (self.masks, self.masks, self.masks, self.masks), axis=0)
+          self.masks = np.expand_dims( self.masks, axis=0 )
 
        self.masks = torch.from_numpy(self.masks)
+       self.out_masks = torch.from_numpy(self.out_masks)
 
    def __len__(self):
        return int(self.ds.sizes['T']/self.stride)
@@ -174,8 +168,13 @@ class MITGCM_Dataset(data.Dataset):
              sample_output[ 3*self.z_dim, :, : ] = \
                                              da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
 
-             # Mask inputs
-             sample_input[:,:,:,:] = np.where( self.masks==1, sample_input[:,:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
+             # Mask data
+             for time in range(self.hist_len):
+                sample_input[time,:,:,:] = np.where( self.out_masks==1,
+                                                     sample_input[time,:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
+
+             sample_output[:,:,:] = np.where( self.out_masks==1,
+                                              sample_output[:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
 
        else:
           if self.dim == '2d':
@@ -207,12 +206,10 @@ class MITGCM_Dataset(data.Dataset):
       
              # mask values
              for time in range(self.hist_len):
-                 sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.masks==1, 
+                 sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.out_masks==1, 
                                                                                                sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:],
                                                                                                np.expand_dims( self.land_values, axis=(1,2)) )
-             ###############################################
-             #### I THINK WE SHOULD MASK OUTPUTS??!?!?! ####
-             ###############################################
+             sample_output[:,:,:] = np.where( self.out_masks==1, sample_output[:,:,:], np.expand_dims( self.land_values, axis=(1,2) ) )
 
           elif self.dim == '3d':
              # Dims are channels,z,y,x
@@ -232,8 +229,11 @@ class MITGCM_Dataset(data.Dataset):
       
              # mask values
              for time in range(self.hist_len):
-                 sample_input[time*4:(time+1)*4,:,:,:] = np.where( self.masks==1, sample_input[time*4:(time+1)*4,:,:,:], 
+                 sample_input[time*4:(time+1)*4,:,:,:] = np.where( self.out_masks==1,
+                                                                   sample_input[time*4:(time+1)*4,:,:,:], 
                                                                    np.expand_dims( self.land_values, axis=(1,2,3)) )
+             sample_output[:,:,:,:] = np.where( self.out_masks==1, sample_output[:,:,:], np.expand_dims( self.land_values, axis=(1,2,3) ) )
+
 
        del da_T_in
        del da_T_out
@@ -252,7 +252,7 @@ class MITGCM_Dataset(data.Dataset):
        if self.transform:
           sample_input, sample_output = self.transform({'input':sample_input, 'output':sample_output})
  
-       return sample_input, sample_output, self.masks
+       return sample_input, sample_output, self.masks, self.out_masks
 
 
 class RF_Normalise_sample(object):

@@ -51,6 +51,8 @@ def parse_args():
     a.add_argument("-ms", "--modelstyle", default='UNet2dtransp', type=str, action='store')
     a.add_argument("-di", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='Spits', type=str, action='store')
+    a.add_argument("-pj", "--predictionjump", default='12hrly', type=str, action='store')
+    a.add_argument("-nm", "--normmethod", default='range', type=str, action='store')
     a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
     a.add_argument("-pa", "--padding", default='None', type=str, action='store')
     a.add_argument("-ks", "--kernsize", default=3, type=int, action='store')
@@ -60,6 +62,7 @@ def parse_args():
     a.add_argument("-wd", "--weightdecay", default=0., type=float, action='store')
     a.add_argument("-nw", "--numworkers", default=8, type=int, action='store')
     a.add_argument("-sd", "--seed", default=30475, type=int, action='store')
+    a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
     a.add_argument("-lo", "--loadmodel", default=False, type=bool, action='store')
     a.add_argument("-se", "--savedepochs", default=0, type=int, action='store')
     a.add_argument("-be", "--best", default=False, type=bool, action='store')
@@ -71,9 +74,6 @@ def parse_args():
     a.add_argument("-im", "--iteratemethod", default='simple', type=str, action='store')
     a.add_argument("-pe", "--plotevolution", default=False, type=bool, action='store')
     a.add_argument("-ee", "--evolutionepochs", default='10,50,100,150,200', type=str, action='store')
-    a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
-    a.add_argument("-pj", "--predictionjump", default='12hrly', type=str, action='store')
-    a.add_argument("-nm", "--normmethod", default='range', type=str, action='store')
 
     return a.parse_args()
 
@@ -123,6 +123,8 @@ if __name__ == "__main__":
        model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)+'_TEST'
        for_len = min(for_len, 50)
        args.epochs = 5
+       args.evolutionepochs = '5'
+       ev_epoch_ls = [int(item) for item in args.evolutionepochs.split(',')]
     else:
        model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_seed'+str(args.seed)
     
@@ -135,7 +137,6 @@ if __name__ == "__main__":
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
        os.system("mkdir %s" % (model_dir+'/TRAIN_EVOLUTION'))
-       os.system("mkdir %s" % (model_dir+'/STATS'))
     
     if args.trainmodel:
        if args.loadmodel: 
@@ -208,13 +209,13 @@ if __name__ == "__main__":
     inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.dim, z_dim)
 
     if args.modelstyle == 'ConvLSTM' or args.modelstyle == 'UNetConvLSTM':
-       no_in_channels = ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, plus masks
-       no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
+       no_in_channels = ( 3*z_dim + 1) + z_dim   # Eta, plus Temp, U, V through depth, plus masks
+       no_out_channels = 3*z_dim + 1             # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '2d':
-       no_in_channels = args.histlen * ( 3*z_dim + 1) + (3*z_dim + 1)  # Eta, plus Temp, U, V through depth, for each past time, plus masks
-       no_out_channels = 3*z_dim + 1                    # Eta field, plus Temp, U, V through depth, just once
+       no_in_channels = args.histlen * ( 3*z_dim + 1) + z_dim   # Eta, plus Temp, U, V through depth, for each past time, plus masks
+       no_out_channels = 3*z_dim + 1                            # Eta field, plus Temp, U, V through depth, just once
     elif args.dim == '3d':
-       no_in_channels = args.histlen * 4 + 4  # Eta Temp, U, V , for each past time, plus masks
+       no_in_channels = args.histlen * 4 + 1  # Eta Temp, U, V , for each past time, plus masks
        no_out_channels = 4                # Eta, Temp, U, V just once
    
     logging.debug('no_in_channels ;'+str(no_in_channels)+'\n')
@@ -300,10 +301,10 @@ if __name__ == "__main__":
        stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
                                                num_workers=args.numworkers, pin_memory=True )
     
-       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, no_in_channels, no_out_channels, args.land, 'training', args.normmethod, channel_dim)
     
-       OutputStats(model_name, args.land+'_'+args.dim, MITGCM_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, no_in_channels, no_out_channels, args.land, 'validation', args.normmethod, channel_dim)
     
     #---------------------
@@ -317,7 +318,7 @@ if __name__ == "__main__":
                                                                               targets_mean, targets_std, targets_range,
                                                                               args.histlen, no_out_channels, args.dim, args.normmethod)] ) )
     
-       IterativelyPredict(model_name, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
+       IterativelyPredict(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
                           y_dim_used, args.land, args.dim, args.histlen, no_in_channels, no_out_channels, landvalues,
                           args.iteratemethod, args.normmethod, channel_dim) 
     
@@ -332,5 +333,5 @@ if __name__ == "__main__":
                                                                              targets_mean, targets_std, targets_range,
                                                                              args.histlen, no_out_channels, args.dim, args.normmethod)] ) )
 
-       PlotTrainingEvolution(model_name, args.land+'_'+args.dim, MITGCM_filename, Evolve_Dataset, h, optimizer, ev_epoch_ls,
+       PlotTrainingEvolution(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, Evolve_Dataset, h, optimizer, ev_epoch_ls,
                              args.dim, args.histlen, no_in_channels, no_out_channels, landvalues, args.normmethod, channel_dim)
