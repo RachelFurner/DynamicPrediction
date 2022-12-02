@@ -13,11 +13,20 @@ import xarray as xr
 import netCDF4 as nc4
 import gc as gc
 
-init=True
+#datafilename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/'
+#data_filename=datadir + '12hrly_data.nc'
+datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
+data_filename=datadir + '10min_data.nc'
+out_filename = datadir+'/stats.nc'
+grid_filename = datadir+'grid.nc'
+
+mean_std_file = '../../../Channel_nn_Outputs/10min_MeanStd.npz'
+
+init=False
 var_range=range(4)
-plot_histograms = True 
+plotting_histograms = False
 calc_stats = True
-nc_stats = True
+nc_stats = False
 
 #------------------------
 
@@ -34,12 +43,6 @@ def plot_histograms(data_name, histogram_inputs, varname, file_varname):
    plt.close()
 
 #------------------------
-datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/'
-data_filename=datadir + '12hrly_data.nc'
-out_filename = datadir+'/stats.nc'
-grid_filename = datadir+'grid.nc'
-
-mean_std_file = '../../../Channel_nn_Outputs/MeanStd.npz'
    
 VarName = ['Temperature', 'U Velocity', 'V Velocity', 'Sea Surface Height']
 ShortVarName = ['Temp', 'UVel', 'VVel', 'Eta']
@@ -109,7 +112,8 @@ for var in var_range:
    da_mask = ds_grid[MaskVarName[var]]
 
    ds_inputs = xr.open_dataset(data_filename)
-   ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
+   ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']), 3 ) )
+   #ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
    da = ds_inputs[ncVarName[var]]
    if var == 3:
       da.values[:,:,:,:] = np.where( da_mask.values[0:1,:,:] > 0., da.values[:,:,:,:], np.nan )
@@ -144,10 +148,9 @@ for var in var_range:
       del nc_Std
       gc.collect()
 
-   targets  = da.values[1:]-da.values[:-1]
-   if plot_histograms:
+   if plotting_histograms:
       plot_histograms('Spits', da.values.reshape(-1), VarName[var], ShortVarName[var]+'Inputs')
-      plot_histograms('Spits', targets.reshape(-1), VarName[var]+' targets', ShortVarName[var]+'Targets')
+      plot_histograms('Spits', (da.values[1:]-da.values[:-1]).reshape(-1), VarName[var]+' targets', ShortVarName[var]+'Targets')
 
    if calc_stats:
       mean_std_data = np.load(mean_std_file)
@@ -161,9 +164,9 @@ for var in var_range:
       inputs_mean[var]  = np.nanmean(da.values)
       inputs_std[var]   = np.nanstd(da.values)
       inputs_range[var] = np.nanmax(da.values) - np.nanmin(da.values)
-      targets_mean[var]  = np.nanmean(targets)
-      targets_std[var]   = np.nanstd(targets)
-      targets_range[var] = np.nanmax(targets) - np.nanmin(targets)
+      targets_mean[var]  = np.nanmean(da.values[1:]-da.values[:-1])
+      targets_std[var]   = np.nanstd(da.values[1:]-da.values[:-1])
+      targets_range[var] = np.nanmax(da.values[1:]-da.values[:-1]) - np.nanmin(da.values[1:]-da.values[:-1])
 
       np.savez( mean_std_file, 
                 inputs_mean, inputs_std, inputs_range,
@@ -171,7 +174,6 @@ for var in var_range:
               ) 
 
    del da
-   del targets
    gc.collect()
 
 mean_std_data = np.load(mean_std_file)
@@ -188,8 +190,3 @@ print(inputs_range)
 print(targets_mean)
 print(targets_std)
 print(targets_range)
-
-
-
-
-

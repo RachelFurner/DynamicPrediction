@@ -19,7 +19,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name = 'Spits_UNet2dtransp_histlen3_seed30475'
+dir_name = 'Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
 #dir_name = 'MultiModel_Spits_UNet2dtransp_histlen1'
 epochs = '200'
 iteration_len = 120
@@ -30,8 +30,12 @@ make_animation_plots = True
 animation_end = 120
 ts_end = 120
 
-pert_list = ['Cntrl_orig', 'Pert0', 'Pert1', 'Pert2', 'Pert3', 'Pert4']
-#pert_list = ['Cntrl_orig', 'Pert0']
+truth_dir =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/'
+truth_filename = '/12hrly_data.nc'
+pert_list = []
+#pert_list = ['50yr_Cntrl', 'pert1', 'pert2', 'pert3']
+#truth_filename = '/hrly_data.nc'
+#pert_list = ['hrly_output']
 #-----------
 
 model_name = dir_name+'_'+epochs+'epochs_'+iteration_method
@@ -88,8 +92,8 @@ print(masked_True_Eta[:ts_end].shape)
 print(masked_Pred_Eta[:ts_end].shape)
 for pert in pert_list:
    print(pert)
-   filename =  '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_'+pert+'/12hrly_data.nc'
-   MITgcm_ds = xr.open_dataset(filename).isel( T=slice( 0, int(ts_end) ) )
+   truth_file =  truth_dir+pert+truth_filename
+   MITgcm_ds = xr.open_dataset(truth_file).isel( T=slice( 0, int(ts_end) ) )
 
    da_MITgcmTemp = MITgcm_ds['THETA']
    masked_MITgcmTemp = np.where( da_Temp_mask.values==0, np.nan, da_MITgcmTemp.values )

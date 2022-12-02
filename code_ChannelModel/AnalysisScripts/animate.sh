@@ -1,4 +1,4 @@
-model_name='Spits_UNet2dtransp_histlen3_seed30475'
+model_name='Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
 #model_name='MultiModel_Spits_UNet2dtransp_histlen1'
 epochs='200'
 iteration_method='simple'

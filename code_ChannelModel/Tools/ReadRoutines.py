@@ -31,7 +31,7 @@ class MITGCM_Dataset(data.Dataset):
          Eta only having one depth level - we get around this by providing 38 identical fields... far from perfect!
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, hist_len, land, tic, bdy_weight, land_values, grid_filename, dim, model_style, transform=None):
+   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, histlen, predlen, land, tic, bdy_weight, land_values, grid_filename, dim, model_style, transform=None):
        """
        Args:
           MITGCM_filename (string): Path to the MITGCM filename containing the data.
@@ -43,7 +43,8 @@ class MITGCM_Dataset(data.Dataset):
        self.ds        = xr.open_dataset(MITGCM_filename, lock=False)
        self.ds        = self.ds.isel( T=slice( int(start_ratio*self.ds.dims['T']), int(end_ratio*self.ds.dims['T']) ) )
        self.stride    = stride
-       self.hist_len  = hist_len
+       self.histlen   = histlen
+       self.predlen   = predlen
        self.transform = transform
        self.land      = land
        self.tic       = tic 
@@ -66,10 +67,6 @@ class MITGCM_Dataset(data.Dataset):
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
    
        # set mask, initialise as ocean (ones) everywhere
-       ###################################################################
-       ## Can we just add histlen dim always, not just for conv set up? ##
-       ###################################################################
-
        HfacC = self.mask_ds['HFacC'].values
 
        self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
@@ -77,7 +74,7 @@ class MITGCM_Dataset(data.Dataset):
 
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
           self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
-          self.masks = np.broadcast_to( self.masks, (self.hist_len, self.z_dim, self.y_dim, self.x_dim) )
+          self.masks = np.broadcast_to( self.masks, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
        elif self.dim == '2d':
           self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
        elif self.dim == '3d':
@@ -92,26 +89,41 @@ class MITGCM_Dataset(data.Dataset):
 
    def __getitem__(self, idx):
 
-       ds_InputSlice  = self.ds.isel(T=slice(idx*self.stride,idx*self.stride+self.hist_len))
-       ds_OutputSlice = self.ds.isel(T=[idx*self.stride+self.hist_len])
+       ds_InputSlice  = self.ds.isel(T=slice(idx*self.stride,idx*self.stride+self.histlen))
+       ds_OutputSlice = self.ds.isel(T=slice(idx*self.stride+self.histlen,idx*self.stride+self.histlen+self.predlen))
 
        if self.land == 'IncLand' or self.land == 'Spits':
           # Read in the data
 
-          da_T_in      = ds_InputSlice['THETA'].values[:,:,:,:] 
-          da_T_out     = ds_OutputSlice['THETA'].values[:,:,:,:] - da_T_in[-1,:,:,:]
+          da_T_in        = ds_InputSlice['THETA'].values[:,:,:,:] 
+          da_T_out_tmp   = ds_OutputSlice['THETA'].values[:,:,:,:]
+          da_T_out       = np.zeros(da_T_out_tmp.shape)
  
-          da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,:,:]
-          da_U_in      = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
-          da_U_out_tmp = ds_OutputSlice['UVEL'].values[:,:,:,:]
-          da_U_out     = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) - da_U_in[-1,:,:,:] # average to get onto same grid as T points
+          da_U_in_tmp    = ds_InputSlice['UVEL'].values[:,:,:,:]
+          da_U_in        = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
+          da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,:,:]
+          da_U_out_tmp   = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
+          da_U_out       = np.zeros(da_U_out_tmp.shape)
 
-          da_V_in  = ds_InputSlice['VVEL'].values[:,:,:-1,:]                           #ignore last land point to get to same as T grid
-          da_V_out = ds_OutputSlice['VVEL'].values[:,:,:-1,:] - da_V_in[-1,:,:,:]      #ignore last land point to get to same as T grid 
+          da_V_in        = ds_InputSlice['VVEL'].values[:,:,:-1,:]                #ignore last land point to get to same as T grid
+          da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,:-1,:]               #ignore last land point to get to same as T grid 
+          da_V_out       = np.zeros(da_V_out_tmp.shape)
    
-          da_Eta_in  = ds_InputSlice['ETAN'].values[:,0,:,:]
-          da_Eta_out = ds_OutputSlice['ETAN'].values[:,0,:,:] - da_Eta_in[-1,:,:]
+          da_Eta_in      = ds_InputSlice['ETAN'].values[:,0,:,:]
+          da_Eta_out_tmp = ds_OutputSlice['ETAN'].values[:,0,:,:]
+          da_Eta_out     = np.zeros(da_Eta_out_tmp.shape)
        
+          da_T_out[0,:,:,:] = da_T_out_tmp[0,:,:,:] - da_T_in[-1,:,:,:]
+          da_U_out[0,:,:,:] = da_U_out_tmp[0,:,:,:] - da_U_in[-1,:,:,:]
+          da_V_out[0,:,:,:] = da_V_out_tmp[0,:,:,:] - da_V_in[-1,:,:,:]
+          da_Eta_out[0,:,:] = da_Eta_out_tmp[0,:,:] - da_Eta_in[-1,:,:]
+
+          if self.predlen > 1:
+             da_T_out[1:self.predlen,:,:,:] = da_T_out[1:self.predlen,:,:,:] - da_T_out[0:self.predlen-1,:,:,:]
+             da_U_out[1:self.predlen,:,:,:] = da_U_out[1:self.predlen,:,:,:] - da_U_out[0:self.predlen-1,:,:,:]
+             da_V_out[1:self.predlen,:,:,:] = da_V_out[1:self.predlen,:,:,:] - da_V_out[0:self.predlen-1,:,:,:]
+             da_Eta_out[1:self.predlen,:,:] = da_Eta_out[1:self.predlen,:,:] - da_Eta_out[0:self.predlen-1,:,:]
+
        elif self.land == 'ExcLand':
        #   # Just cut out the ocean parts of the grid
    
@@ -147,9 +159,9 @@ class MITGCM_Dataset(data.Dataset):
        # Ammend here so ConvLSTM option with seqtime as a dimension
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
           if self.dim == '2d':
-             sample_input  = np.zeros(( self.hist_len, 1+3*self.z_dim, self.y_dim, self.x_dim ))
-             sample_output = np.zeros(( 1+3*self.z_dim, self.y_dim, self.x_dim ))
-             for time in range(self.hist_len):
+             sample_input  = np.zeros(( self.histlen, 1+3*self.z_dim, self.y_dim, self.x_dim ))
+             sample_output = np.zeros(( (1+3*self.z_dim)*self.predlen, self.y_dim, self.x_dim ))
+             for time in range(self.histlen):
                 sample_input[ time, :self.z_dim, :, : ]  = \
                                                 da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
                 sample_input[ time, self.z_dim:2*self.z_dim, :, : ]  = \
@@ -159,30 +171,32 @@ class MITGCM_Dataset(data.Dataset):
                 sample_input[ time, 3*self.z_dim, :, : ] = \
                                                 da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
          
-             sample_output[ :self.z_dim, :, : ] = \
-                                             da_T_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ self.z_dim:2*self.z_dim, :, : ] = \
-                                             da_U_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ 2*self.z_dim:3*self.z_dim, :, : ] = \
-                                             da_V_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ 3*self.z_dim, :, : ] = \
-                                             da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
+             for time in range(self.predlen):
+                sample_output[ (self.z_dim*3+1)*time : (self.z_dim*3+1)*time+self.z_dim, :, : ] = \
+                                                da_T_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ (self.z_dim*3+1)*time+self.z_dim : (self.z_dim*3+1)*time+2*self.z_dim, :, : ] = \
+                                                da_U_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ (self.z_dim*3+1)*time+2*self.z_dim : (self.z_dim*3+1)*time+3*self.z_dim, :, : ] = \
+                                                da_V_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ (self.z_dim*3+1)*time+3*self.z_dim, :, : ] = \
+                                                da_Eta_out[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
 
              # Mask data
-             for time in range(self.hist_len):
+             for time in range(self.histlen):
                 sample_input[time,:,:,:] = np.where( self.out_masks==1,
                                                      sample_input[time,:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
 
-             sample_output[:,:,:] = np.where( self.out_masks==1,
-                                              sample_output[:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
-
+             for time in range(self.predlen):
+                sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:] = np.where( self.out_masks==1,
+                                                                                     sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:], 
+                                                                                     np.expand_dims( self.land_values, axis=(1,2) ) )
        else:
           if self.dim == '2d':
              # Dims are channels,y,x
-             sample_input  = np.zeros(( self.hist_len*(1+3*self.z_dim), self.y_dim, self.x_dim ))
-             sample_output = np.zeros(( (1+3*self.z_dim), self.y_dim, self.x_dim ))
+             sample_input  = np.zeros(( self.histlen*(1+3*self.z_dim), self.y_dim, self.x_dim ))
+             sample_output = np.zeros(( self.predlen*(1+3*self.z_dim), self.y_dim, self.x_dim ))
       
-             for time in range(self.hist_len):
+             for time in range(self.histlen):
                 sample_input[ self.z_dim*3*time+time : self.z_dim*3*time+time+self.z_dim, :, : ]  = \
                                                 da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
          
@@ -195,28 +209,32 @@ class MITGCM_Dataset(data.Dataset):
                 sample_input[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
                                                 da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
          
-             sample_output[ :1*self.z_dim, :, : ] = \
-                                             da_T_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ 1*self.z_dim:2*self.z_dim, :, : ] = \
-                                             da_U_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ 2*self.z_dim:3*self.z_dim, :, : ] = \
-                                             da_V_out[:,:,:,:].reshape(-1,self.y_dim,self.x_dim)
-             sample_output[ 3*self.z_dim, :, : ] = \
-                                             da_Eta_out[:,:,:].reshape(-1,self.y_dim,self.x_dim)              
+             for time in range(self.histlen):
+                sample_output[ self.z_dim*3*time+time:self.z_dim*3*time+time+self.z_dim, :, : ] = \
+                                                da_T_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ self.z_dim*3*time+time+self.z_dim:self.z_dim*3*time+time+2*self.z_dim, :, : ] = \
+                                                da_U_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ self.z_dim*3*time+time+2*self.z_dim:self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
+                                                da_V_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
+                sample_output[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
+                                                da_Eta_out[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
       
              # mask values
-             for time in range(self.hist_len):
+             for time in range(self.histlen):
                  sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:] = np.where( self.out_masks==1, 
                                                                                                sample_input[time*(1+3*self.z_dim):(time+1)*(1+3*self.z_dim),:,:],
                                                                                                np.expand_dims( self.land_values, axis=(1,2)) )
-             sample_output[:,:,:] = np.where( self.out_masks==1, sample_output[:,:,:], np.expand_dims( self.land_values, axis=(1,2) ) )
+             for time in range(self.predlen):
+                sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:] = np.where( self.out_masks==1,
+                                                                                     sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:], 
+                                                                                     np.expand_dims( self.land_values, axis=(1,2) ) )
 
           elif self.dim == '3d':
              # Dims are channels,z,y,x
-             sample_input  = np.zeros(( 4 * self.hist_len, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
+             sample_input  = np.zeros(( 4 * self.histlen, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
              sample_output = np.zeros(( 4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
       
-             for time in range(self.hist_len):
+             for time in range(self.histlen):
                 sample_input[time*4,:,:,:]   = da_T_in[time, :, :, :]
                 sample_input[time*4+1,:,:,:] = da_U_in[time, :, :, :]
                 sample_input[time*4+2,:,:,:] = da_V_in[time, :, :, :]
@@ -228,7 +246,7 @@ class MITGCM_Dataset(data.Dataset):
              sample_output[3,:,:,:] = np.broadcast_to(da_Eta_out[:, :, :], (1, self.z_dim, self.y_dim, self.x_dim))
       
              # mask values
-             for time in range(self.hist_len):
+             for time in range(self.histlen):
                  sample_input[time*4:(time+1)*4,:,:,:] = np.where( self.out_masks==1,
                                                                    sample_input[time*4:(time+1)*4,:,:,:], 
                                                                    np.expand_dims( self.land_values, axis=(1,2,3)) )
@@ -257,7 +275,7 @@ class MITGCM_Dataset(data.Dataset):
 
 class RF_Normalise_sample(object):
 
-    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, histlen, no_out_channels, dim, norm_method):
+    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, histlen, predlen, no_phys_channels, dim, norm_method):
         self.inputs_mean   = inputs_mean
         self.inputs_std    = inputs_std
         self.inputs_range  = inputs_range
@@ -265,7 +283,8 @@ class RF_Normalise_sample(object):
         self.targets_std   = targets_std
         self.targets_range = targets_range
         self.histlen       = histlen
-        self.no_out_channels = no_out_channels
+        self.predlen       = predlen
+        self.no_phys_channels = no_phys_channels
         self.dim           = dim
         self.norm_method   = norm_method
 
@@ -280,16 +299,23 @@ class RF_Normalise_sample(object):
 
         if self.dim == '2d':
            for time in range(self.histlen):
-              sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :] =                   \
-                                   RF_Normalise( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :],
-                                                             self.inputs_mean, self.inputs_std, self.inputs_range, self.dim, self.norm_method )
+              sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :] =                   \
+                                   RF_Normalise( sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :],
+                                                 self.inputs_mean, self.inputs_std, self.inputs_range, self.dim, self.norm_method )
+           for time in range(self.predlen):
+              sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :] =                   \
+                                   RF_Normalise( sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :],
+                                                 self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method )
         elif self.dim == '3d':
            for time in range(self.histlen):
-              sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :] =                   \
-                                   RF_Normalise( sample['input'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :, :],
-                                                             self.inputs_mean, self.inputs_std, self.inputs_range,self.dim, self.norm_method )
+              sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :, :] =                   \
+                                   RF_Normalise( sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :, :],
+                                                 self.inputs_mean, self.inputs_std, self.inputs_range,self.dim, self.norm_method )
+           for time in range(self.predlen):
+              sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :, :] =                   \
+                                   RF_Normalise( sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :, :],
+                                                 self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method )
 
-        sample['output'] = RF_Normalise( sample['output'], self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method )
 
         return sample['input'], sample['output']
 
