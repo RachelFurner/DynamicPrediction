@@ -41,6 +41,9 @@ import multiprocessing as mp
 
 from scipy.ndimage import gaussian_filter
 
+import wandb
+import gcm_filters as gcm_filters
+
 def ReadMeanStd(dim, no_levels, pred_jump):
    mean_std_file = '../../../Channel_nn_Outputs/'+pred_jump+'_MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
@@ -137,6 +140,7 @@ def TrainModel(model_name, model_style, dimension, histlen, predlen, tic, TEST, 
               if dimension != '2d' and model_style != 'UNet2dTransp':
                  sys.exit('Cannot currently use predlen>1 with options other than 2d tansp network')
               predicted_batch = torch.zeros(target_batch.shape).to(device, non_blocking=True, dtype=torch.float)
+              # If predlen>1 calc iteratively for 'roll out' loss function
               for time in range(predlen):
                  predicted_batch[:,time*no_phys_channels:(time+1)*no_phys_channels,:,:] = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks
                  for hist_time in range(histlen-1):
@@ -215,6 +219,7 @@ def TrainModel(model_name, model_style, dimension, histlen, predlen, tic, TEST, 
 
            batch_no = batch_no + 1
 
+       wandb.log({"train loss" : losses['train'][-1]/no_tr_samples})
        losses['train'][-1] = losses['train'][-1] / no_tr_samples
        losses['train_Temp'][-1] = losses['train_Temp'][-1] / no_tr_samples
        losses['train_U'][-1] = losses['train_U'][-1] / no_tr_samples
@@ -265,6 +270,7 @@ def TrainModel(model_name, model_style, dimension, histlen, predlen, tic, TEST, 
 
            batch_no = batch_no + 1
    
+       wandb.log({"val loss" : losses['val'][-1]/no_tr_samples})
        losses['val'][-1] = losses['val'][-1] / no_val_samples
        logging.info('epoch {}, validation loss {}'.format(epoch, losses['val'][-1])+'\n')
   
@@ -321,7 +327,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, MeanStd_pre
       predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )
                          ).cpu().detach().double()
 
-   # Denormalise and mask, if predlen>1 (loss function calc over multiple steps), only take first 
+   # Denormalise and mask, if predlen>1 (loss function calc over multiple steps) only take first set of predictions
    target_batch = torch.where(out_masks==1, rr.RF_DeNormalise(target_batch[:, :no_phys_channels, :, :],
                                                               targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
    predicted_batch = torch.where(out_masks==1, rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, dimension, norm_method), np.nan)
@@ -504,22 +510,29 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
              predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
           predicted_batch = predicted_batch.cpu().detach().numpy() 
 
-          # Denormalise, if predlen>1 (loss function calc over multiple steps), only take first step
+          # Denormalise, if predlen>1 (loss function calc over multiple steps) only take first step, and convert from increments to fields for outputting
           target_batch = rr.RF_DeNormalise(target_batch[:, :no_phys_channels, :, :], targets_mean, targets_std, targets_range,
                                            dimension, norm_method)
           predicted_batch = rr.RF_DeNormalise(predicted_batch, targets_mean, targets_std, targets_range, dimension, norm_method)
-          input_batch = rr.RF_DeNormalise(input_batch.cpu().detach().numpy(), inputs_mean, inputs_std, inputs_range, dimension, norm_method)
+          input_batch = input_batch.cpu().detach().numpy()
 
-          # Convert from increments to fields for outputting
           if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-             target_batch = input_batch[:,-1,:,:,:] + target_batch
-             predicted_batch = input_batch[:,-1,:,:,:] + predicted_batch
+             input_batch[:,:,:no_phys_channels,:,:] = rr.RF_DeNormalise( input_batch[:,:,:no_phys_channels,:,:],
+                                                                    inputs_mean, inputs_std, inputs_range, dimension, norm_method )
+             target_batch = input_batch[:,-1,:no_phys_channels,:,:] + target_batch
+             predicted_batch = input_batch[:,-1,:no_phys_channels,:,:] + predicted_batch
           elif dimension == '2d':
-             target_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + target_batch
-             predicted_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + predicted_batch
+             input_batch[:,:no_phys_channels,:,:] = rr.RF_DeNormalise( input_batch[:,:no_phys_channels,:,:],
+                                                                       inputs_mean, inputs_std, inputs_range, dimension, norm_method )
+             #target_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + target_batch
+             #predicted_batch = input_batch[:,-(3*no_depth_levels+1):,:,:] + predicted_batch
+             target_batch = input_batch[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:] + target_batch
+             predicted_batch = input_batch[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:] + predicted_batch
           elif dimension == '3d':
-             target_batch = input_batch[:,-4:,:,:,:] + target_batch
-             predicted_batch = input_batch[:,-4:,:,:,:] + predicted_batch
+             input_batch[:,:no_phys_channels,:,:,:] = rr.RF_DeNormalise( input_batch[:,:no_phys_channels,:,:,:],
+                                                                         inputs_mean, inputs_std, inputs_range, dimension, norm_method )
+             target_batch = input_batch[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:,:] + target_batch
+             predicted_batch = input_batch[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:,:] + predicted_batch
 
           # Add summed error of this batch
           if batch_no==0:
@@ -658,7 +671,7 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
 
 
 def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
-                       y_dim_used, land, dimension, histlen, landvalues, iterate_method, norm_method, channel_dim, pred_jump, for_subsample):
+                       y_dim_used, land, dimension, histlen, landvalues, iterate_method, iterate_smooth, norm_method, channel_dim, pred_jump, for_subsample):
    logging.info('Iterating')
 
    landvalues = torch.tensor(landvalues)
@@ -687,7 +700,7 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z.shape[0], pred_jump)
 
    # Set up netcdf files to write to
-   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_'+iterate_method+'_Forecast'+str(for_len)+'.nc'
+   nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/ITERATED_FORECAST/'+model_name+'_'+str(no_epochs)+'epochs_'+iterate_method+'_smooth'+str(iterate_smooth)+'_Forecast'+str(for_len)+'.nc'
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
    nc_file.createDimension('T', for_len/for_subsample+histlen)
@@ -740,17 +753,14 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
 
    # Read in data from MITgcm dataset (take 0th entry, as others are target, masks etc) and save as first entry in both arrays
    input_sample, target_sample, masks, out_masks = Iterate_Dataset.__getitem__(start)
+
    # Give extra dimension at front (number of samples - here 1)
-   print('RF')
-   print(len(Iterate_Dataset.__getitem__(start)))
-   print(input_sample.shape)
    input_sample = input_sample.unsqueeze(0)
-   print(input_sample.shape)
    masks = masks.unsqueeze(0)
    if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:,:,:,:],
+      iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:,:histlen*(no_depth_levels*3+1),:,:],
                                           inputs_mean, inputs_std, inputs_range, dimension, norm_method)
-      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:,:,:,:]
+      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:,:histlen*(no_depth_levels*3+1),:,:]
    elif dimension == '2d':
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:(no_depth_levels*3+1),:,:].unsqueeze(0),
                                           inputs_mean, inputs_std, inputs_range, dimension, norm_method)
@@ -796,6 +806,7 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          else:
             predicted = h( torch.cat( (input_sample, masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                          ).cpu().detach()
+         print(predicted.shape)
 
          # Denormalise 
          predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, dimension, norm_method)
@@ -806,9 +817,6 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          # Calculate next field, by combining prediction (increment) with field
          if iterate_method == 'simple':
             next_field = iterated_fields[-1] + predicted
-         elif iterate_method == 'smooth':
-            next_field = iterated_fields[-1] + predicted
-            next_field = torch.from_numpy( gaussian_filter(next_field.numpy(), sigma=.44 ) )
          elif iterate_method == 'AB2':
             if time == 0:
                if dimension == '2d':
@@ -876,6 +884,15 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          if dimension == '3d':
             next_field = torch.where( out_masks==1, next_field, landvalues.unsqueeze(1).unsqueeze(2).unsqueeze(3) )
 
+         # Smooth field 
+         if iterate_smooth != 0:
+            for channel in range(next_field.shape[1]):
+              filter = gcm_filters.Filter( filter_scale=iterate_smooth, dx_min=1, filter_shape=gcm_filters.FilterShape.TAPER,
+                                           grid_type=gcm_filters.GridType.REGULAR_WITH_LAND,
+                                           grid_vars={'wet_mask': xr.DataArray(out_masks[channel,:,:], dims=['y','x'])} )
+              next_field[0,channel,:,:] = torch.from_numpy( filter.apply( xr.DataArray(next_field[0,channel,:,:], dims=['y', 'x'] ),
+                                                            dims=['y', 'x']).values )
+
          if ( time%for_subsample == 0 ):
             print('    '+str(time))
             # Cat prediction onto existing fields
@@ -883,10 +900,10 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
             # Get MITgcm data for relevant step
             # Plus one to time dimension as we want the next step, to match time step of prediction
             if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-               MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0][histlen-1:histlen,:,:,:] ), axis=0)
+               MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0][histlen-1:histlen,:3*no_depth_levels+1,:,:] ), axis=0)
                true_increment = torch.cat( ( true_increment, 
-                                             Iterate_Dataset.__getitem__(start+time+1)[0][histlen-1:histlen,:,:,:]
-                                             - Iterate_Dataset.__getitem__(start+time)[0][histlen-1:histlen,:,:,:] ), axis=0)
+                                             Iterate_Dataset.__getitem__(start+time+1)[0][histlen-1:histlen,:3*no_depth_levels+1,:,:]
+                                             - Iterate_Dataset.__getitem__(start+time)[0][histlen-1:histlen,:3*no_depth_levels+1,:,:] ), axis=0)
             elif dimension == '2d':
                MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(start+time+1)[0]
                                           [(histlen-1)*(no_depth_levels*3+1):histlen*(no_depth_levels*3+1),:,:].unsqueeze(0) ),
@@ -910,9 +927,9 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          # Prep new input sample
          if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
             for time in range(histlen-1):
-               input_sample[0,time,:,:,:] = \
-                                 input_sample[0,time+1,:,:,:]
-            input_sample[0,histlen-1,:,:,:] = next_field[0,:,:,:]
+               input_sample[0,time,:no_depth_levels*3+1,:,:] = \
+                                 input_sample[0,time+1,:no_depth_levels*3+1,:,:]
+            input_sample[0,histlen-1,:no_depth_levels*3+1,:,:] = next_field[0,:,:,:]
          elif dimension == '2d':
             for time in range(histlen-1):
                input_sample[0,time*(3*no_depth_levels+1):(time+1)*(3*no_depth_levels+1),:,:] = \
@@ -1010,9 +1027,13 @@ def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filena
    target_sample = target_sample.unsqueeze(0)
 
    if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-      prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,-1,:,:,:]
+      prev_field = rr.RF_DeNormalise(input_sample[:,-1:,:no_phys_channels,:,:], inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,:,:,:,:]
    elif dimension == '2d':
-      prev_field = rr.RF_DeNormalise(input_sample, inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,-no_phys_channels:,:,:]
+      prev_field = rr.RF_DeNormalise(input_sample[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:],
+                                                  inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,:,:,:]
+   elif dimension == '3d':
+      prev_field = rr.RF_DeNormalise(input_sample[:,(histlen-1)*no_phys_channels:histlen*no_phys_channels,:,:,:],
+                                                  inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,:,:,:,:]
    target_tend = rr.RF_DeNormalise(target_sample[:,:no_phys_channels,:,:], targets_mean, targets_std, targets_range, dimension, norm_method)[0,:,:,:]
    target_field = prev_field + target_tend
    target_tend = np.where( out_masks.numpy()==1., target_tend.numpy(), np.nan )
@@ -1038,23 +1059,25 @@ def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filena
       predicted_tend = np.where( out_masks.numpy()==1., predicted_tend.numpy(), np.nan )
       # Need to add code for 3d options here and make sure it works for histlen>1
       if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
-         fig = ChnPlt.plot_depth_fld_diff(target_field[level,:,:], 'True Temperature',
-                                          predicted_field[level,:,:], 'Predicted Temperature',
+         print(target_field.shape)
+         print(predicted_field.shape)
+         fig = ChnPlt.plot_depth_fld_diff(target_field[0,level,:,:], 'True Temperature',
+                                          predicted_field[0,level,:,:], 'Predicted Temperature',
                                           level, da_X.values, da_Y.values, da_Z.values, title=None)
          plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Temp_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
          
-         fig = ChnPlt.plot_depth_fld_diff(target_field[no_levels+level,:,:], 'True East-West Velocity', 
-                                          predicted_field[no_levels+level,:,:], 'Predicted East-West Velocity',
+         fig = ChnPlt.plot_depth_fld_diff(target_field[0,no_levels+level,:,:], 'True East-West Velocity', 
+                                          predicted_field[0,no_levels+level,:,:], 'Predicted East-West Velocity',
                                           level, da_X.values, da_Y.values, da_Z.values)
          plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_U_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
          
-         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels+level,:,:], 'True North-South Velocity',
-                                          predicted_field[2*no_levels+level,:,:], 'Predicted North-South Velocity',
+         fig = ChnPlt.plot_depth_fld_diff(target_field[0,2*no_levels+level,:,:], 'True North-South Velocity',
+                                          predicted_field[0,2*no_levels+level,:,:], 'Predicted North-South Velocity',
                                           level, da_X.values, da_Y.values, da_Z.values, title=None)
          plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_V_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
          
-         fig = ChnPlt.plot_depth_fld_diff(target_field[2*no_levels,:,:], 'True Sea Surface Height',
-                                          predicted_field[2*no_levels,:,:], 'Predicted Sea Surface Height',
+         fig = ChnPlt.plot_depth_fld_diff(target_field[0,2*no_levels,:,:], 'True Sea Surface Height',
+                                          predicted_field[0,2*no_levels,:,:], 'Predicted Sea Surface Height',
                                           0, da_X.values, da_Y.values, da_Z.values, title=None)
          plt.savefig(rootdir+'/TRAIN_EVOLUTION/'+model_name+'_'+str(epochs)+'epochs_Eta_diff_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 

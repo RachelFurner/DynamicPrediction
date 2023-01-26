@@ -19,7 +19,7 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name = 'Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
+dir_name = 'subsample3_Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
 #dir_name = 'MultiModel_Spits_UNet2dtransp_histlen1'
 epochs = '200'
 iteration_len = 120

@@ -12,25 +12,26 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import netCDF4 as nc4
 import gc as gc
+import ReadRoutines as rr
 
-#datafilename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl_orig/'
-#data_filename=datadir + '12hrly_data.nc'
-datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
-data_filename=datadir + '10min_data.nc'
+for_jump = '12hrly'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/'+for_jump+'_output/'
+datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+data_filename=datadir + for_jump + '_data.nc'
 out_filename = datadir+'/stats.nc'
 grid_filename = datadir+'grid.nc'
 
-mean_std_file = '../../../Channel_nn_Outputs/10min_MeanStd.npz'
+mean_std_file = '../../../Channel_nn_Outputs/new_'+for_jump+'_MeanStd.npz'
 
-init=False
+init=True 
 var_range=range(4)
-plotting_histograms = False
-calc_stats = True
-nc_stats = False
+plotting_histograms = True 
+calc_stats = True 
+nc_stats = True 
 
 #------------------------
 
-def plot_histograms(data_name, histogram_inputs, varname, file_varname):
+def plot_histograms(histogram_inputs, varname, file_varname):
    plt.rcParams.update({'font.size': 22})
    no_bins = 500
    fig_histogram = plt.figure(figsize=(10, 8))
@@ -38,7 +39,7 @@ def plot_histograms(data_name, histogram_inputs, varname, file_varname):
    ax1.hist(histogram_inputs, bins = no_bins)
    ax1.set_title(varname+' Histogram')
    # ax1.set_ylim(top=y_top[var])
-   plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+data_name+'_histogram_'+file_varname+'.png', 
+   plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+for_jump+'_histogram_'+file_varname+'.png', 
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -113,7 +114,6 @@ for var in var_range:
 
    ds_inputs = xr.open_dataset(data_filename)
    ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']), 3 ) )
-   #ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
    da = ds_inputs[ncVarName[var]]
    if var == 3:
       da.values[:,:,:,:] = np.where( da_mask.values[0:1,:,:] > 0., da.values[:,:,:,:], np.nan )
@@ -148,10 +148,6 @@ for var in var_range:
       del nc_Std
       gc.collect()
 
-   if plotting_histograms:
-      plot_histograms('Spits', da.values.reshape(-1), VarName[var], ShortVarName[var]+'Inputs')
-      plot_histograms('Spits', (da.values[1:]-da.values[:-1]).reshape(-1), VarName[var]+' targets', ShortVarName[var]+'Targets')
-
    if calc_stats:
       mean_std_data = np.load(mean_std_file)
       inputs_mean  = mean_std_data['arr_0']
@@ -172,6 +168,26 @@ for var in var_range:
                 inputs_mean, inputs_std, inputs_range,
                 targets_mean, targets_std, targets_range,
               ) 
+
+   if plotting_histograms:
+      plot_histograms( da.values.reshape(-1), VarName[var], ShortVarName[var]+'Inputs')
+      plot_histograms( (da.values[1:]-da.values[:-1]).reshape(-1), VarName[var]+' targets', ShortVarName[var]+'Targets')
+      # Also plot normed data
+      mean_std_data = np.load(mean_std_file)
+      inputs_mean  = mean_std_data['arr_0']
+      inputs_std   = mean_std_data['arr_1']
+      inputs_range = mean_std_data['arr_2']
+      targets_mean  = mean_std_data['arr_3']
+      targets_std   = mean_std_data['arr_4']
+      targets_range = mean_std_data['arr_5']
+      plot_histograms( ( (da.values - inputs_mean[var])/inputs_std[var] ).reshape(-1),
+                       VarName[var], ShortVarName[var]+'Inputs_NormStd' )
+      plot_histograms( ( (da.values - inputs_mean[var])/inputs_range[var] ).reshape(-1),
+                       VarName[var], ShortVarName[var]+'Inputs_NormRange' )
+      plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_std[var] ).reshape(-1),
+                       VarName[var], ShortVarName[var]+'Targets_NormStd' )
+      plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_range[var] ).reshape(-1),
+                       VarName[var], ShortVarName[var]+'Targets_NormRange' )
 
    del da
    gc.collect()

@@ -50,7 +50,7 @@ class MITGCM_Dataset(data.Dataset):
        self.tic       = tic 
        no_depth_levels = 38
        self.land_values = land_values
-       self.mask_ds   = xr.open_dataset(grid_filename, lock=False)
+       self.grid_ds   = xr.open_dataset(grid_filename, lock=False)
        self.dim       = dim
        self.model_style = model_style
 
@@ -65,9 +65,9 @@ class MITGCM_Dataset(data.Dataset):
           self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
           self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
-   
+
        # set mask, initialise as ocean (ones) everywhere
-       HfacC = self.mask_ds['HFacC'].values
+       HfacC = self.grid_ds['HFacC'].values
 
        self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
        self.masks[:,:,:] = np.where( HfacC > 0., 1, 0 )
@@ -96,23 +96,22 @@ class MITGCM_Dataset(data.Dataset):
           # Read in the data
 
           da_T_in        = ds_InputSlice['THETA'].values[:,:,:,:] 
-          da_T_out_tmp   = ds_OutputSlice['THETA'].values[:,:,:,:]
-          da_T_out       = np.zeros(da_T_out_tmp.shape)
- 
           da_U_in_tmp    = ds_InputSlice['UVEL'].values[:,:,:,:]
           da_U_in        = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
+          da_V_in        = ds_InputSlice['VVEL'].values[:,:,:-1,:]                #ignore last land point to get to same as T grid
+          da_Eta_in      = ds_InputSlice['ETAN'].values[:,0,:,:]
+
+          da_T_out_tmp   = ds_OutputSlice['THETA'].values[:,:,:,:]
           da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,:,:]
           da_U_out_tmp   = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
-          da_U_out       = np.zeros(da_U_out_tmp.shape)
-
-          da_V_in        = ds_InputSlice['VVEL'].values[:,:,:-1,:]                #ignore last land point to get to same as T grid
           da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,:-1,:]               #ignore last land point to get to same as T grid 
-          da_V_out       = np.zeros(da_V_out_tmp.shape)
-   
-          da_Eta_in      = ds_InputSlice['ETAN'].values[:,0,:,:]
           da_Eta_out_tmp = ds_OutputSlice['ETAN'].values[:,0,:,:]
-          da_Eta_out     = np.zeros(da_Eta_out_tmp.shape)
        
+          da_T_out       = np.zeros(da_T_out_tmp.shape)
+          da_U_out       = np.zeros(da_U_out_tmp.shape)
+          da_V_out       = np.zeros(da_V_out_tmp.shape)
+          da_Eta_out     = np.zeros(da_Eta_out_tmp.shape)
+
           da_T_out[0,:,:,:] = da_T_out_tmp[0,:,:,:] - da_T_in[-1,:,:,:]
           da_U_out[0,:,:,:] = da_U_out_tmp[0,:,:,:] - da_U_in[-1,:,:,:]
           da_V_out[0,:,:,:] = da_V_out_tmp[0,:,:,:] - da_V_in[-1,:,:,:]
@@ -156,10 +155,10 @@ class MITGCM_Dataset(data.Dataset):
        #TimeCheck(self.tic, 'Read in data')
 
        # Set up sample arrays and then fill (better for memory than concatenating)
-       # Ammend here so ConvLSTM option with seqtime as a dimension
+
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
           if self.dim == '2d':
-             sample_input  = np.zeros(( self.histlen, 1+3*self.z_dim, self.y_dim, self.x_dim ))
+             sample_input  = np.zeros(( self.histlen, 3*self.z_dim+1, self.y_dim, self.x_dim ))
              sample_output = np.zeros(( (1+3*self.z_dim)*self.predlen, self.y_dim, self.x_dim ))
              for time in range(self.histlen):
                 sample_input[ time, :self.z_dim, :, : ]  = \
@@ -170,7 +169,7 @@ class MITGCM_Dataset(data.Dataset):
                                                 da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
                 sample_input[ time, 3*self.z_dim, :, : ] = \
                                                 da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
-         
+
              for time in range(self.predlen):
                 sample_output[ (self.z_dim*3+1)*time : (self.z_dim*3+1)*time+self.z_dim, :, : ] = \
                                                 da_T_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
@@ -183,13 +182,14 @@ class MITGCM_Dataset(data.Dataset):
 
              # Mask data
              for time in range(self.histlen):
-                sample_input[time,:,:,:] = np.where( self.out_masks==1,
-                                                     sample_input[time,:,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
+                sample_input[time,:3*self.z_dim+1,:,:] = np.where( self.out_masks==1,
+                                                     sample_input[time,:3*self.z_dim+1,:,:], np.expand_dims( self.land_values, axis=(0,2,3) ) )
 
              for time in range(self.predlen):
                 sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:] = np.where( self.out_masks==1,
                                                                                      sample_output[time*(self.z_dim*3+1):(time+1)*(self.z_dim*3+1),:,:], 
                                                                                      np.expand_dims( self.land_values, axis=(1,2) ) )
+
        else:
           if self.dim == '2d':
              # Dims are channels,y,x
@@ -231,7 +231,7 @@ class MITGCM_Dataset(data.Dataset):
 
           elif self.dim == '3d':
              # Dims are channels,z,y,x
-             sample_input  = np.zeros(( 4 * self.histlen, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
+             sample_input  = np.zeros(( 4*self.histlen, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
              sample_output = np.zeros(( 4, self.z_dim, self.y_dim, self.x_dim ))  # shape: (no channels, z, y, x)
       
              for time in range(self.histlen):
@@ -251,7 +251,6 @@ class MITGCM_Dataset(data.Dataset):
                                                                    sample_input[time*4:(time+1)*4,:,:,:], 
                                                                    np.expand_dims( self.land_values, axis=(1,2,3)) )
              sample_output[:,:,:,:] = np.where( self.out_masks==1, sample_output[:,:,:], np.expand_dims( self.land_values, axis=(1,2,3) ) )
-
 
        del da_T_in
        del da_T_out
@@ -275,7 +274,8 @@ class MITGCM_Dataset(data.Dataset):
 
 class RF_Normalise_sample(object):
 
-    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, histlen, predlen, no_phys_channels, dim, norm_method):
+    def __init__(self, inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range, 
+                 histlen, predlen, no_phys_channels, dim, norm_method, model_style):
         self.inputs_mean   = inputs_mean
         self.inputs_std    = inputs_std
         self.inputs_range  = inputs_range
@@ -287,6 +287,7 @@ class RF_Normalise_sample(object):
         self.no_phys_channels = no_phys_channels
         self.dim           = dim
         self.norm_method   = norm_method
+        self.model_style   = model_style
 
     def __call__(self, sample):
 
@@ -295,9 +296,18 @@ class RF_Normalise_sample(object):
         #sample_output = transforms.Normalize(sample_output,self.outputs_inputs_mean, self.outputs_inputs_std)
 
         # only normalise for channels with physical variables (= no_out channels*histlen)..
-        # the input channels also have mask channels, but we don't want to normalise these. 
+        # the input channels also have mask channels and lat info, but we don't want to normalise these. 
 
-        if self.dim == '2d':
+        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
+           for time in range(self.histlen):
+              sample['input'][time,:self.no_phys_channels, :, :] =                   \
+                                   RF_Normalise( sample['input'][time,:self.no_phys_channels, :, :],
+                                                 self.inputs_mean, self.inputs_std, self.inputs_range, self.dim, self.norm_method )
+           for time in range(self.predlen):
+              sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :] =                   \
+                                   RF_Normalise( sample['output'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :],
+                                                 self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method )
+        elif self.dim == '2d':
            for time in range(self.histlen):
               sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :] =                   \
                                    RF_Normalise( sample['input'][time*self.no_phys_channels:(time+1)*self.no_phys_channels, :, :],
