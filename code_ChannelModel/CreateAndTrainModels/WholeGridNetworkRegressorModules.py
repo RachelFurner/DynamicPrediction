@@ -45,7 +45,7 @@ import wandb
 import gcm_filters as gcm_filters
 
 def ReadMeanStd(dim, no_levels, pred_jump):
-   mean_std_file = '../../../Channel_nn_Outputs/'+pred_jump+'_MeanStd.npz'
+   mean_std_file = '../../../Channel_nn_Outputs/DATASETS/'+pred_jump+'_MeanStd.npz'
    mean_std_data = np.load(mean_std_file)
    inputs_mean  = mean_std_data['arr_0']
    inputs_std   = mean_std_data['arr_1']
@@ -323,6 +323,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, MeanStd_pre
       #input_batch, target_batch, masks, bdy_masks = next(iter(data_loader))
       input_batch, target_batch, masks, out_masks = next(iter(data_loader))
       input_batch = input_batch.to(device, non_blocking=True, dtype=torch.float)
+      target_batch = target_batch.double()
       masks  = masks.to(device, non_blocking=True, dtype=torch.float)
       predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )
                          ).cpu().detach().double()
@@ -719,7 +720,6 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
    nc_TrueV      = nc_file.createVariable( 'True_V'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueEta    = nc_file.createVariable( 'True_Eta'   , 'f4', ('T', 'Y', 'X')      )
 
-   print(for_len/for_subsample, da_Z.values.shape[0], y_dim_used, da_X.values.shape[0])
    nc_TrueTempInc = nc_file.createVariable( 'Tr_TInc'  , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueUInc    = nc_file.createVariable( 'Tr_UInc'     , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_TrueVInc    = nc_file.createVariable( 'Tr_VInc'     , 'f4', ('T', 'Z', 'Y', 'X') )
@@ -764,7 +764,6 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
    elif dimension == '2d':
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:(no_depth_levels*3+1),:,:].unsqueeze(0),
                                           inputs_mean, inputs_std, inputs_range, dimension, norm_method)
-      print(input_sample.shape)
       MITgcm_data = Iterate_Dataset.__getitem__(start)[0].unsqueeze(0)[:,:no_depth_levels*3+1,:,:]
       for time in range(1,histlen):
           iterated_fields = torch.cat( (iterated_fields,
@@ -806,7 +805,6 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          else:
             predicted = h( torch.cat( (input_sample, masks),axis=channel_dim ).to(device, non_blocking=True, dtype=torch.float)
                          ).cpu().detach()
-         print(predicted.shape)
 
          # Denormalise 
          predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, dimension, norm_method)
@@ -951,7 +949,6 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
  
    # Fill variables
    if dimension == '2d':
-      print(MITgcm_data[:,0:no_depth_levels,:,:].shape)
       nc_TrueTemp[:,:,:,:] = MITgcm_data[:,0:no_depth_levels,:,:] 
       nc_TrueU[:,:,:,:]    = MITgcm_data[:,1*no_depth_levels:2*no_depth_levels,:,:]
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2*no_depth_levels:3*no_depth_levels,:,:]
@@ -1036,8 +1033,8 @@ def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filena
                                                   inputs_mean, inputs_std, inputs_range, dimension, norm_method)[0,:,:,:,:]
    target_tend = rr.RF_DeNormalise(target_sample[:,:no_phys_channels,:,:], targets_mean, targets_std, targets_range, dimension, norm_method)[0,:,:,:]
    target_field = prev_field + target_tend
-   target_tend = np.where( out_masks.numpy()==1., target_tend.numpy(), np.nan )
-   target_field = np.where( out_masks.numpy()==1., target_field.numpy(), np.nan )
+   target_tend = np.where( out_masks==1., target_tend, np.nan )
+   target_field = np.where( out_masks==1., target_field, np.nan )
 
    for epochs in epochs_list:
    
@@ -1050,13 +1047,14 @@ def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filena
    
       # Make prediction
       with torch.no_grad():
-         predicted_tend = h( torch.cat( (input_sample, masks.unsqueeze(0)), dim=channel_dim ).to(device, non_blocking=True, dtype=torch.float) ).cpu().detach()
+         predicted_tend = h( torch.cat( (input_sample, masks.unsqueeze(0)), dim=channel_dim ).to(
+                                                                  device, non_blocking=True, dtype=torch.float) ).cpu().detach()
          predicted_tend = rr.RF_DeNormalise(predicted_tend, targets_mean, targets_std, targets_range, dimension, norm_method)[0]
          predicted_field = prev_field + predicted_tend
    
       # Make plot
-      predicted_field = np.where( out_masks.numpy()==1., predicted_field.numpy(), np.nan )
-      predicted_tend = np.where( out_masks.numpy()==1., predicted_tend.numpy(), np.nan )
+      predicted_field = np.where( out_masks==1., predicted_field, np.nan )
+      predicted_tend = np.where( out_masks==1., predicted_tend, np.nan )
       # Need to add code for 3d options here and make sure it works for histlen>1
       if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
          print(target_field.shape)

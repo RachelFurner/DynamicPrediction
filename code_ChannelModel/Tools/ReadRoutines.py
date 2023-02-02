@@ -16,13 +16,44 @@ import gc
 import time as time
 import sys
 sys.path.append('../NNregression')
-#from WholeGridNetworkRegressorModules import TimeCheck 
+from WholeGridNetworkRegressorModules import *
+
+import netCDF4 as nc4
+
+class ProcData_Dataset(data.Dataset):
+   
+   ''' 
+        Dataset which reads in the processes data, and returns training/validation/test samples
+   ''' 
+   def __init__(self, model_name, start_ratio, end_ratio):
+       ProcDataFilename = '../../../Channel_nn_Outputs/DATASETS/Dataset_'+model_name+'.nc'
+       self.ds          = xr.open_dataset(ProcDataFilename, lock=False)
+       self.ds          = self.ds.isel(samples=slice( int(start_ratio*self.ds.dims['samples']), int(end_ratio*self.ds.dims['samples']) ) )
+       self.da_inputs   = self.ds['inputs']
+       self.da_targets  = self.ds['targets']
+       self.masks       = self.ds['masks'].values
+       self.out_masks   = self.ds['out_masks'].values
+       self.masks       = torch.from_numpy(self.masks)
+       self.out_masks   = torch.from_numpy(self.out_masks)
+
+   def __len__(self):
+       return self.ds.sizes['samples']
+
+   def __getitem__(self, idx):
+
+       sample_input = self.da_inputs.isel(samples=idx).values
+       sample_output = self.da_targets.isel(samples=idx).values
+       sample_input = torch.from_numpy(sample_input)
+       sample_output = torch.from_numpy(sample_output)
+
+       return sample_input, sample_output, self.masks, self.out_masks
+   
 
 # Create Dataset, which inherits the data.Dataset class
-class MITGCM_Dataset(data.Dataset):
+class MITgcm_Dataset(data.Dataset):
 
    '''
-        MITGCM dataset
+        MITgcm dataset
 
          This code is set up in '2d' mode so that the data is 2-d with different channels for each level of 
          each variable. This solves issues with eta being 2-d and other inputs being 3-d. This matches 
@@ -31,16 +62,16 @@ class MITGCM_Dataset(data.Dataset):
          Eta only having one depth level - we get around this by providing 38 identical fields... far from perfect!
    '''
 
-   def __init__(self, MITGCM_filename, start_ratio, end_ratio, stride, histlen, predlen, land, tic, bdy_weight, land_values, grid_filename, dim, model_style, transform=None):
+   def __init__(self, MITgcm_filename, start_ratio, end_ratio, stride, histlen, predlen, land, tic, bdy_weight, land_values, grid_filename, dim, model_style, transform=None):
        """
        Args:
-          MITGCM_filename (string): Path to the MITGCM filename containing the data.
-          start_ratio (float)     : Ratio point (between 0 and 1) at which to start sampling from MITGCM data
-          end_ratio (float)       : Ratio point (between 0 and 1) at which to stop sampling from MITGCM data
-          stride (integer)        : Rate at which to subsample in time when reading MITGCM data
+          MITgcm_filename (string): Path to the MITgcm filename containing the data.
+          start_ratio (float)     : Ratio point (between 0 and 1) at which to start sampling from MITgcm data
+          end_ratio (float)       : Ratio point (between 0 and 1) at which to stop sampling from MITgcm data
+          stride (integer)        : Rate at which to subsample in time when reading MITgcm data
        """
  
-       self.ds        = xr.open_dataset(MITGCM_filename, lock=False)
+       self.ds        = xr.open_dataset(MITgcm_filename, lock=False)
        self.ds        = self.ds.isel( T=slice( int(start_ratio*self.ds.dims['T']), int(end_ratio*self.ds.dims['T']) ) )
        self.stride    = stride
        self.histlen   = histlen
@@ -209,7 +240,7 @@ class MITGCM_Dataset(data.Dataset):
                 sample_input[ self.z_dim*3*time+time+3*self.z_dim, :, : ] = \
                                                 da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
          
-             for time in range(self.histlen):
+             for time in range(self.predlen):
                 sample_output[ self.z_dim*3*time+time:self.z_dim*3*time+time+self.z_dim, :, : ] = \
                                                 da_T_out[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
                 sample_output[ self.z_dim*3*time+time+self.z_dim:self.z_dim*3*time+time+2*self.z_dim, :, : ] = \
@@ -270,6 +301,95 @@ class MITGCM_Dataset(data.Dataset):
           sample_input, sample_output = self.transform({'input':sample_input, 'output':sample_output})
  
        return sample_input, sample_output, self.masks, self.out_masks
+
+
+
+def CreateDataset( MITgcm_filename, subsample_rate, histlen, predlen, land, tic, bdyweight, landvalues, grid_filename, dim, 
+                   modelstyle, predictionjump, z_dim, no_phys_channels, no_in_channels, no_out_channels, normmethod, model_name):
+
+    batch_size = 256   # hard coded as set to max viable and no benefit to changing
+
+    # Open file for dimension etc later
+    MITgcm_ds = xr.open_dataset(MITgcm_filename, lock=False)
+    #MITgcm_ds = xr.open_dataset(MITgcm_filename)
+    MITgcm_ds.close()
+  
+    # Read in mean, std, range
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dim, z_dim, predictionjump)
+
+    # Get data using pytorch dataloader
+    MITgcm_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0.0, 1.0, subsample_rate,
+                                       histlen, predlen, land, tic, bdyweight, landvalues, grid_filename, dim, modelstyle,
+                                       transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                         targets_mean, targets_std, targets_range, histlen, predlen,
+                                                                         no_phys_channels, dim, normmethod, modelstyle)] ) )
+
+    MITgcm_loader = torch.utils.data.DataLoader(MITgcm_Dataset, batch_size=batch_size, shuffle=False,
+                                                num_workers=1, pin_memory=True )
+
+    no_samples = len(MITgcm_Dataset)
+    X_size = MITgcm_ds['X'].shape[0]
+    Y_size = MITgcm_ds['Y'].shape[0]
+    Z_size = MITgcm_ds['Zmd000038'].shape[0]
+
+    batch = 0
+
+    if batch == 0:
+       out_file = nc4.Dataset('../../../Channel_nn_Outputs/DATASETS/Dataset_'+model_name+'.nc','w', format='NETCDF4')
+       # Create dimensions
+       out_file.createDimension('samples', no_samples)
+       out_file.createDimension('histlen', histlen)
+       out_file.createDimension('phys_channels', no_phys_channels)
+       out_file.createDimension('out_channels', no_out_channels)
+       out_file.createDimension('X', X_size)
+       out_file.createDimension('Y', Y_size)
+       out_file.createDimension('Z', Z_size)
+       # Create dimension variables
+       nc_samples = out_file.createVariable( 'samples', 'i4', 'samples' )
+       nc_histlen = out_file.createVariable( 'histlen', 'i4', 'histlen' )
+       nc_phys_channels = out_file.createVariable( 'phys_channels', 'i4',  'phys_channels')
+       nc_out_channels = out_file.createVariable( 'out_channels', 'i4', 'out_channels' )
+       nc_X = out_file.createVariable( 'X', 'i4', 'X' )
+       nc_Y = out_file.createVariable( 'Y', 'i4', 'Y' )
+       nc_Z = out_file.createVariable( 'Z', 'i4', 'Z' )
+       # Fill dimension variables
+       nc_samples[:] = np.arange(no_samples)
+       nc_histlen[:] = np.arange(histlen)
+       nc_phys_channels[:] = np.arange(no_phys_channels)
+       nc_out_channels[:] = np.arange(no_out_channels)
+       nc_X[:] = MITgcm_ds['X'].values
+       nc_Y[:] = MITgcm_ds['Y'].values
+       nc_Z[:] = MITgcm_ds['Zmd000038'].values
+       # Create variables
+       if modelstyle == 'ConvLSTM' or modelstyle == 'UNetConvLSTM':
+          nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'phys_channels', 'histlen', 'Y', 'X') )
+          nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Y', 'X') )
+          nc_masks     = out_file.createVariable( 'masks',     'f4', ('histlen', 'Z', 'Y', 'X') )
+          nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_channels', 'Y', 'X') )
+       elif dim == '2d':
+          nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'phys_channels', 'Y', 'X') )
+          nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Y', 'X') )
+          nc_masks     = out_file.createVariable( 'masks',     'f4', ('Z', 'Y', 'X') )
+          nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_channels', 'Y', 'X') )
+       elif dim == '3d':
+          nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'phys_channels', 'Z', 'Y', 'X') )
+          nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Z', 'Y', 'X') )
+          nc_masks     = out_file.createVariable( 'masks',     'f4', ('Z', 'Y', 'X') )
+          nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_channels', 'Z', 'Y', 'X') )
+       out_file.close()
+
+
+    # Fill Dataset
+    for input_batch, target_batch, masks, out_masks in MITgcm_loader:
+       print('batch number : '+str(batch))
+       out_file = nc4.Dataset('../../../Channel_nn_Outputs/DATASETS/Dataset_'+model_name+'.nc','r+', format='NETCDF4')
+       nc_inputs[batch*batch_size:(batch+1)*batch_size] = input_batch
+       nc_targets[batch*batch_size:(batch+1)*batch_size] = target_batch
+       if batch == 0:
+          nc_masks[:] = masks[0,]
+          nc_out_masks[:] = out_masks[0,]
+       batch = batch+1
+       out_file.close()
 
 
 class RF_Normalise_sample(object):

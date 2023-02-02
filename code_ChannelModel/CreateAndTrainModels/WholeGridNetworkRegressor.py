@@ -50,6 +50,7 @@ def parse_args():
 
     a.add_argument("-na", "--name", default="", action='store')
     a.add_argument("-te", "--test", default=False, type=bool, action='store')
+    a.add_argument("-cd", "--createdataset", default=False, type=bool, action='store')
     a.add_argument("-ms", "--modelstyle", default='UNet2dtransp', type=str, action='store')
     a.add_argument("-di", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='Spits', type=str, action='store')
@@ -178,31 +179,33 @@ if __name__ == "__main__":
        grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
        if args.predictionjump == '12hrly':
           if args.test: 
-             #MITGCM_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/50yr_Cntrl/12hrly_small_set.nc'
-             MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
+             #MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/50yr_Cntrl/12hrly_small_set.nc'
+             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
           else:
-             MITGCM_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/12hrly_data.nc'
+             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_data.nc'
+             #MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/12hrly_data.nc'
+             #MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/12hrly_data.nc'
        elif args.predictionjump == 'hrly':
           if args.test: 
-             MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/hrly_small_set.nc'
+             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/hrly_small_set.nc'
           else:
-             MITGCM_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/hrly_data.nc'
+             MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/hrly_data.nc'
        elif args.predictionjump == '10min':
           if args.test: 
-             MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/10min_small_set.nc'
+             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/10min_small_set.nc'
           else:
-             MITGCM_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/10min_data.nc' 
+             MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/10min_data.nc' 
           subsample_rate = 3*subsample_rate # give larger subsample for such small timestepping, MITgcm dataset is longer so same amount of training/val samples
     else:
        grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
        if args.test: 
-          MITGCM_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
+          MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
        else:
           DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
-          MITGCM_filename = DIR+'12hrly_data.nc'
+          MITgcm_filename = DIR+'12hrly_data.nc'
     
-    print(MITGCM_filename)
-    ds = xr.open_dataset(MITGCM_filename)
+    print(MITgcm_filename)
+    ds = xr.open_dataset(MITgcm_filename)
     
     ds.close()
 
@@ -246,37 +249,50 @@ if __name__ == "__main__":
     logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
     logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
 
-    #-------------------------------------------------------------------------------------
-    # Create training and valdiation Datsets and dataloaders with normalisation
-    #-------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------------------
+    # Create Dataset and save to disk - only needs doing once, ideally on CPU, then training, validation, test data read in from saved file
+    #---------------------------------------------------------------------------------------------------------------------------------------
     if args.landvalue == -999:
        landvalues = inputs_mean
     else:
        landvalues = np.ones(inputs_mean.shape)
        landvalues[:] = args.landvalue
+       
+    if args.createdataset:
+
+       rr.CreateDataset(MITgcm_filename, subsample_rate, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
+                        grid_filename, args.dim, args.modelstyle, args.predictionjump, z_dim, no_phys_channels, no_in_channels, no_out_channels,
+                        args.normmethod, model_name)
+
+    #-------------------------------------------------------------------------------------
+    # Create training and validation Datsets and dataloaders with normalisation
+    #-------------------------------------------------------------------------------------
     # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
-    Train_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate,
-                                       args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-                                       transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                         targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-                                                                         no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
-    Val_Dataset   = rr.MITGCM_Dataset( MITGCM_filename, train_end_ratio, val_end_ratio, subsample_rate,
-                                       args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-                                       transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                         targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-                                                                         no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
-    Test_Dataset  = rr.MITGCM_Dataset( MITGCM_filename, val_end_ratio, 1.0, subsample_rate,
-                                       args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-                                       transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                         targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-                                                                         no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
+    #Train_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0.0, train_end_ratio, subsample_rate,
+    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
+    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
+    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
+    #Val_Dataset   = rr.MITgcm_Dataset( MITgcm_filename, train_end_ratio, val_end_ratio, subsample_rate,
+    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
+    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
+    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
+    #Test_Dataset  = rr.MITgcm_Dataset( MITgcm_filename, val_end_ratio, 1.0, subsample_rate,
+    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
+    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
+    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
+    Train_Dataset = rr.ProcData_Dataset(model_name, 0., train_end_ratio)
+    Val_Dataset   = rr.ProcData_Dataset(model_name, train_end_ratio, val_end_ratio)
+    Test_Dataset  = rr.ProcData_Dataset(model_name, val_end_ratio, 1.)
 
     no_tr_samples = len(Train_Dataset)
     no_val_samples = len(Val_Dataset)
     no_test_samples = len(Test_Dataset)
-    logging.debug('no_training_samples ; '+str(no_tr_samples)+'\n')
-    logging.debug('no_validation_samples ; '+str(no_val_samples)+'\n')
-    logging.debug('no_test_samples ; '+str(no_test_samples)+'\n')
+    logging.info('no_training_samples ; '+str(no_tr_samples)+'\n')
+    logging.info('no_validation_samples ; '+str(no_val_samples)+'\n')
+    logging.info('no_test_samples ; '+str(no_test_samples)+'\n')
 
     train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
                                                num_workers=args.numworkers, pin_memory=True )
@@ -341,13 +357,13 @@ if __name__ == "__main__":
        stats_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=True, 
                                                num_workers=args.numworkers, pin_memory=True )
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'training', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'validation', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'test', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
     
     #---------------------
@@ -355,14 +371,14 @@ if __name__ == "__main__":
     #---------------------
     if args.iterate:
 
-       Iterate_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0., 1., 1, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
+       Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
                                             grid_filename, args.dim,  args.modelstyle,
                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
                                                                               targets_mean, targets_std, targets_range,
                                                                               args.histlen, args.predlen, no_phys_channels, args.dim, 
                                                                               args.normmethod, args.modelstyle)] ) )
     
-       IterativelyPredict(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, Iterate_Dataset, h, start, for_len, total_epochs,
+       IterativelyPredict(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
                           y_dim_used, args.land, args.dim, args.histlen, landvalues,
                           args.iteratemethod, args.iteratesmooth, args.normmethod, channel_dim, args.predictionjump, for_subsample) 
     
@@ -371,12 +387,13 @@ if __name__ == "__main__":
     #------------------------------------------------------
     if args.plotevolution:
 
-       Evolve_Dataset = rr.MITGCM_Dataset( MITGCM_filename, 0.0, train_end_ratio, subsample_rate, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
-                                           grid_filename, args.dim, args.modelstyle,
-                                           transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                             targets_mean, targets_std, targets_range,
-                                                                             args.histlen, args.predlen, no_phys_channels, args.dim,
-                                                                             args.normmethod, args.modelstyle)] ) )
+       #Evolve_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0.0, train_end_ratio, subsample_rate, args.histlen, args.predlen, 
+       #                                    args.land, tic, args.bdyweight, landvalues,
+       #                                    grid_filename, args.dim, args.modelstyle,
+       #                                    transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+       #                                                                      targets_mean, targets_std, targets_range,
+       #                                                                      args.histlen, args.predlen, no_phys_channels, args.dim,
+       #                                                                      args.normmethod, args.modelstyle)] ) )
 
-       PlotTrainingEvolution(model_name, args.modelstyle, args.land+'_'+args.dim, MITGCM_filename, Evolve_Dataset, h, optimizer, ev_epoch_ls,
+       PlotTrainingEvolution(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, Train_Dataset, h, optimizer, ev_epoch_ls,
                              args.dim, args.histlen, landvalues, args.normmethod, channel_dim, args.predictionjump, no_phys_channels)

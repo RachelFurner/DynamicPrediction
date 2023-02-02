@@ -1,3 +1,7 @@
 *.out
 *batch*.sh
 *.pyc
+*npy
+code_ChannelModel/CreateAndTrainModels/wandb/*
+code_sectorModel/singularity_setup.def
+code_ChannelModel/CreateAndTrainModels/CheckFiles.py
