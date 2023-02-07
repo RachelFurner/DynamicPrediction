@@ -144,11 +144,12 @@ if __name__ == "__main__":
     if not os.path.isdir(model_dir):
        os.system("mkdir %s" % (model_dir))
        os.system("mkdir %s" % (model_dir+'/MODELS'))
-       os.system("mkdir %s" % (model_dir+'/PLOTS'))
+       os.system("mkdir %s" % (model_dir+'/TRAINING_PLOTS'))
        os.system("mkdir %s" % (model_dir+'/STATS'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
        os.system("mkdir %s" % (model_dir+'/TRAIN_EVOLUTION'))
+       os.system("mkdir %s" % (model_dir+'/EXAMPLE_PREDICTIONS'))
     
     if args.trainmodel:
        if args.loadmodel: 
@@ -181,10 +182,12 @@ if __name__ == "__main__":
           if args.test: 
              #MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/50yr_Cntrl/12hrly_small_set.nc'
              MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
+             MITgcm_stats_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/stats.nc'
           else:
-             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_data.nc'
-             #MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/12hrly_data.nc'
+             #MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_data.nc'
+             MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/12hrly_data.nc'
              #MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/12hrly_data.nc'
+             MITgcm_stats_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/stats.nc'
        elif args.predictionjump == 'hrly':
           if args.test: 
              MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/hrly_small_set.nc'
@@ -358,13 +361,13 @@ if __name__ == "__main__":
                                                num_workers=args.numworkers, pin_memory=True )
     
        OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'training', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
+                   args.histlen, args.land, 'training', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
     
        OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'validation', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
+                   args.histlen, args.land, 'validation', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
     
        OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'test', args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
+                   args.histlen, args.land, 'test', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
     
     #---------------------
     # Iteratively predict 

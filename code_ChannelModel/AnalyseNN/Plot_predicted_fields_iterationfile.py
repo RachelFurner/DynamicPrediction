@@ -40,18 +40,10 @@ print('reading in data')
 #------------------------
 iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forecast'+str(iteration_len)+'.nc'
 iter_ds = xr.open_dataset(iter_data_filename)
-da_true_Temp = iter_ds['True_Temp']
-da_true_U    = iter_ds['True_U']
-da_true_V    = iter_ds['True_V']
-da_true_Eta  = iter_ds['True_Eta']
 da_pred_Temp = iter_ds['Pred_Temp']
 da_pred_U    = iter_ds['Pred_U']
 da_pred_V    = iter_ds['Pred_V']
 da_pred_Eta  = iter_ds['Pred_Eta']
-da_Temp_errors = iter_ds['Temp_Errors']
-da_U_errors    = iter_ds['U_Errors']
-da_V_errors    = iter_ds['V_Errors']
-da_Eta_errors  = iter_ds['Eta_Errors']
 da_Temp_mask   = iter_ds['Temp_Mask']
 da_U_mask      = iter_ds['U_Mask']
 da_V_mask      = iter_ds['V_Mask']
@@ -60,13 +52,9 @@ da_X = iter_ds['X']
 da_Y = iter_ds['Y']
 da_Z = iter_ds['Z']
 
-masked_True_Temp = np.where( da_Temp_mask.values==0, np.nan, da_true_Temp.values )
 masked_Pred_Temp = np.where( da_Temp_mask.values==0, np.nan, da_pred_Temp.values )
-masked_True_U    = np.where( da_U_mask.values==0, np.nan, da_true_U.values )
 masked_Pred_U    = np.where( da_U_mask.values==0, np.nan, da_pred_U.values )
-masked_True_V    = np.where( da_V_mask.values==0, np.nan, da_true_V.values )
 masked_Pred_V    = np.where( da_V_mask.values==0, np.nan, da_pred_V.values )
-masked_True_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_true_Eta.values )
 masked_Pred_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_pred_Eta.values )
 
 #-------------------------------

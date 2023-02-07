@@ -16,6 +16,7 @@ import gc
 import time as time
 import sys
 sys.path.append('../NNregression')
+sys.path.append('../CreateAndTrainModels')
 from WholeGridNetworkRegressorModules import *
 
 import netCDF4 as nc4

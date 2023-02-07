@@ -34,10 +34,12 @@ print('reading in data')
 #------------------------
 stats_data_filename=rootdir+model_name+'_StatsOutput_'+trainorval+'.nc'
 stats_ds = xr.open_dataset(stats_data_filename)
-da_Temp_RMS = stats_ds['TempRMS']
+#da_Temp_RMS = stats_ds['TempRMS']
+da_Temp_RMS = stats_ds['Temp_RMS']
 da_U_RMS    = stats_ds['U_RMS']
 da_V_RMS    = stats_ds['V_RMS']
-da_Eta_RMS  = stats_ds['EtaRMS']
+#da_Eta_RMS  = stats_ds['EtaRMS']
+da_Eta_RMS  = stats_ds['Eta_RMS']
 da_X = stats_ds['X']
 da_Y = stats_ds['Y']
 da_Z = stats_ds['Z']

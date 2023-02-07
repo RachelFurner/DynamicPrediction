@@ -1,6 +1,6 @@
-base_name='Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
+base_name='NewCode_Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
 #base_name='MultiModel_Spits_UNet2dtransp_histlen1'
-epochs='180'
+epochs='200'
 #trainorval='training'
 trainorval='validation'
 

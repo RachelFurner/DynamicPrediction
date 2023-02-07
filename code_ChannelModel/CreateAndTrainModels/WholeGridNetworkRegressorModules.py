@@ -349,22 +349,22 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, MeanStd_pre
 
    fig_main = plt.figure(figsize=(9,9))
    ax_temp  = fig_main.add_subplot(221)
-   ax_U     = fig_main.add_subplot(222)
-   ax_V     = fig_main.add_subplot(223)
-   ax_Eta   = fig_main.add_subplot(224)
+   ax_U     = fig_main.add_subplot(223)
+   ax_V     = fig_main.add_subplot(224)
+   ax_Eta   = fig_main.add_subplot(222)
 
    ax_temp.scatter(targets[:,0,:,:,:],
                    predictions[:,0,:,:,:],
-                   edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temp')
+                   edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temperature')
    ax_U.scatter(targets[:,1,:,:,:],
                 predictions[:,1,:,:,:],
-                edgecolors=(0, 0, 0), alpha=0.15, color='red', label='U')
+                edgecolors=(0, 0, 0), alpha=0.15, color='red', label='East-West Velocity')
    ax_V.scatter(targets[:,2,:,:,:], 
                 predictions[:,2,:,:,:],
-                edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='V')
+                edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='North-South Velocity')
    ax_Eta.scatter(targets[:,3,0,:,:], 
                   predictions[:,3,0,:,:],
-                  edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Eta')
+                  edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Sea Surface Height')
    bottom = min( np.nanmin(targets), np.nanmin(predictions) )
    top    = max( np.nanmax(targets), np.nanmax(predictions) )  
    
@@ -454,8 +454,8 @@ def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losse
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
  
-def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
-                histlen, land, file_append, norm_method, channel_dim, pred_jump, no_phys_channels):
+def OutputStats(model_name, model_style, MeanStd_prefix, MITgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
+                histlen, land, file_append, norm_method, channel_dim, pred_jump, no_phys_channels, MITgcm_stats_filename):
    #-------------------------------------------------------------
    # Output the rms and correlation coefficients over a dataset
    #-------------------------------------------------------------
@@ -469,10 +469,12 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
    # Read in grid data from MITgcm file
-   mitgcm_ds = xr.open_dataset(mitgcm_filename)
-   da_X = mitgcm_ds['X']
-   da_Y = mitgcm_ds['Yp1']
-   da_Z = mitgcm_ds['Zmd000038'] 
+   MITgcm_ds = xr.open_dataset(MITgcm_filename)
+   da_X = MITgcm_ds['X']
+   da_Y = MITgcm_ds['Yp1']
+   da_Z = MITgcm_ds['Zmd000038'] 
+
+   MITgcm_stats_ds = xr.open_dataset(MITgcm_stats_filename)
 
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, da_Z.shape[0], pred_jump)
 
@@ -597,10 +599,15 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
    nc_VErrors    = nc_file.createVariable( 'V_Errors'   , 'f4', ('T', 'Z', 'Y', 'X') )
    nc_EtaErrors  = nc_file.createVariable( 'Eta_Errors' , 'f4', ('T', 'Y', 'X')      )
 
-   nc_TempRMS    = nc_file.createVariable( 'TempRMS'    , 'f4', ('Z', 'Y', 'X')      )
+   nc_TempRMS    = nc_file.createVariable( 'Temp_RMS'   , 'f4', ('Z', 'Y', 'X')      )
    nc_U_RMS      = nc_file.createVariable( 'U_RMS'      , 'f4', ('Z', 'Y', 'X')      )
    nc_V_RMS      = nc_file.createVariable( 'V_RMS'      , 'f4', ('Z', 'Y', 'X')      )
-   nc_EtaRMS     = nc_file.createVariable( 'EtaRMS'     , 'f4', ('Y', 'X')           )
+   nc_EtaRMS     = nc_file.createVariable( 'Eta_RMS'    , 'f4', ('Y', 'X')           )
+
+   nc_Scaled_TempRMS = nc_file.createVariable( 'ScaledTempRMS' , 'f4', ('Z', 'Y', 'X')      )
+   nc_Scaled_U_RMS   = nc_file.createVariable( 'Scaled_U_RMS'  , 'f4', ('Z', 'Y', 'X')      )
+   nc_Scaled_V_RMS   = nc_file.createVariable( 'Scaled_V_RMS'  , 'f4', ('Z', 'Y', 'X')      )
+   nc_Scaled_EtaRMS  = nc_file.createVariable( 'ScaledEtaRMS'  , 'f4', ('Y', 'X')           )
 
    # Fill variables
    nc_T[:] = np.arange(no_samples)
@@ -639,6 +646,11 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
       nc_V_RMS[:,:,:]   = rms_error[2*no_depth_levels:3*no_depth_levels,:,:]
       nc_EtaRMS[:,:]    = rms_error[3*no_depth_levels,:,:]
 
+      nc_Scaled_TempRMS[:,:,:] = rms_error[0:no_depth_levels,:,:] / MITgcm_stats_ds['StdTemp'].values
+      nc_Scaled_U_RMS[:,:,:]   = rms_error[1*no_depth_levels:2*no_depth_levels,:,:] / MITgcm_stats_ds['StdUVel'].values
+      nc_Scaled_V_RMS[:,:,:]   = rms_error[2*no_depth_levels:3*no_depth_levels,:,:] / MITgcm_stats_ds['StdVVel'].values
+      nc_Scaled_EtaRMS[:,:]    = rms_error[3*no_depth_levels,:,:] / MITgcm_stats_ds['StdEta'].values
+
    elif dimension=='3d':
       nc_TrueTemp[:,:,:,:] = targets[:no_samples,0,:,:,:] 
       nc_TrueU[:,:,:,:]    = targets[:no_samples,1,:,:,:]
@@ -671,7 +683,7 @@ def OutputStats(model_name, model_style, MeanStd_prefix, mitgcm_filename, data_l
       nc_EtaRMS[:,:]    = rms_error[3,0,:,:]
 
 
-def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
+def IterativelyPredict(model_name, model_style, MeanStd_prefix, MITgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs,
                        y_dim_used, land, dimension, histlen, landvalues, iterate_method, iterate_smooth, norm_method, channel_dim, pred_jump, for_subsample):
    logging.info('Iterating')
 
@@ -689,12 +701,12 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
          h = h.cuda()
 
    # Read in grid data from MITgcm file
-   mitgcm_ds = xr.open_dataset(mitgcm_filename)
-   da_X = mitgcm_ds['X']
-   da_Y = mitgcm_ds['Yp1']
+   MITgcm_ds = xr.open_dataset(MITgcm_filename)
+   da_X = MITgcm_ds['X']
+   da_Y = MITgcm_ds['Yp1']
    if land == 'ExcLand':
       da_Y = da_Y[3:]
-   da_Z = mitgcm_ds['Zmd000038'] 
+   da_Z = MITgcm_ds['Zmd000038'] 
 
    no_depth_levels = 38   #Unesseccary duplication, could use with da_Z shape , should change...
 
@@ -1000,7 +1012,7 @@ def IterativelyPredict(model_name, model_style, MeanStd_prefix, mitgcm_filename,
       nc_VMask[:,:,:]    = out_masks[2,:,:,:]
       nc_EtaMask[:,:]    = out_masks[3,0,:,:]
 
-def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filename, Evolution_Dataset, h, optimizer, epochs_list,
+def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, MITgcm_filename, Evolution_Dataset, h, optimizer, epochs_list,
                           dimension, histlen, landvalues, norm_method, channel_dim, pred_jump, no_phys_channels):
 
    logging.info('Plotting Training Evolution')
@@ -1011,10 +1023,10 @@ def PlotTrainingEvolution(model_name, model_style, MeanStd_prefix, mitgcm_filena
    rootdir = '../../../Channel_nn_Outputs/'+model_name
    
    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-   mitgcm_ds = xr.open_dataset(mitgcm_filename)
-   da_X = mitgcm_ds['X']
-   da_Y = mitgcm_ds['Y']
-   da_Z = mitgcm_ds['Zmd000038']
+   MITgcm_ds = xr.open_dataset(MITgcm_filename)
+   da_X = MITgcm_ds['X']
+   da_Y = MITgcm_ds['Y']
+   da_Z = MITgcm_ds['Zmd000038']
    no_levels = da_Z.shape[0]
    
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(dimension, no_levels, pred_jump)
