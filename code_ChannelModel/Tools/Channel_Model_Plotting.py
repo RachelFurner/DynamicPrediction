@@ -45,7 +45,7 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
                    title=None, min_value=None, max_value=None, diff=False, cmap=None, extend=None): 
     
     # Create a figure
-    fig = plt.figure(figsize=(8,4))  #(24,10))
+    fig = plt.figure(figsize=(8,4.4)) 
     ax = plt.subplot(111)
     if diff:
        if min_value==None:
@@ -76,7 +76,8 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
     return(fig, ax, im)
 
 def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_labels, y_labels, depth_labels, 
-                        title=None, flds_min_value=None, flds_max_value=None, diff_min_value=None, diff_max_value=None, extend=None):
+                        title=None, flds_min_value=None, flds_max_value=None, diff_min_value=None, diff_max_value=None,
+                        extend=None, panes=3, cmap=None):
 
     if flds_min_value == None: 
        flds_min_value = min( np.nanmin(field1[:,:]), np.nanmin(field2[:,:]) )
@@ -84,36 +85,63 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
        flds_max_value = max( np.nanmax(field1[:,:]), np.amax(field2[:,:]) )
 
     if diff_min_value == None: 
-       diff_min_value = -max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+       diff_min_value = -0.8*max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
     if diff_max_value == None: 
-       diff_max_value =  max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+       diff_max_value =  0.8*max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+
+    if cmap==None:
+       cmap = 'viridis'
  
-    fig = plt.figure(figsize=(8,15))
-    ax1 = plt.subplot(311)
-    ax2 = plt.subplot(312)
-    ax3 = plt.subplot(313)
-    ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap='viridis')
-    ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap='viridis')
-    ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+    if panes == 3:
+       fig = plt.figure(figsize=(8,15))
+       ax1 = plt.subplot(311)
+       ax2 = plt.subplot(312)
+       ax3 = plt.subplot(313)
+       ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
+       ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
+       ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+   
+       ax1.set_title(str(field1_name)+' at depth level '+str(level))
+       ax2.set_title(str(field2_name)+' at depth level '+str(level))
+       ax3.set_title('The Difference')
+   
+       cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
+       cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
+       if extend:
+          cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes, extend=extend)
+       else:
+          cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
+       cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes, extend='both')
+    
+       if title:
+          plt.suptitle(title, fontsize=14)
+   
+       plt.tight_layout()
+       plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
 
-    ax1.set_title(str(field1_name)+' at '+str(int(depth_labels[level]))+'m depth')
-    ax2.set_title(str(field2_name)+' at '+str(int(depth_labels[level]))+'m depth')
-    ax3.set_title('The Difference')
+    if panes == 2:
+       fig = plt.figure(figsize=(8,10))
+       ax2 = plt.subplot(211)
+       ax3 = plt.subplot(212)
+       ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
+       ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
-    cb1axes = fig.add_axes([0.92, 0.42, 0.03, 0.52]) 
-    cb3axes = fig.add_axes([0.92, 0.08, 0.03, 0.20]) 
-    if extend:
-       cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes, extend=extend)
-    else:
-       cb1=plt.colorbar(im1, ax=(ax1,ax2), orientation='vertical', cax=cb1axes)
-    cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes, extend='both')
+       ax2.set_title(str(field2_name)+' at '+str(int(depth_labels[level]))+'m depth')
+       ax3.set_title('The Difference')
+
+       cb1axes = fig.add_axes([0.95, 0.55, 0.03, 0.4]) 
+       cb3axes = fig.add_axes([0.95, 0.05, 0.03, 0.4]) 
+       if extend:
+          cb1=plt.colorbar(im2, ax=(ax2), orientation='vertical', cax=cb1axes, extend=extend)
+       else:
+          cb1=plt.colorbar(im2, ax=(ax2), orientation='vertical', cax=cb1axes)
+       cb3=plt.colorbar(im3, ax=ax3, orientation='vertical', cax=cb3axes, extend='both')
  
-    if title:
-       plt.suptitle(title, fontsize=14)
+       if title:
+          plt.suptitle(title, fontsize=14)
 
-    plt.tight_layout()
-    plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
-    #plt.subplots_adjust(wspace=0.01, hspace = 0.4, bottom=0.15)
+       plt.tight_layout()
+       plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
 
     return(fig)
 
@@ -304,44 +332,59 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, x_lab
 # Plot time series at specific points #
 #######################################
 
-def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None):
+def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colors=None):
 
    my_legend=[]
+   count=0
    for name, dataset in datasets.items():
 
       if len(point) == 0:
           ii = np.argwhere(np.isnan(dataset[:]))
           if ii.shape[0]==0:
-              end=length
+             end=length
           else: 
-              end=min(np.nanmin(ii),length)
-          ax.plot(dataset[:end])
+             end=min(np.nanmin(ii),length)
+          if colors:
+             ax.plot(dataset[:end], color=colors[count])
+          else:
+             ax.plot(dataset[:end])
 
       elif len(point) == 1:
           ii = np.argwhere(np.isnan(dataset[:, point[0]]))
           if ii.shape[0]==0:
-              end=length
+             end=length
           else: 
-              end=min(np.nanmin(ii),length)
-          ax.plot(dataset[:end, point[0]])
+             end=min(np.nanmin(ii),length)
+          if colors:
+             ax.plot(dataset[:end, point[0]], color=colors[count])
+          else: 
+             ax.plot(dataset[:end, point[0]])
 
       elif len(point) == 2:
           ii = np.argwhere(np.isnan(dataset[:, point[0], point[1]]))
           if ii.shape[0]==0:
-              end=length
+             end=length
           else: 
-              end=min(np.nanmin(ii),length)
-          ax.plot(dataset[:end, point[0], point[1]])
+             end=min(np.nanmin(ii),length)
+          if colors:
+             ax.plot(dataset[:end, point[0], point[1]], color=colors[count])
+          else: 
+             ax.plot(dataset[:end, point[0], point[1]])
 
       elif len(point) == 3:
           ii = np.argwhere(np.isnan(dataset[:, point[0], point[1], point[2]]))
           if ii.shape[0]==0:
-              end=length
+             end=length
           else: 
-              end=min(np.nanmin(ii),length)
-          ax.plot(dataset[:end, point[0], point[1], point[2]])
+             end=min(np.nanmin(ii),length)
+          if colors:
+             ax.plot(dataset[:end, point[0], point[1], point[2]], color=colors[count])
+          else: 
+             ax.plot(dataset[:end, point[0], point[1], point[2]])
 
       my_legend.append(name)
+      count=count+1
+
    ax.legend(my_legend)
    if y_label:
       ax.set_ylabel(y_label)
@@ -352,11 +395,14 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None):
  
    return(ax)
 
-def plt_timeseries(point, length, datasets, ylim=None, y_label=None):
+def plt_timeseries(point, length, datasets, ylim=None, y_label=None, colors=None):
    
    fig = plt.figure(figsize=(20 ,2))
    ax=plt.subplot(111)
    if ylim == None:
+      if len(point) == 0:
+         bottom = min(next(iter(datasets.values()))[:length])-1
+         top    = max(next(iter(datasets.values()))[:length])+1
       if len(point) == 2:
          bottom = min(next(iter(datasets.values()))[:length, point[0], point[1]])-1
          top    = max(next(iter(datasets.values()))[:length, point[0], point[1]])+1
@@ -364,7 +410,7 @@ def plt_timeseries(point, length, datasets, ylim=None, y_label=None):
          bottom = min(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])-1
          top    = max(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, y_label=y_label, colors=colors)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)

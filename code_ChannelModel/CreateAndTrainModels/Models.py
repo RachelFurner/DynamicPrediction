@@ -3,28 +3,13 @@
 
 import numpy as np
 import os
-import xarray as xr
-import pickle
-
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-
 from torch.utils import data
 import torch.nn as nn
 from torch.autograd import Variable
 import torch
 from torchvision import transforms, utils
-
 from collections import OrderedDict
-
-import netCDF4 as nc4
-
-import time as time
 import gc
-
-import GPUtil
-
 import logging
 
 class CustomPad2dTransp(nn.Module):
@@ -33,7 +18,6 @@ class CustomPad2dTransp(nn.Module):
       self.kern_size = kern_size
    def forward(self, x):
       # apply cyclical padding in x dir
-      # pad_size = int( (self.kern_size-1)/2 )
       x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0), mode='circular')
       return x
 
@@ -43,7 +27,6 @@ class CustomPad3dTransp(nn.Module):
       self.kern_size = kern_size
    def forward(self, x):
       # apply cyclical padding in x dir
-      # pad_size = int( (self.kern_size-1)/2 )
       x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0, 0, 0), mode='circular')
       return x
 
@@ -58,11 +41,6 @@ class CustomPad2d(nn.Module):
       # apply other padding in y dir
       if self.padding_type == 'Cons':
          x = nn.functional.pad(x,(0,0,self.pad_size,self.pad_size),mode='constant', value=0)
-      #elif self.padding_type == 'Refl':
-      #   x = nn.functional.pad(x,(0,0,self.pad_size,self.pad_size),mode='reflect')
-      # Be wary using Repl - mask set up means const with 0 gives land outside of domain, Repl doesn't on S bdy
-      #elif self.padding_type == 'Repl':
-      #   x = nn.functional.pad(x,(0,0,self.pad_size,self.pad_size),mode='replicate')
       else:
          raise RuntimeError('ERROR - NO Padding style given!!!')
       return x
@@ -78,10 +56,6 @@ class CustomPad3d(nn.Module):
       # apply other padding in y dir
       if self.padding_type == 'Cons':
          x = nn.functional.pad(x,(0,0,self.pad_size,self.pad_size,self.pad_size,self.pad_size),mode='constant', value=0)
-      # Refl not available in 3d
-      # Be wary using Repl - mask set up means const with 0 gives land outside of domain, Repl doesn't on S bdy
-      #elif self.padding_type == 'Repl':
-      #   x = nn.functional.pad(x,(0,0,self.pad_size,self.pad_size,self.pad_size,self.pad_size),mode='replicate')
       else:
          raise RuntimeError('ERROR - NO Padding style given!!!')
       return x
@@ -90,6 +64,7 @@ class CustomPad3d(nn.Module):
 class UNet2dTransp(nn.Module):
    def __init__(self, in_channels, out_channels, padding_type, xdim, ydim, kern_size):
       super(UNet2dTransp, self).__init__()
+      print('ydim ;'+str(ydim))
 
       features = 2**(in_channels-1).bit_length()  # nearest power of two to input channels
       logging.info('No features ; '+str(features)+'\n')
@@ -113,6 +88,8 @@ class UNet2dTransp(nn.Module):
       self.kern_size = kern_size
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('input.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
@@ -255,6 +232,8 @@ class UNet2dInterp(nn.Module):
       self.kern_size = kern_size
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('x.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
@@ -363,6 +342,8 @@ class UNet2dTranspExcLand(nn.Module):
       self.kern_size = kern_size
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('x.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
@@ -504,6 +485,8 @@ class UNet3dTransp(nn.Module):
       self.kern_size = kern_size
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('x.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
@@ -642,8 +625,10 @@ class UNet2d(nn.Module):
       self.conv = nn.Conv2d(in_channels=features, out_channels=out_channels, kernel_size=1)
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('x.shape; '+str(x.shape))
-      x = x.to(dtype=torch.float)
+      x = x.to(dtype=torch.float, non_blocking=True)
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
       enc2 = self.encoder2(self.pool1(enc1))
@@ -731,6 +716,8 @@ class UNet3d(nn.Module):
       self.conv = nn.Conv3d(in_channels=features, out_channels=out_channels, kernel_size=1)
 
    def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('x.shape; '+str(x.shape))
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
@@ -827,57 +814,87 @@ class ConvLSTMCell(nn.Module):
                               padding=(kernel_size[0] // 2, kernel_size[1] // 2),
                               bias=False)
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
  
     def forward(self, input_tensor, cur_state):
-        h_cur, c_cur = cur_state
         #print('')
-        #print('in ConvLSTMCell')
-        #print('h_cur.shape; '+str(h_cur.shape))
-        #print('c_cur.shape; '+str(c_cur.shape))
-        #print('input_tensor.shape; '+str(input_tensor.shape))
+        #print('input_tensor is cuda ;'+str(input_tensor.is_cuda))
+        #print('input_tensor shape ;'+str(input_tensor.shape))
+        #print('cur_state[0] is cuda ;'+str(cur_state[0].is_cuda))
+        #print('cur_state[0] shape ;'+str(cur_state[0].shape))
+        #print('cur_state[1] is cuda ;'+str(cur_state[1].is_cuda))
+        #print('cur_state[1] shape ;'+str(cur_state[1].shape))
+        #print('a; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
+        h_cur, c_cur = cur_state
+        #print('h_cur is cuda ;'+str(h_cur.is_cuda))
+        #print('h_cur shape ;'+str(h_cur.shape))
+        #print('c_cur is cuda ;'+str(c_cur.is_cuda))
+        #print('c_cur shape ;'+str(c_cur.shape))
+        #print('b; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
 
-        h_cur = h_cur.to(self.device)
-        c_cur = c_cur.to(self.device)
-
-        combined = torch.cat([input_tensor, h_cur], dim=1)  # concatenate along channel axis
-
-        #print('combined.shape; '+str(combined.shape))
-        combined_conv = self.conv(combined)
-        #print('combined_conv.shape; '+str(combined_conv.shape))
-        cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim=1)
+        cc_i, cc_f, cc_o, cc_g = torch.split(self.conv(torch.cat([input_tensor, h_cur], dim=1)), self.hidden_dim, dim=1)
+        #print('cc_i is cuda ;'+str(cc_i.is_cuda))
+        #print('cc_i shape ;'+str(cc_i.shape))
+        #print('cc_f is cuda ;'+str(cc_f.is_cuda))
+        #print('cc_f shape ;'+str(cc_f.shape))
+        #print('cc_o is cuda ;'+str(cc_o.is_cuda))
+        #print('cc_o shape ;'+str(cc_o.shape))
+        #print('cc_g is cuda ;'+str(cc_g.is_cuda))
+        #print('cc_g shape ;'+str(cc_g.shape))
+        #print('c; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
+        del input_tensor
+        del h_cur
+        torch.cuda.empty_cache()
+        #print('d; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
         i = torch.sigmoid(cc_i)
         f = torch.sigmoid(cc_f)
         o = torch.sigmoid(cc_o)
         g = torch.tanh(cc_g)
-
-        c_next = f * c_cur + i * g
-        h_next = o * torch.tanh(c_next)
-
-        del input_tensor
-        del cur_state
-        del h_cur
-        del c_cur
-        del combined
-        del combined_conv 
+        #print('i is cuda ;'+str(i.is_cuda))
+        #print('i shape ;'+str(i.shape))
+        #print('f is cuda ;'+str(f.is_cuda))
+        #print('f shape ;'+str(f.shape))
+        #print('o is cuda ;'+str(o.is_cuda))
+        #print('o shape ;'+str(o.shape))
+        #print('g is cuda ;'+str(g.is_cuda))
+        #print('g shape ;'+str(g.shape))
+        #print('e; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
         del cc_i
         del cc_f
         del cc_o
         del cc_g
+        torch.cuda.empty_cache()
+        #print('f; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
+
+        c_next = f * c_cur + i * g
+        h_next = o * torch.tanh(c_next)
+        #print('c_next is cuda ;'+str(c_next.is_cuda))
+        #print('c_next shape ;'+str(c_next.shape))
+        #print('h_next is cuda ;'+str(h_next.is_cuda))
+        #print('h_next shape ;'+str(h_next.shape))
+        #print('g; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        #print('')
+
+        del c_cur
         del i
         del f
         del o
         del g
         gc.collect()
         torch.cuda.empty_cache()
-        
+        #print('h; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+   
         return h_next, c_next
 
     def init_hidden(self, batch_size, image_size):
         height, width = image_size
-        return (torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device),
-                torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
-
+        return (torch.zeros(batch_size, self.hidden_dim, height, width),
+                torch.zeros(batch_size, self.hidden_dim, height, width))
 
 class ConvLSTM(nn.Module):
 
@@ -932,13 +949,6 @@ class ConvLSTM(nn.Module):
         
         self.cell_list = nn.ModuleList(cell_list)
 
-        del kernel_size
-        del hidden_dim
-        del cell_list
-        del cur_input_dim
-        gc.collect()
-        torch.cuda.empty_cache()
-
     def forward(self, input_tensor):
         """
         Parameters
@@ -979,20 +989,6 @@ class ConvLSTM(nn.Module):
             layer_output_list = layer_output_list[-1:]
             last_state_list = last_state_list[-1:]
 
-        del b
-        del w
-        del hidden_state
-        del layer_output_list
-        del last_state_list
-        del seq_len
-        del cur_layer_input
-        del c
-        del output_inner
-        del layer_output
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        #return layer_output_list, last_state_list
         return h
 
     def _init_hidden(self, batch_size, image_size):
@@ -1040,6 +1036,8 @@ class UNetConvLSTM(nn.Module):
     def __init__(self, in_channels, out_channels, xdim, ydim, kernel_size):
         super(UNetConvLSTM, self).__init__()
 
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = (kernel_size, kernel_size)
@@ -1062,8 +1060,6 @@ class UNetConvLSTM(nn.Module):
 
         self.ConvLSTMCell6 = ConvLSTMCell(input_dim=self.features, hidden_dim=out_channels, kernel_size=self.kernel_size)
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
     def forward(self, input_tensor):
         """
         Parameters
@@ -1074,99 +1070,103 @@ class UNetConvLSTM(nn.Module):
         -------
         last_state_list, layer_output
         """
+
+        #print('1; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+
         b, _, _, ydim, xdim = input_tensor.size()
 
         seq_len = input_tensor.size(1)
 
         h = torch.zeros((b, self.features, ydim, xdim), device=self.device)
         c = torch.zeros((b, self.features, ydim, xdim), device=self.device)
+        torch.cuda.empty_cache()
+        #print('2; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         output_enc1 = []
-       
+        #print('3; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         for t in range(seq_len):
-            #print('t ; '+str(t))
-            h, c = self.ConvLSTMCell1(input_tensor=input_tensor[:, t, :, :, :], cur_state=[h, c])
+            #print('t; '+str(t))
+            #print('4; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+            h, c = self.ConvLSTMCell1(input_tensor=input_tensor[:, t, :, :, :].to(self.device, non_blocking=True), cur_state=[h, c])
+            #print(h.shape)
+            #print(c.shape)
+            #print('5; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
             output_enc1.append(h)
+            #print('6; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         enc1 = torch.stack(output_enc1, dim=1)
-        #print('enc1.shape; '+str(enc1.shape))
+        #print('7; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        del output_enc1
+        del h
+        del c
+        gc.collect()
+        torch.cuda.empty_cache()
+        #print('8; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
 
-        h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
-        c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
+        h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ), device=self.device)
+        c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ), device=self.device)
+        #print('9; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         output_enc2 = []
+        #print('10; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         for t in range(seq_len):
-            #print('t ; '+str(t))
-            pooled_enc1 = self.pool1(enc1[:, t, :, :, :])
-            h, c = self.ConvLSTMCell2(input_tensor=pooled_enc1, cur_state=[h, c])
+            #print('t; '+str(t))
+            #print('11; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+            h, c = self.ConvLSTMCell2(input_tensor=self.pool1(enc1[:, t, :, :, :]), cur_state=[h, c])
+            #print('12; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
             output_enc2.append(h)
+            #print('13; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
         enc2 = torch.stack(output_enc2, dim=1)
-        #print('enc2.shape; '+str(enc2.shape))
+        #print('14; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
+        del output_enc2
+        gc.collect()
+        torch.cuda.empty_cache()
+        #print('15; '+str(torch.cuda.memory_allocated(device='cuda')/1024.0/1024.0))
 
-        h = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ))
-        c = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ))
+        h = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ), device=self.device)
+        c = torch.zeros((b, self.features*4, int(ydim/4), int(xdim/4) ), device=self.device)
         output_bottleneck = []
         for t in range(seq_len):
-            #print('t ; '+str(t))
-            pooled_enc2 = self.pool2(enc2[:, t, :, :, :])
-            h, c = self.ConvLSTMCell3(input_tensor=pooled_enc2, cur_state=[h, c])
+            h, c = self.ConvLSTMCell3(input_tensor=self.pool2(enc2[:, t, :, :, :]), cur_state=[h, c])
             output_bottleneck.append(h)
         bottleneck = torch.stack(output_bottleneck, dim=1)
-        #print('bottleneck.shape; '+str(bottleneck.shape))
+        del output_bottleneck
+        gc.collect()
+        torch.cuda.empty_cache()
 
-        h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
-        c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ))
+        h = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ), device=self.device)
+        c = torch.zeros((b, self.features*2, int(ydim/2), int(xdim/2) ), device=self.device)
         output_dec2 = []
         for t in range(seq_len):
-            #print('t ; '+str(t))
-            upsampled_bottleneck = self.upsample2(bottleneck[:, t, :, :, :])
-            #print('upsampled_bottleneck.shape '+str(upsampled_bottleneck.shape))
-            #print('enc2[:, t, :, :, :].shape '+str(enc2[:, t, :, :, :].shape))
-            h, c = self.ConvLSTMCell4(input_tensor=torch.cat((upsampled_bottleneck, enc2[:, t, :, :, :]),dim=1), cur_state=[h, c])
+            h, c = self.ConvLSTMCell4(input_tensor=torch.cat((self.upsample2(bottleneck[:, t, :, :, :]), enc2[:, t, :, :, :]),dim=1), cur_state=[h, c])
             output_dec2.append(h)
         dec2 = torch.stack(output_dec2, dim=1)
-        #print('dec2.shape; '+str(dec2.shape))
+        del output_dec2
+        del enc2
+        del bottleneck
+        gc.collect() 
+        torch.cuda.empty_cache()
 
-        h = torch.zeros((b, self.features, ydim, xdim))
-        c = torch.zeros((b, self.features, ydim, xdim))
+        h = torch.zeros((b, self.features, ydim, xdim), device=self.device)
+        c = torch.zeros((b, self.features, ydim, xdim), device=self.device)
         output_dec1 = []
         for t in range(seq_len):
-            #print('t ; '+str(t))
-            upsampled_dec2 = self.upsample1(dec2[:, t, :, :, :])
-            h, c = self.ConvLSTMCell5(input_tensor=torch.cat((upsampled_dec2, enc1[:, t, :, :, :]),dim=1), cur_state=[h, c])
+            h, c = self.ConvLSTMCell5(input_tensor=torch.cat((self.upsample1(dec2[:, t, :, :, :]), enc1[:, t, :, :, :]),dim=1), cur_state=[h, c])
             output_dec1.append(h)
         dec1 = torch.stack(output_dec1, dim=1)
-        #print('dec1.shape; '+str(dec1.shape))
+        del output_dec1
+        del enc1
+        del dec2
+        gc.collect() 
+        torch.cuda.empty_cache()
 
-        h = torch.zeros((b, self.out_channels, ydim, xdim))
-        c = torch.zeros((b, self.out_channels, ydim, xdim))
+        h = torch.zeros((b, self.out_channels, ydim, xdim), device=self.device)
+        c = torch.zeros((b, self.out_channels, ydim, xdim), device=self.device)
         output_final = []
         for t in range(seq_len):
-            #print('t ; '+str(t))
             h, c = self.ConvLSTMCell6(input_tensor=dec1[:, t, :, :, :], cur_state=[h, c])
             output_final.append(h)
         final = torch.stack(output_final, dim=1)
-        #print('final.shape; '+str(final.shape))
-
-        del b
-        del xdim
-        del ydim 
-        del seq_len
-        del h
-        del c
-        del output_enc1
-        del enc1
-        del pooled_enc1
-        del output_enc2
-        del enc2
-        del pooled_enc2
-        del output_bottleneck
-        del bottleneck
-        del upsampled_bottleneck
-        del output_dec2
-        del dec2
-        del upsampled_dec2
-        del output_dec1
-        del dec1
         del output_final
-        gc.collect()
+        del dec1
+        gc.collect() 
         torch.cuda.empty_cache()
 
         return final[:,-1,:,:,:]
@@ -1190,7 +1190,6 @@ class UNetConvLSTM(nn.Module):
         return param
 
 
-
 def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_value, padding_type, xdim, ydim, zdim, kern_size, weight_decay=0):
    # inputs are (no_samples, 115channels, 100y, 240x).  (38 vertical levels, T, U, V 3d, Eta 2d)
    os.environ['PYTHONHASHSEED'] = str(seed_value)
@@ -1201,6 +1200,7 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_val
    torch.backends.cudnn.enabled = False
    torch.backends.cudnn.deterministic = True
    torch.backends.cudnn.benchmark = False
+   torch.use_deterministic_algorithms(True, warn_only=True)
 
    if model_style == 'UNet2dtransp':
       h = UNet2dTransp(no_input_channels, no_target_channels, padding_type, xdim, ydim, kern_size)
@@ -1227,139 +1227,3 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_val
    optimizer = torch.optim.Adam( h.parameters(), lr=lr, weight_decay=weight_decay )
 
    return h, optimizer
-
-#-----------------#
-# Models for GANs #
-#-----------------#
-
-#class Block(nn.Module):
-#    def __init__(self, in_channels, out_channels, down=True, act="relu", use_dropout=False):
-#        super(Block, self).__init__()
-#        self.conv = nn.Sequential(
-#            nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False, padding_mode="reflect")
-#            if down
-#            else nn.ConvTranspose2d(in_channels, out_channels, 4, 2, 1, bias=False),
-#            nn.BatchNorm2d(out_channels),
-#            nn.ReLU() if act == "relu" else nn.LeakyReLU(0.2),
-#        )
-#
-#        self.use_dropout = use_dropout
-#        self.dropout = nn.Dropout(0.5)
-#        self.down = down
-#
-#    def forward(self, x):
-#        x = self.conv(x)
-#        return self.dropout(x) if self.use_dropout else x
-#
-#
-#class Generator(nn.Module):
-#    def __init__(self, in_channels=3, features=64):
-#        super().__init__()
-#        self.initial_down = nn.Sequential(
-#            nn.Conv2d(in_channels, features, 4, 2, 1, padding_mode="reflect"),
-#            nn.LeakyReLU(0.2),
-#        )
-#        self.down1 = Block(features, features * 2, down=True, act="leaky", use_dropout=False)
-#        self.down2 = Block(
-#            features * 2, features * 4, down=True, act="leaky", use_dropout=False
-#        )
-#        self.down3 = Block(
-#            features * 4, features * 8, down=True, act="leaky", use_dropout=False
-#        )
-#        self.down4 = Block(
-#            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-#        )
-#        self.down5 = Block(
-#            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-#        )
-#        self.down6 = Block(
-#            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-#        )
-#        self.bottleneck = nn.Sequential(
-#            nn.Conv2d(features * 8, features * 8, 4, 2, 1), nn.ReLU()
-#        )
-#
-#        self.up1 = Block(features * 8, features * 8, down=False, act="relu", use_dropout=True)
-#        self.up2 = Block(
-#            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True
-#        )
-#        self.up3 = Block(
-#            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True
-#        )
-#        self.up4 = Block(
-#            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=False
-#        )
-#        self.up5 = Block(
-#            features * 8 * 2, features * 4, down=False, act="relu", use_dropout=False
-#        )
-#        self.up6 = Block(
-#            features * 4 * 2, features * 2, down=False, act="relu", use_dropout=False
-#        )
-#        self.up7 = Block(features * 2 * 2, features, down=False, act="relu", use_dropout=False)
-#        self.final_up = nn.Sequential(
-#            nn.ConvTranspose2d(features * 2, in_channels, kernel_size=4, stride=2, padding=1),
-#            nn.Tanh(),
-#        )
-#
-#    def forward(self, x):
-#        d1 = self.initial_down(x)
-#        d2 = self.down1(d1)
-#        d3 = self.down2(d2)
-#        d4 = self.down3(d3)
-#        d5 = self.down4(d4)
-#        d6 = self.down5(d5)
-#        d7 = self.down6(d6)
-#        bottleneck = self.bottleneck(d7)
-#        up1 = self.up1(bottleneck)
-#        up2 = self.up2(torch.cat([up1, d7], 1))
-#        up3 = self.up3(torch.cat([up2, d6], 1))
-#        up4 = self.up4(torch.cat([up3, d5], 1))
-#        up5 = self.up5(torch.cat([up4, d4], 1))
-#        up6 = self.up6(torch.cat([up5, d3], 1))
-#        up7 = self.up7(torch.cat([up6, d2], 1))
-#        return self.final_up(torch.cat([up7, d1], 1))
-#
-#class CNNBlock(nn.Module):
-#    def __init__(self, in_channels, out_channels, stride):
-#        super(CNNBlock, self).__init__()
-#        self.conv = nn.Sequential(
-#            nn.Conv2d(
-#                in_channels, out_channels, 4, stride, 1, bias=False, padding_mode="reflect"
-#            ),
-#            nn.BatchNorm2d(out_channels),
-#            nn.LeakyReLU(0.2),
-#        )
-#
-#    def forward(self, x):
-#        return self.conv(x)
-#
-#class Discriminator(nn.Module):
-#    def __init__(self, in_channels, kern_size):
-#        super().__init__()
-#        in_channels = in_channels*2 # We cat the input and prediction/target together
-#        features = 2**(in_channels-1).bit_length()  # nearest power of two to input channels
-#        self.layer1 = nn.Sequential(
-#            nn.Conv2d(
-#                in_channels * 2,
-#                features,
-#                kernel_size=kern_size,
-#                stride=2,
-#                padding_mode=padding_type, 
-#            ),
-#            nn.LeakyReLU(0.2),
-#        )
-#
-#        self.layer2 = CNNBlock(features, features*2, stride=2)
-#        self.layer3 = CNNBlock(features*2, features*4, stride=2)
-#        self.layer4 = CNNBlock(features*4, features*8, stride=1)
-#        self.layer5 = nn.Conv2d(features*8, 1, kernel_size=4, stride=1, padding=1, padding_mode="reflect")
-#
-#    def forward(self, x, y):
-#        x = torch.cat([x, y], dim=1)
-#        x = self.layer1(x)
-#        x = self.layer2(x)
-#        x = self.layer3(x)
-#        x = self.layer4(x)
-#        x = self.layer5(x)
-#        return x
-#

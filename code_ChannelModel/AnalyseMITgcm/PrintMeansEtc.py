@@ -3,7 +3,8 @@ import numpy as np
 
 #mean_std_file = '../../../Channel_nn_Outputs/10min_MeanStd.npz'
 #mean_std_file = '../../../Channel_nn_Outputs/hrly_MeanStd.npz'
-mean_std_file = '../../../Channel_nn_Outputs/12hrly_MeanStd.npz'
+mean_std_file = '../../../Channel_nn_Outputs/DATASETS/12hrly_MeanStd.npz_OLD'
+#mean_std_file = '../../../Channel_nn_Outputs/DATASETS/12hrly_MeanStd.npz'
 mean_std_data = np.load(mean_std_file)
 inputs_mean  = mean_std_data['arr_0']
 inputs_std   = mean_std_data['arr_1']

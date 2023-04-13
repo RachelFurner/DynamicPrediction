@@ -7,42 +7,25 @@
 # file here, although note this is 2 steps of the underlying model which runs a 12 hourly timestep.
 # The data is subsampled in time to give quasi-independence
 
-#from comet_ml import Experiment
+import torch
+from torchvision import transforms, utils
+import os
 import sys
 sys.path.append('../Tools')
 import ReadRoutines as rr
-
-sys.path.append('.')
 from WholeGridNetworkRegressorModules import *
 from Models import CreateModel
-
 import numpy as np
-import os
 import xarray as xr
-import pickle
-
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-
-from torch.utils import data
-import torch.nn as nn
-from torch.autograd import Variable
-import torch
-from torchvision import transforms, utils
-
+#os.environ[ 'MPLCONFIGDIR' ] = '/data/hpcdata/users/racfur/tmp/'
+#import matplotlib
+#matplotlib.use('agg')
+#import matplotlib.pyplot as plt
 import netCDF4 as nc4
-
-import time as time
 import gc
-
 import argparse
 import logging
-
 import multiprocessing as mp
-#import torch.multiprocessing
-#torch.multiprocessing.set_sharing_strategy('file_system')
-
 import wandb
 
 def parse_args():
@@ -57,14 +40,14 @@ def parse_args():
     a.add_argument("-pj", "--predictionjump", default='12hrly', type=str, action='store')
     a.add_argument("-nm", "--normmethod", default='range', type=str, action='store')
     a.add_argument("-hl", "--histlen", default=1, type=int, action='store')
-    a.add_argument("-pl", "--predlen", default=1, type=int, action='store')
+    a.add_argument("-pl", "--rolllen", default=1, type=int, action='store')
     a.add_argument("-pa", "--padding", default='None', type=str, action='store')
     a.add_argument("-ks", "--kernsize", default=3, type=int, action='store')
-    a.add_argument("-bs", "--batchsize", default=16, type=int, action='store')
+    a.add_argument("-bs", "--batchsize", default=36, type=int, action='store')
     a.add_argument("-bw", "--bdyweight", default=1., type=float, action='store')
     a.add_argument("-lr", "--learningrate", default=0.000003, type=float, action='store')
     a.add_argument("-wd", "--weightdecay", default=0., type=float, action='store')
-    a.add_argument("-nw", "--numworkers", default=8, type=int, action='store')
+    a.add_argument("-nw", "--numworkers", default=2, type=int, action='store')
     a.add_argument("-sd", "--seed", default=30475, type=int, action='store')
     a.add_argument("-lv", "--landvalue", default=0., type=float, action='store')
     a.add_argument("-lo", "--loadmodel", default=False, type=bool, action='store')
@@ -77,27 +60,27 @@ def parse_args():
     a.add_argument("-it", "--iterate", default=False, type=bool, action='store')
     a.add_argument("-im", "--iteratemethod", default='simple', type=str, action='store')
     a.add_argument("-is", "--iteratesmooth", default=0, type=int, action='store')
-    a.add_argument("-pe", "--plotevolution", default=False, type=bool, action='store')
-    a.add_argument("-ee", "--evolutionepochs", default='10,50,100,150,200', type=str, action='store')
+    a.add_argument("-ss", "--smoothsteps", default=0, type=int, action='store')
+    a.add_argument("-wb", "--wandb", default=False, type=bool, action='store')
 
     return a.parse_args()
 
 if __name__ == "__main__":
     
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') 
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logging.info('Using device: '+device+'\n')
+    
     mp.set_start_method('spawn')
 
     args = parse_args()
-  
-    ev_epoch_ls = [int(item) for item in args.evolutionepochs.split(',')]
-
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') 
 
     logging.info('packages imported')
     logging.info('matplotlib backend: '+str(matplotlib.get_backend()) )
     logging.info("os.environ['DISPLAY']: "+str(os.environ['DISPLAY']))
     logging.info('torch.__version__ : '+str(torch.__version__))
     
-    tic = time.time()
     #-------------------------------------
     # Manually set variables for this run
     #--------------------------------------
@@ -112,7 +95,7 @@ if __name__ == "__main__":
     save_freq = 10      # Plot scatter plot, and save the model every n epochs (save in case of a crash etc)
     
     if args.predictionjump == '12hrly':
-       for_len = 120    # How long to iteratively predict for
+       for_len = 180    # How long to iteratively predict for
        for_subsample = 1
     elif args.predictionjump == 'hrly':
        for_len = 1440   # How long to iteratively predict for
@@ -130,15 +113,15 @@ if __name__ == "__main__":
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-   
-    model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_predlen'+str(args.predlen)+'_seed'+str(args.seed)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.backends.cuda.matmul.allow_tf32 = True
+
+    model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)+'_seed'+str(args.seed)
     # Amend some variables if testing code
     if args.test: 
        model_name = model_name+'_TEST'
-       for_len = min(for_len, 50)
-       args.epochs = 5
-       args.evolutionepochs = '5'
-       ev_epoch_ls = [int(item) for item in args.evolutionepochs.split(',')]
+       for_len = min(for_len, 20)
+       args.epochs = min(args.epochs, 5)
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
@@ -146,6 +129,7 @@ if __name__ == "__main__":
        os.system("mkdir %s" % (model_dir+'/MODELS'))
        os.system("mkdir %s" % (model_dir+'/TRAINING_PLOTS'))
        os.system("mkdir %s" % (model_dir+'/STATS'))
+       os.system("mkdir %s" % (model_dir+'/STATS/PLOTS'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
        os.system("mkdir %s" % (model_dir+'/TRAIN_EVOLUTION'))
@@ -165,7 +149,7 @@ if __name__ == "__main__":
     if args.land == 'IncLand' or args.land == 'Spits':
        y_dim_used = 104
     elif args.land == 'ExcLand':
-       y_dim_used = 97
+       y_dim_used = 98
     else:
        raise RuntimeError('ERROR, Whats going on with args.land?!')
 
@@ -176,80 +160,72 @@ if __name__ == "__main__":
     elif args.dim == '3d':
        channel_dim = 1
     
-    if args.land == 'Spits':
-       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
-       if args.predictionjump == '12hrly':
-          if args.test: 
-             #MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/50yr_Cntrl/12hrly_small_set.nc'
-             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_small_set.nc'
-             MITgcm_stats_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/stats.nc'
+    if args.predictionjump == '12hrly':
+       if args.land == 'Spits':
+          if args.rolllen > 1:
+             MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/150yr_Cntrl/'
           else:
-             #MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/12hrly_data.nc'
-             MITgcm_filename = '/data/hpcflash/users/racfur/50yr_Cntrl/12hrly_data.nc'
-             #MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/12hrly_data.nc'
-             MITgcm_stats_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/stats.nc'
-       elif args.predictionjump == 'hrly':
-          if args.test: 
-             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/hrly_small_set.nc'
-          else:
-             MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/hrly_data.nc'
-       elif args.predictionjump == '10min':
-          if args.test: 
-             MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/10min_small_set.nc'
-          else:
-             MITgcm_filename = '/local/extra/racfur/MundayChannelConfig10km_LandSpits/runs/10min_data.nc' 
-          subsample_rate = 3*subsample_rate # give larger subsample for such small timestepping, MITgcm dataset is longer so same amount of training/val samples
-    else:
-       grid_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/grid.nc'
-       if args.test: 
-          MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/12hrly_small_set.nc'
+             MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
        else:
-          DIR =  '/local/extra/racfur/MundayChannelConfig10km_nodiff/runs/50yr_Cntrl/'
-          MITgcm_filename = DIR+'12hrly_data.nc'
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
+    elif args.predictionjump == 'hrly':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/'
+    elif args.predictionjump == '10min':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
+       subsample_rate = 3*subsample_rate # give larger subsample for such small timestepping, MITgcm dataset is longer so same amount of training/val samples
+
+    ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
+    if args.test: 
+       MITgcm_filename = MITgcm_dir+args.predictionjump+'_small_set.nc'
+       ProcDataFilename = ProcDataFilename+'_TEST.nc'
+    else:
+       MITgcm_filename = MITgcm_dir+args.predictionjump+'_data.nc'
+       ProcDataFilename = ProcDataFilename+'.nc'
+    MITgcm_stats_filename = MITgcm_dir+args.land+'_stats.nc'
+    grid_filename = MITgcm_dir+'grid.nc'
+    mean_std_file = MITgcm_dir+args.land+'_'+args.predictionjump+'_MeanStd.npz'
     
     print(MITgcm_filename)
+    print(ProcDataFilename)
     ds = xr.open_dataset(MITgcm_filename)
     
     ds.close()
 
-    wandb.init(project="ChannelConfig", entity="rf-phd", name=model_name)
     logging.info('Model ; '+model_name+'\n')
     
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    logging.info('Using device: '+device+'\n')
-    
-    wandb.config = {
-       "name": model_name,
-       "norm_method": args.normmethod,
-       "learning_rate": args.learningrate,
-       "epochs": args.epochs,
-       "batch_size": args.batchsize
-    }
+    if args.wandb:
+       wandb.init(project="ChannelConfig", entity="rf-phd", name=model_name)
+       wandb.config = {
+          "name": model_name,
+          "norm_method": args.normmethod,
+          "learning_rate": args.learningrate,
+          "epochs": args.epochs,
+          "batch_size": args.batchsize
+       }
  
-    #TimeCheck(tic, 'setting variables')
-   
     #----------------------------------------
     # Read in mean and std, and set channels
     #----------------------------------------
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
 
-    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = ReadMeanStd(args.dim, z_dim, args.predictionjump)
-
     if args.modelstyle == 'ConvLSTM' or args.modelstyle == 'UNetConvLSTM':
-       no_phys_channels = 3*z_dim + 1                              # Eta, plus Temp, U, V through depth
-       no_in_channels = no_phys_channels + z_dim                   # Eta, plus Temp, U, V through depth, plus masks
-       no_out_channels = no_phys_channels                          # Eta, plus Temp, U, V through depth
+       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux 
+       no_model_in_channels = no_phys_in_channels + z_dim             # Phys_in channels plus masks
+       no_out_channels = 3*z_dim + 1                                  # Temp, U, V through depth, plus Eta
     elif args.dim == '2d':
-       no_phys_channels = 3*z_dim + 1                              # Eta, plus Temp, U, V through depth
-       no_in_channels = args.histlen * no_phys_channels + z_dim    # Eta, plus Temp, U, V through depth, for each past time, plus masks
-       no_out_channels = no_phys_channels                          # Eta, plus Temp, U, V through depth (predict 1 step ahead, even if LF calculated over mutliple steps
+       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux
+       no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
+       no_out_channels = 3*z_dim+1                                    # Eta, plus Temp, U, V through depth (predict 1 step ahead, even if LF calculated over mutliple steps
     elif args.dim == '3d':
-       no_phys_channels = 4                                        # Eta, Temp, U, V
-       no_in_channels = args.histlen * no_phys_channels + 1        # Eta Temp, U, V , for each past time, plus masks
-       no_out_channels = no_phys_channels                          # Eta, Temp, U, V just once
+       no_phys_in_channels = 6                                        # Temp, U, V, Eta, gTforc and taux
+       no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
+       no_out_channels = 4                                            # Temp, U, V, Eta just once
    
-    logging.info('no_phys_channels ;'+str(no_phys_channels)+'\n')
-    logging.info('no_in_channels ;'+str(no_in_channels)+'\n')
+    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = \
+                                          ReadMeanStd(mean_std_file, args.dim, no_phys_in_channels, no_out_channels, z_dim, args.seed)
+
+    logging.info('no_phys_in_channels ;'+str(no_phys_in_channels)+'\n')
+    logging.info('no_model_in_channels ;'+str(no_model_in_channels)+'\n')
     logging.info('no_out_channels ;'+str(no_out_channels)+'\n')
 
     #---------------------------------------------------------------------------------------------------------------------------------------
@@ -263,32 +239,16 @@ if __name__ == "__main__":
        
     if args.createdataset:
 
-       rr.CreateDataset(MITgcm_filename, subsample_rate, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
-                        grid_filename, args.dim, args.modelstyle, args.predictionjump, z_dim, no_phys_channels, no_in_channels, no_out_channels,
-                        args.normmethod, model_name)
+       rr.CreateProcDataset(MITgcm_filename, ProcDataFilename, subsample_rate, args.histlen, args.rolllen, args.land, args.bdyweight, landvalues,
+                            grid_filename, args.dim, args.modelstyle, mean_std_file, z_dim, y_dim_used, no_phys_in_channels, no_out_channels,
+                            args.normmethod, model_name, args.seed)
 
     #-------------------------------------------------------------------------------------
-    # Create training and validation Datsets and dataloaders with normalisation
+    # Read in training and validation Datsets and dataloaders
     #-------------------------------------------------------------------------------------
-    # Note normalisation is carries out channel by channel, over the inputs and targets, using mean and std from training data
-    #Train_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0.0, train_end_ratio, subsample_rate,
-    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
-    #Val_Dataset   = rr.MITgcm_Dataset( MITgcm_filename, train_end_ratio, val_end_ratio, subsample_rate,
-    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
-    #Test_Dataset  = rr.MITgcm_Dataset( MITgcm_filename, val_end_ratio, 1.0, subsample_rate,
-    #                                   args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues, grid_filename, args.dim, args.modelstyle,
-    #                                   transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-    #                                                                     targets_mean, targets_std, targets_range, args.histlen, args.predlen,
-    #                                                                     no_phys_channels, args.dim, args.normmethod, args.modelstyle)] ) )
-    Train_Dataset = rr.ProcData_Dataset(model_name, 0., train_end_ratio)
-    Val_Dataset   = rr.ProcData_Dataset(model_name, train_end_ratio, val_end_ratio)
-    Test_Dataset  = rr.ProcData_Dataset(model_name, val_end_ratio, 1.)
+    Train_Dataset = rr.ReadProcData_Dataset(model_name, ProcDataFilename, 0., train_end_ratio, args.seed)
+    Val_Dataset   = rr.ReadProcData_Dataset(model_name, ProcDataFilename, train_end_ratio, val_end_ratio, args.seed)
+    Test_Dataset  = rr.ReadProcData_Dataset(model_name, ProcDataFilename, val_end_ratio, 1., args.seed)
 
     no_tr_samples = len(Train_Dataset)
     no_val_samples = len(Val_Dataset)
@@ -307,7 +267,7 @@ if __name__ == "__main__":
     #--------------
     # Set up model
     #--------------
-    h, optimizer = CreateModel( args.modelstyle, no_in_channels, no_out_channels, args.learningrate, args.seed, args.padding,
+    h, optimizer = CreateModel( args.modelstyle, no_model_in_channels, no_out_channels, args.learningrate, args.seed, args.padding,
                                 ds.isel(T=slice(0)).sizes['X'], y_dim_used, z_dim, args.kernsize, args.weightdecay )
    
     #------------------
@@ -323,17 +283,17 @@ if __name__ == "__main__":
   
     if args.loadmodel:
        if args.trainmodel:
-          losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best)
-          losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.predlen, tic, args.test, no_tr_samples, no_val_samples, 
-                              save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, 
-                              channel_dim, no_phys_channels, start_epoch=start_epoch, current_best_loss=current_best_loss)
+          losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best, args.seed)
+          losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples, 
+                              save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, channel_dim, 
+                              no_phys_in_channels, no_out_channels, args.wandb, start_epoch=start_epoch, current_best_loss=current_best_loss)
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses )
        else:
-          LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best)
+          LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best, args.seed)
     elif args.trainmodel:  # Training mode BUT NOT loading model
-       losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.predlen, tic, args.test, no_tr_samples, no_val_samples,
+       losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples,
                            save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed,
-                           losses, channel_dim, no_phys_channels)
+                           losses, channel_dim, no_phys_in_channels, no_out_channels, args.wandb)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses)
    
     #--------------------
@@ -341,12 +301,13 @@ if __name__ == "__main__":
     #--------------------
     if args.plotscatter:
     
-       PlotScatter(model_name, args.dim, train_loader, h, total_epochs, 'training', args.land+'_'+args.dim,
-                   args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
-       PlotScatter(model_name, args.dim, val_loader, h, total_epochs, 'validation', args.land+'_'+args.dim,
-                   args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
-       PlotScatter(model_name, args.dim, test_loader, h, total_epochs, 'test', args.land+'_'+args.dim,
-                   args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
+       PlotScatter(model_name, args.dim, train_loader, h, total_epochs, 'training', args.normmethod, channel_dim,
+                   mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
+       if not args.test: 
+          PlotScatter(model_name, args.dim, val_loader, h, total_epochs, 'validation', args.normmethod, channel_dim,
+                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
+          PlotScatter(model_name, args.dim, test_loader, h, total_epochs, 'test', args.normmethod, channel_dim, 
+                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
     
     #------------------
     # Assess the model 
@@ -355,48 +316,43 @@ if __name__ == "__main__":
     
        stats_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
                                                   num_workers=args.numworkers, pin_memory=True )
-       stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                               num_workers=args.numworkers, pin_memory=True )
-       stats_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                               num_workers=args.numworkers, pin_memory=True )
+       if not args.test: 
+          stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
+                                                  num_workers=args.numworkers, pin_memory=True )
+          stats_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=True, 
+                                                  num_workers=args.numworkers, pin_memory=True )
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'training', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
+       OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
+                   args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
+                   MITgcm_stats_filename, args.seed)
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'validation', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
+       if not args.test: 
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
+                      args.histlen, args.land, 'validation', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
+                      MITgcm_stats_filename, args.seed)
     
-       OutputStats(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'test', args.normmethod, channel_dim, args.predictionjump, no_phys_channels, MITgcm_stats_filename)
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
+                      args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
+                      MITgcm_stats_filename, args.seed)
     
     #---------------------
     # Iteratively predict 
     #---------------------
     if args.iterate:
 
-       Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.predlen, args.land, tic, args.bdyweight, landvalues,
-                                            grid_filename, args.dim,  args.modelstyle,
+       Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.rolllen, args.land, args.bdyweight, landvalues,
+                                            grid_filename, args.dim,  args.modelstyle, no_phys_in_channels, no_out_channels, args.seed,
                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
                                                                               targets_mean, targets_std, targets_range,
-                                                                              args.histlen, args.predlen, no_phys_channels, args.dim, 
-                                                                              args.normmethod, args.modelstyle)] ) )
+                                                                              args.histlen, args.rolllen, no_phys_in_channels, no_out_channels, args.dim, 
+                                                                              args.normmethod, args.modelstyle, args.seed)] ) )
     
-       IterativelyPredict(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
-                          y_dim_used, args.land, args.dim, args.histlen, landvalues,
-                          args.iteratemethod, args.iteratesmooth, args.normmethod, channel_dim, args.predictionjump, for_subsample) 
+       IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
+                          y_dim_used, args.land, args.dim, args.histlen, landvalues, args.iteratemethod, args.iteratesmooth, args.smoothsteps,
+                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, args.seed) 
     
     #------------------------------------------------------
     # Plot fields from various training steps of the model
     #------------------------------------------------------
-    if args.plotevolution:
-
-       #Evolve_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0.0, train_end_ratio, subsample_rate, args.histlen, args.predlen, 
-       #                                    args.land, tic, args.bdyweight, landvalues,
-       #                                    grid_filename, args.dim, args.modelstyle,
-       #                                    transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-       #                                                                      targets_mean, targets_std, targets_range,
-       #                                                                      args.histlen, args.predlen, no_phys_channels, args.dim,
-       #                                                                      args.normmethod, args.modelstyle)] ) )
-
-       PlotTrainingEvolution(model_name, args.modelstyle, args.land+'_'+args.dim, MITgcm_filename, Train_Dataset, h, optimizer, ev_epoch_ls,
-                             args.dim, args.histlen, landvalues, args.normmethod, channel_dim, args.predictionjump, no_phys_channels)
+    # Not done here as not needed. Instead run assess stats with various saved versions of the model, and plot whatever wanted,
+    # including example predictions from scripts in Analyse NN
