@@ -26,7 +26,7 @@ plt.rc('ytick', labelsize='x-small')
 #----------------------------
 point = [ 2, 8, 6]
 
-run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2}
+run_vars={'dimension':2, 'lat':True , 'lon':True, 'dep':True , 'current':True , 'bolus_vel':True , 'sal':True , 'eta':True , 'density':True , 'poly_degree':2, 'StepSize':1, 'predict':'DelT'}
 
 data_prefix=''
 exp_prefix = ''
@@ -87,6 +87,8 @@ print('Av_Error.shape')
 print(Av_Error.shape)
 
 cbar_label = 'Error ('+u'\xb0'+'C)'
+diff_cbar_label = 'Change in error ('+u'\xb0'+'C)'
+
 #--------------------------
 # Plot spatial depth plots
 #--------------------------
@@ -125,8 +127,8 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_AvErrors_x'+str(x_coord)+
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_AbsError[:,:,:], 'Averaged Absolute Errors', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
-                                         text='(b)', title=None, min_value=0.0, max_value=0.000306, cmap='Reds',
-                                         #text='(a)', title=None, min_value=0.0, max_value=0.000306, cmap='Reds',
+                                         #text='(b)', title=None, min_value=0.0, max_value=0.000306, cmap='Reds',
+                                         text='(a)', title=None, min_value=0.0, max_value=0.000306, cmap='Reds',
                                          cbar_label=cbar_label, Sci=True)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_AvAbsErrors_x'+str(x_coord)+'.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
 
@@ -147,13 +149,13 @@ plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_CorCoef_x'+str(x_coord)+'
 fig, ax, im = rfplt.plot_xconst_crss_sec(Av_AbsError[:,:,:]-Cntrl_Av_AbsError, 'Diff in Averaged Absolute Errors with Control Run', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          text='(b)', title=None, min_value=None, max_value=None, diff=True,
-                                         cbar_label=cbar_label, Sci=True)
+                                         cbar_label=diff_cbar_label, Sci=True)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_AvAbsErrors_DiffwCntrl_x'+str(x_coord)+'.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
 
 fig, ax, im = rfplt.plot_xconst_crss_sec(Cor_Coef[:,:,:]-Cntrl_Cor_Coef, 'Diff in Corelation Coeficients with Control Run', x_coord,
                                          MITGCM_ds['X'].values, MITGCM_ds['Y'].values, MITGCM_ds['Z'].values,
                                          text='(b)', title=None, min_value=None, max_value=None, diff=True,
-                                         cbar_label=cbar_label, Sci=True)
+                                         cbar_label=diff_cbar_label, Sci=True)
 plt.savefig(rootdir+'PLOTS/'+model_name+'/'+exp_name+'_CoerCoef_DiffwCntrl_x'+str(x_coord)+'.eps', bbox_inches = 'tight', pad_inches = 0.1, format='eps')
 
 #-----------------------
