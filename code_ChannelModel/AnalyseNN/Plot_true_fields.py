@@ -19,11 +19,11 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'    
+dir_name = 'Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'    
 epochs = '200'
-iteration_len = 60 
+iteration_len = 180 
 
-animation_end = 60   
+animation_end = 180  
 
 #-----------
 
@@ -38,7 +38,7 @@ x_coord = point[2]
 #------------------------
 print('reading in data')
 #------------------------
-iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_simple_Forecast'+str(iteration_len)+'.nc'
+iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_simple_smth0stps0_Forlen'+str(iteration_len)+'.nc'
 iter_ds = xr.open_dataset(iter_data_filename)
 da_true_Temp = iter_ds['True_Temp']
 da_true_U    = iter_ds['True_U']

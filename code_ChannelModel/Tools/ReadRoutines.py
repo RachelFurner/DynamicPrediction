@@ -124,8 +124,6 @@ class MITgcm_Dataset(data.Dataset):
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,3:101,:]).shape[2]
           # set mask, initialise as ocean (ones) everywhere
           self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.masks[:,:,:] = np.where( HfacC[:,3:101,:] > 0., 1, 0 )
-
        else:
           # Set dims based on T grid
           self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
@@ -134,6 +132,9 @@ class MITgcm_Dataset(data.Dataset):
           # set mask, initialise as ocean (ones) everywhere
           self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
           self.masks[:,:,:] = np.where( HfacC > 0., 1, 0 )
+       print('self.z_dim; '+str(self.z_dim))
+       print('self.y_dim; '+str(self.y_dim))
+       print('self.x_dim; '+str(self.x_dim))
 
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
           self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
@@ -210,8 +211,8 @@ class MITgcm_Dataset(data.Dataset):
           da_V_out_tmp   = 0.5 * (da_V_out_tmp[:,:,:-1,:]+da_V_out_tmp[:,:,1:,:]) # average to get onto same grid as T points
           da_Eta_out_tmp = ds_OutputSlice['ETAN'].values[:,0,3:101,:]
 
-          da_gtForc_extra = ds_OutputSlice['gT_Forc'].values[:,0,:,:]
-          da_taux_tmp     = ds_OutputSlice['oceTAUX'].values[:,0,:,:]
+          da_gtForc_extra = ds_OutputSlice['gT_Forc'].values[:,0,3:101,:]
+          da_taux_tmp     = ds_OutputSlice['oceTAUX'].values[:,0,3:101,:]
           da_taux_extra   = 0.5 * (da_taux_tmp[:,:,:-1]+da_taux_tmp[:,:,1:])
 
        da_T_out       = np.zeros(da_T_out_tmp.shape)
@@ -225,10 +226,10 @@ class MITgcm_Dataset(data.Dataset):
        da_Eta_out[0,:,:] = da_Eta_out_tmp[0,:,:] - da_Eta_in[-1,:,:]
 
        if self.rolllen > 1:
-          da_T_out[1:self.rolllen,:,:,:] = da_T_out[1:self.rolllen,:,:,:] - da_T_out[0:self.rolllen-1,:,:,:]
-          da_U_out[1:self.rolllen,:,:,:] = da_U_out[1:self.rolllen,:,:,:] - da_U_out[0:self.rolllen-1,:,:,:]
-          da_V_out[1:self.rolllen,:,:,:] = da_V_out[1:self.rolllen,:,:,:] - da_V_out[0:self.rolllen-1,:,:,:]
-          da_Eta_out[1:self.rolllen,:,:] = da_Eta_out[1:self.rolllen,:,:] - da_Eta_out[0:self.rolllen-1,:,:]
+          da_T_out[1:self.rolllen,:,:,:] = da_T_out_tmp[1:self.rolllen,:,:,:] - da_T_out_tmp[0:self.rolllen-1,:,:,:]
+          da_U_out[1:self.rolllen,:,:,:] = da_U_out_tmp[1:self.rolllen,:,:,:] - da_U_out_tmp[0:self.rolllen-1,:,:,:]
+          da_V_out[1:self.rolllen,:,:,:] = da_V_out_tmp[1:self.rolllen,:,:,:] - da_V_out_tmp[0:self.rolllen-1,:,:,:]
+          da_Eta_out[1:self.rolllen,:,:] = da_Eta_out_tmp[1:self.rolllen,:,:] - da_Eta_out_tmp[0:self.rolllen-1,:,:]
 
 
        # Set up sample arrays and then fill (better for memory than concatenating)
@@ -368,7 +369,7 @@ class MITgcm_Dataset(data.Dataset):
        sample_extrafluxes = torch.from_numpy(sample_extrafluxes)
 
        if self.transform:
-          sample_input, sample_target = self.transform({'input':sample_input, 'target':sample_target})
+          sample_input, sample_target, sample_extrafluxes = self.transform({'input':sample_input,'target':sample_target,'extrafluxes':sample_extrafluxes})
  
        return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks
 
@@ -413,6 +414,7 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
 
     print(X_size)
     print(Y_size)
+    print(y_dim_used)
     print(Z_size)
 
     batch = 0
@@ -563,6 +565,10 @@ class RF_Normalise_sample(object):
               sample['target'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :] =                   \
                                    RF_Normalise( sample['target'][time*self.no_out_channels:(time+1)*self.no_out_channels, :, :],
                                                  self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method, self.seed )
+           for time in range(self.rolllen):
+              sample['extrafluxes'][time*2:(time+1)*2, :, :] =                   \
+                                   RF_Normalise( sample['extrafluxes'][time*2:(time+1)*2, :, :],
+                                                 self.inputs_mean[-2:], self.inputs_std[-2:], self.inputs_range[-2:], self.dim, self.norm_method, self.seed )
         elif self.dim == '3d':
            for time in range(self.histlen):
               sample['input'][time*self.no_phys_in_channels:(time+1)*self.no_phys_in_channels, :, :, :] =                   \
@@ -574,7 +580,7 @@ class RF_Normalise_sample(object):
                                                  self.targets_mean, self.targets_mean, self.targets_range, self.dim, self.norm_method, self.seed )
 
 
-        return sample['input'], sample['target']
+        return sample['input'], sample['target'], sample['extrafluxes']
 
 def RF_Normalise(data, d_mean, d_std, d_range, dim, norm_method, seed ):
     """Normalise data based on training means and std (given)

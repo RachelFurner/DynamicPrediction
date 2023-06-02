@@ -8,9 +8,9 @@ import Channel_Model_Plotting as ChnlPlt
 
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import linear_model
-from sklearn.preprocessing import PolynomialFeatures
-from skimage.util import view_as_windows
+#from sklearn import linear_model
+#from sklearn.preprocessing import PolynomialFeatures
+#from skimage.util import view_as_windows
 import os
 import xarray as xr
 import pickle
@@ -72,7 +72,7 @@ ds_stats = xr.open_dataset(stats_file)
 #------------
 # Plot Means
 #------------
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['MeanEta'][0,:,:], np.nan), 'Mean Sea Surface Height', 0,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['MeanEta'][0,:,:], np.nan), 'Mean Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value= -max( abs(np.amin(ds_stats['MeanEta'][0,:,:])), np.amax(ds_stats['MeanEta'][0,:,:]) ),
@@ -81,14 +81,14 @@ plt.savefig(rootdir+'PLOTS/MeanEta', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
    
 for level in range(38):
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanTemp'][level,:,:], np.nan), 'Mean Temperature', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanTemp'][level,:,:], np.nan), 'Mean Temperature ('+u'\xb0'+'C)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, min_value=None, max_value=None)
                                         #title=None, min_value=0.0, max_value=6.5, extend='both', cmap='bwr')
    plt.savefig(rootdir+'PLOTS/MeanTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean East-West Velocity', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean East-West Velocity (m/s)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, cmap='PRGn',
                                         min_value=-0.3, max_value=0.3, extend='both')
@@ -97,7 +97,7 @@ for level in range(38):
    plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean North-South Velocity', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean North-South Velocity (m/s)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, cmap='PRGn',
                                         min_value=-0.1, max_value=0.1, extend='both')
@@ -109,28 +109,28 @@ for level in range(38):
 #-----------
 # Plot Stds
 #-----------
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['StdEta'][0,:,:], np.nan), 'Std Sea Surface Height', 0,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['StdEta'][0,:,:], np.nan), 'Std Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, min_value=None, max_value=None)
 plt.savefig(rootdir+'PLOTS/StdEta', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
    
 for level in range(38):
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdTemp'][level,:,:], np.nan), 'Std Temperature', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdTemp'][level,:,:], np.nan), 'Std Temperature ('+u'\xb0'+'C)', level,
                                       da_X.values, da_Y.values, da_Z.values,
                                       title=None, min_value=None, max_value=None)
                                       #title=None, min_value=0.0, max_value=0.8, extend='both')
    plt.savefig(rootdir+'PLOTS/StdTemp_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std East-West Velocity', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std East-West Velocity (m/s)', level,
                                       da_X.values, da_Y.values, da_Z.values,
                                       title=None, min_value=None, max_value=None)
                                       #title=None, min_value=0.0, max_value=0.3, extend='both')
    plt.savefig(rootdir+'PLOTS/StdUVel_z'+str(level), bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std North-South Velocity', level,
+   fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std North-South Velocity (m/s)', level,
                                       da_X.values, da_Y.values, da_Z.values,
                                       title=None, min_value=None, max_value=None)
                                       #title=None, min_value=0.0, max_value=0.32, extend='both')
@@ -145,13 +145,13 @@ y_coord = point[1]
 x_coord = point[2]
 
 print('plot spatial depth plots')
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time,level,:,:], np.nan), 'Temperature', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time,level,:,:], np.nan), 'Temperature ('+u'\xb0'+'C)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, min_value=0.0, max_value=6.3)
 plt.savefig(rootdir+'PLOTS/Temp_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][time,level,:,:], np.nan), 'East-West Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][time,level,:,:], np.nan), 'East-West Velocity (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value = -0.5, max_value = 0.5, extend='both')
@@ -160,7 +160,7 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][ti
 plt.savefig(rootdir+'PLOTS/UVel_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][time,level,:,:], np.nan), 'North-South Velocity', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][time,level,:,:], np.nan), 'North-South Velocity (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value = -0.5, max_value = 0.5, extend='both')
@@ -169,7 +169,7 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][ti
 plt.savefig(rootdir+'PLOTS/VVel_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time,0,:,:], np.nan), 'Sea Surface Height', 0,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time,0,:,:], np.nan), 'Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value = -0.8, max_value = 0.8)
@@ -181,30 +181,34 @@ plt.close()
 #-----------------------------
 level = 2
 print('plot tendancy plots')
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time+1,level,:,:]-da_T[time,level,:,:], np.nan), 'Temperature Increment', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time+1,level,:,:]-da_T[time,level,:,:], np.nan),
+                                     'Temperature Increment ('+u'\xb0'+'C)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, min_value=-0.6, max_value=0.6, cmap='PRGn', extend='both')
 plt.savefig(rootdir+'PLOTS/TempTend_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][time+1,level,:,:]-ds['UVEL'][time,level,:,:], np.nan), 'East-West Velocity Increment', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][time+1,level,:,:]-ds['UVEL'][time,level,:,:], np.nan), 
+                                     'East-West Velocity Increment (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value=-0.2, max_value=0.2, extend='both')
 plt.savefig(rootdir+'PLOTS/UVelTend_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][time+1,level,:,:]-ds['VVEL'][time,level,:,:], np.nan), 'North-South Velocity Increment', level,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][time+1,level,:,:]-ds['VVEL'][time,level,:,:], np.nan),
+                                     'North-South Velocity Increment (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
                                      min_value=-0.3, max_value=0.3, extend='both')
 plt.savefig(rootdir+'PLOTS/VVelTend_z'+str(level)+'_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time+1,0,:,:]-ds['ETAN'][time,0,:,:], np.nan), 'Sea Surface Height Increment', 0,
+fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time+1,0,:,:]-ds['ETAN'][time,0,:,:], np.nan),
+                                     'Sea Surface Height Increment (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value=-0.08, max_value=0.08)
+                                     min_value=-0.08, max_value=0.08, extend='both')
 plt.savefig(rootdir+'PLOTS/EtaTend_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 

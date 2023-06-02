@@ -83,7 +83,7 @@ if __name__ == "__main__":
     
     #-------------------------------------
     # Manually set variables for this run
-    #--------------------------------------
+    #-------------------------------------
 
     logging.info('args '+str(args))
     
@@ -103,6 +103,9 @@ if __name__ == "__main__":
     elif args.predictionjump == '10min':
        for_len = 8640   # How long to iteratively predict for
        for_subsample = 72
+    elif args.predictionjump == 'wkly':
+       for_len = 13     # How long to iteratively predict for
+       for_subsample = 1
     start = 0        # Start from zero to fit with perturbed runs
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -120,7 +123,7 @@ if __name__ == "__main__":
     # Amend some variables if testing code
     if args.test: 
        model_name = model_name+'_TEST'
-       for_len = min(for_len, 20)
+       for_len = min(for_len, 100)
        args.epochs = min(args.epochs, 5)
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
@@ -162,14 +165,11 @@ if __name__ == "__main__":
     
     if args.predictionjump == '12hrly':
        if args.land == 'Spits':
-          if args.rolllen > 1:
-             MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/150yr_Cntrl/'
-          else:
-             MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
        else:
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
     elif args.predictionjump == 'hrly':
-       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/hrly_output/'
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
     elif args.predictionjump == '10min':
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
        subsample_rate = 3*subsample_rate # give larger subsample for such small timestepping, MITgcm dataset is longer so same amount of training/val samples
@@ -210,15 +210,24 @@ if __name__ == "__main__":
 
     if args.modelstyle == 'ConvLSTM' or args.modelstyle == 'UNetConvLSTM':
        no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux 
-       no_model_in_channels = no_phys_in_channels + z_dim             # Phys_in channels plus masks
+       if args.land == 'ExcLand':
+          no_model_in_channels = no_phys_in_channels                  # Phys_in channels, no masks for excland version
+       else:
+          no_model_in_channels = no_phys_in_channels + z_dim          # Phys_in channels plus masks
        no_out_channels = 3*z_dim + 1                                  # Temp, U, V through depth, plus Eta
     elif args.dim == '2d':
        no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux
-       no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
-       no_out_channels = 3*z_dim+1                                    # Eta, plus Temp, U, V through depth (predict 1 step ahead, even if LF calculated over mutliple steps
+       if args.land == 'ExcLand':
+          no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for excland version
+       else:
+          no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
+       no_out_channels = 3*z_dim+1                                    # Eta, plus Temp, U, V through depth (predict 1 step ahead, even for rolout loss)
     elif args.dim == '3d':
        no_phys_in_channels = 6                                        # Temp, U, V, Eta, gTforc and taux
-       no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
+       if args.land == 'ExcLand':
+          no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for Excland case
+       else:
+          no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
        no_out_channels = 4                                            # Temp, U, V, Eta just once
    
     inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = \
@@ -280,18 +289,18 @@ if __name__ == "__main__":
               'train_V'   : [],
               'train_Eta' : [],
               'val'       : [] }
-  
+ 
     if args.loadmodel:
        if args.trainmodel:
           losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best, args.seed)
-          losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples, 
+          losses = TrainModel(model_name, args.modelstyle, args.dim, args.land, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples, 
                               save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, channel_dim, 
                               no_phys_in_channels, no_out_channels, args.wandb, start_epoch=start_epoch, current_best_loss=current_best_loss)
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses )
        else:
           LoadModel(model_name, h, optimizer, args.savedepochs, 'inf', losses, args.best, args.seed)
     elif args.trainmodel:  # Training mode BUT NOT loading model
-       losses = TrainModel(model_name, args.modelstyle, args.dim, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples,
+       losses = TrainModel(model_name, args.modelstyle, args.dim, args.land, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples,
                            save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed,
                            losses, channel_dim, no_phys_in_channels, no_out_channels, args.wandb)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses)
@@ -308,6 +317,22 @@ if __name__ == "__main__":
                       mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
           PlotScatter(model_name, args.dim, test_loader, h, total_epochs, 'test', args.normmethod, channel_dim, 
                       mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
+    
+    #---------------------
+    # Iteratively predict 
+    #---------------------
+    if args.iterate:
+
+       Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.rolllen, args.land, args.bdyweight, landvalues,
+                                            grid_filename, args.dim,  args.modelstyle, no_phys_in_channels, no_out_channels, args.seed,
+                                            transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
+                                                                              targets_mean, targets_std, targets_range,
+                                                                              args.histlen, args.rolllen, no_phys_in_channels, no_out_channels, args.dim, 
+                                                                              args.normmethod, args.modelstyle, args.seed)] ) )
+    
+       IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
+                          y_dim_used, args.land, args.dim, args.histlen, landvalues, args.iteratemethod, args.iteratesmooth, args.smoothsteps,
+                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, args.seed) 
     
     #------------------
     # Assess the model 
@@ -334,22 +359,6 @@ if __name__ == "__main__":
           OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
                       MITgcm_stats_filename, args.seed)
-    
-    #---------------------
-    # Iteratively predict 
-    #---------------------
-    if args.iterate:
-
-       Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.rolllen, args.land, args.bdyweight, landvalues,
-                                            grid_filename, args.dim,  args.modelstyle, no_phys_in_channels, no_out_channels, args.seed,
-                                            transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                              targets_mean, targets_std, targets_range,
-                                                                              args.histlen, args.rolllen, no_phys_in_channels, no_out_channels, args.dim, 
-                                                                              args.normmethod, args.modelstyle, args.seed)] ) )
-    
-       IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
-                          y_dim_used, args.land, args.dim, args.histlen, landvalues, args.iteratemethod, args.iteratesmooth, args.smoothsteps,
-                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, args.seed) 
     
     #------------------------------------------------------
     # Plot fields from various training steps of the model

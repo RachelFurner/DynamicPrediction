@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 from matplotlib.cm import get_cmap
+import matplotlib.colors as colors
 from scipy.stats import skew
 
 plt.rcParams.update({'font.size': 14})
@@ -19,7 +20,7 @@ plt.rcParams.update({'font.size': 14})
 # Plotting spatial depth fields #
 #################################
 
-def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, max_value=None, cmap=None):
+def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, max_value=None, cmap=None, norm=None):
 
     # Assumes field is (z, y, x)
     if not min_value:
@@ -27,7 +28,10 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, m
     if not max_value:
        max_value = np.nanmax(field[:,:])   # Highest value
 
-    im = ax.pcolormesh(field[:,:], vmin=min_value, vmax=max_value, cmap=cmap)
+    if norm == 'log':
+       im = ax.pcolormesh(field[:,:], norm=colors.LogNorm(vmin=min_value, vmax=max_value), cmap=cmap)
+    else:
+       im = ax.pcolormesh(field[:,:], vmin=min_value, vmax=max_value, cmap=cmap)
     ax.set_xlabel('x position (km)')
     ax.set_ylabel('y position (km)')
    
@@ -42,7 +46,7 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, m
     return(ax, im)
 
 def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels, 
-                   title=None, min_value=None, max_value=None, diff=False, cmap=None, extend=None): 
+                   title=None, min_value=None, max_value=None, diff=False, cmap=None, extend=None, norm=None): 
     
     # Create a figure
     fig = plt.figure(figsize=(8,4.4)) 
@@ -59,13 +63,16 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
           cmap = 'viridis'
     if extend==None:
        extend='neither'
-    ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap)
+    ax, im = plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value, max_value, cmap, norm)
 
-    #ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]+'m deep')))
-    ax.set_title(str(field_name)+' at depth level '+str(level))
+    if 'Sea Surface Height' not in field_name:
+       ax.set_title(str(field_name)+' at '+str(int(depth_labels[level]))+'m')
+    else:
+       ax.set_title(str(field_name))
+       #ax.set_title(str(field_name)+' at depth level '+str(level))
 
     # Add a color bar
-    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.5, 1.3), extend=extend)
+    cb=plt.colorbar(im, ax=(ax), shrink=0.9, anchor=(0.0, 0.5), extend=extend)
 
     if title:
        plt.suptitle(title, fontsize=14)
@@ -332,7 +339,7 @@ def plot_xconst_crss_sec_diff(field1, field1_name, field2, field2_name, x, x_lab
 # Plot time series at specific points #
 #######################################
 
-def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colors=None):
+def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colors=None, alphas=None):
 
    my_legend=[]
    count=0
@@ -344,8 +351,12 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colo
              end=length
           else: 
              end=min(np.nanmin(ii),length)
-          if colors:
+          if colors and alphas:
+             ax.plot(dataset[:end], color=colors[count], alpha=alphas[count])
+          elif colors:
              ax.plot(dataset[:end], color=colors[count])
+          elif alphas:
+             ax.plot(dataset[:end], alpha=alphas[count])
           else:
              ax.plot(dataset[:end])
 
@@ -355,8 +366,12 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colo
              end=length
           else: 
              end=min(np.nanmin(ii),length)
-          if colors:
+          if colors and alphas:
+             ax.plot(dataset[:end, point[0]], color=colors[count], alpha=alphas[count])
+          elif colors:
              ax.plot(dataset[:end, point[0]], color=colors[count])
+          elif alphas:
+             ax.plot(dataset[:end, point[0]], alpha=alphas[count])
           else: 
              ax.plot(dataset[:end, point[0]])
 
@@ -366,8 +381,12 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colo
              end=length
           else: 
              end=min(np.nanmin(ii),length)
-          if colors:
+          if colors and alphas:
+             ax.plot(dataset[:end, point[0], point[1]], color=colors[count], alpha=alphas[count])
+          elif colors:
              ax.plot(dataset[:end, point[0], point[1]], color=colors[count])
+          elif alphas:
+             ax.plot(dataset[:end, point[0], point[1]], alpha=alphas[count])
           else: 
              ax.plot(dataset[:end, point[0], point[1]])
 
@@ -377,12 +396,17 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colo
              end=length
           else: 
              end=min(np.nanmin(ii),length)
-          if colors:
+          if colors and alphas:
+             ax.plot(dataset[:end, point[0], point[1], point[2]], color=colors[count], alpha=alphas[count])
+          elif colors:
              ax.plot(dataset[:end, point[0], point[1], point[2]], color=colors[count])
+          elif alphas:
+             ax.plot(dataset[:end, point[0], point[1], point[2]], alpha=alphas[count])
           else: 
              ax.plot(dataset[:end, point[0], point[1], point[2]])
 
-      my_legend.append(name)
+      if '50yr_smooth' not in name and 'pert' not in name:
+         my_legend.append(name)
       count=count+1
 
    ax.legend(my_legend)
@@ -395,7 +419,7 @@ def plt_timeseries_ax(ax, point, length, datasets, ylim=None, y_label=None, colo
  
    return(ax)
 
-def plt_timeseries(point, length, datasets, ylim=None, y_label=None, colors=None):
+def plt_timeseries(point, length, datasets, ylim=None, y_label=None, colors=None, alphas=None):
    
    fig = plt.figure(figsize=(20 ,2))
    ax=plt.subplot(111)
@@ -410,7 +434,7 @@ def plt_timeseries(point, length, datasets, ylim=None, y_label=None, colors=None
          bottom = min(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])-1
          top    = max(next(iter(datasets.values()))[:length, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, y_label=y_label, colors=colors)
+   ax=plt_timeseries_ax(ax, point, length, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.15, top=0.90)
@@ -426,14 +450,14 @@ def plt_2_timeseries(point, length1, length2, datasets, ylim=None, y_label=None)
       bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    ax=plt.subplot(212)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)
@@ -449,21 +473,21 @@ def plt_3_timeseries(point, length1, length2, length3, datasets, ylim=None, y_la
       bottom = min(datasets['True Temp'][:length1, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length1, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length1, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    ax=plt.subplot(312)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length2, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length2, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length2, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    ax=plt.subplot(313)
    if ylim == None:
       bottom = min(datasets['True Temp'][:length3, point[0], point[1], point[2]])-1
       top    = max(datasets['True Temp'][:length3, point[0], point[1], point[2]])+1
       ylim=[bottom, top]
-   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim, y_label=y_label)
+   ax=plt_timeseries_ax(ax, point, length3, datasets, ylim=ylim, y_label=y_label, colors=colors, alphas=alphas)
 
    plt.tight_layout()
    plt.subplots_adjust(hspace = 0.5, left=0.05, right=0.95, bottom=0.07, top=0.95)

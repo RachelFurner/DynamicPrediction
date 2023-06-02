@@ -13,6 +13,7 @@ import xarray as xr
 import netCDF4 as nc4
 
 for_jump = '12hrly'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
 datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
 data_filename = datadir + for_jump + '_data.nc'
 #data_filename = datadir + for_jump + '_small_set.nc'
@@ -23,21 +24,22 @@ predictionjump = '12hrly'
 out_filename = datadir+land+'_stats.nc'
 mean_std_file = datadir+land+'_'+predictionjump+'_MeanStd.npz'
 
-init=True 
+init=False
 var_range=range(6)
 plotting_histograms = True 
-calc_stats = True 
-nc_stats = True 
+calc_stats = False
+nc_stats = False
 
 #------------------------
 
 def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None, datarange=None):
    plt.rcParams.update({'font.size': 22})
-   no_bins = 33
+   no_bins = 100
+   #no_bins = 33   # For wind forcing use less bins
    fig_histogram = plt.figure(figsize=(10, 8))
    ax1 = fig_histogram.add_subplot(111)
    ax1.hist(histogram_inputs, bins = no_bins)
-   ax1.set_title(varname+' Histogram')
+   ax1.set_title(varname)
    # ax1.set_ylim(top=y_top[var])
    ax1.text(0.03, 0.94, 'Mean: '+str(np.format_float_scientific(mean, precision=3)), transform=ax1.transAxes, fontsize=14)
    ax1.text(0.03, 0.90, 'Standard deviation: '+str(np.format_float_scientific(std, precision=3)), transform=ax1.transAxes,fontsize=14)
@@ -48,7 +50,8 @@ def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None
 
 #------------------------
    
-VarName = ['Temperature', 'U Velocity', 'V Velocity', 'Sea Surface Height', 'Temperature Flux', 'Wind Forcing']
+VarName = ['Temperature ('+u'\xb0'+'C)', 'East-West Velocity (m/s)', 'North-South Velocity (m/s)', 'Sea Surface Height (m)',
+           'Temperature Flux ('+u'\xb0'+'C/s)', 'Wind Forcing $\mathregular{N/m^{2}}$']
 ShortVarName = ['Temp', 'UVel', 'VVel', 'Eta', 'gT_Forc', 'utaux']
 ncVarName = ['THETA', 'UVEL', 'VVEL', 'ETAN', 'gT_Forc', 'oceTAUX']
 MaskVarName = ['HFacC', 'HFacW', 'HFacS', 'HFacC', 'HFacC', 'HFacW']
@@ -189,13 +192,13 @@ for var in var_range:
          targets_mean  = mean_std_data['arr_3']
          targets_std   = mean_std_data['arr_4']
          targets_range = mean_std_data['arr_5']
-         plot_histograms( (da.values[1:]-da.values[:-1]).reshape(-1), VarName[var]+' targets', ShortVarName[var]+'Targets', 
+         plot_histograms( (da.values[1:]-da.values[:-1]).reshape(-1), 'Change in '+VarName[var], ShortVarName[var]+'Targets', 
                            inputs_mean[var], inputs_std[var], inputs_range[var])
          # Also plot normed data
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_std[var] ).reshape(-1),
-                          VarName[var], ShortVarName[var]+'Targets_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var] )
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_range[var] ).reshape(-1),
-                          VarName[var], ShortVarName[var]+'Targets_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var] )
 
 mean_std_data = np.load(mean_std_file)
 inputs_mean  = mean_std_data['arr_0']

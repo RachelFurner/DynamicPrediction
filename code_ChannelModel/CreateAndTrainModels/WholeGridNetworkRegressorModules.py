@@ -85,7 +85,7 @@ def my_loss(output, target):
    loss = torch.mean( (output - target)**2 )
    return loss
 
-def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr_samples, no_val_samples, save_freq, train_loader,
+def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST, no_tr_samples, no_val_samples, save_freq, train_loader,
                val_loader, h, optimizer, num_epochs, seed_value, losses, channel_dim, no_phys_in_channels, no_out_channels,
                wandb, start_epoch=1, current_best_loss=0.1):
 
@@ -131,7 +131,10 @@ def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr
                  # get prediction from the model, given the inputs
                  # multiply by masks, to give 0 at land values, to circumvent issues with normalisation!
                  if rolllen == 1:
-                    predicted_batch = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                    if land == 'ExcLand':
+                       predicted_batch = h( input_batch ) * out_masks.to(device, non_blocking=True)
+                    else:
+                       predicted_batch = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
                  else:
                     if dimension != '2d' and model_style != 'UNet2dTransp':
                        sys.exit('Cannot currently use rolllen>1 with options other than 2d tansp network')
@@ -139,8 +142,12 @@ def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr
                     # If rolllen>1 calc iteratively for 'roll out' loss function
                     for roll_time in range(rolllen):
                        torch.cuda.empty_cache()
-                       predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] =  \
-                                                    h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                       if land == 'ExcLand':
+                          predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] =  \
+                                                       h( input_batch ) * out_masks.to(device, non_blocking=True)
+                       else:
+                          predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] =  \
+                                                       h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
                        for hist_time in range(histlen-1):
                           input_batch[:, hist_time*no_phys_in_channels:(hist_time+1)*no_phys_in_channels, :, :] =   \
                                     input_batch[:, (hist_time+1)*no_phys_in_channels:(hist_time+2)*no_phys_in_channels, :, :]
@@ -260,14 +267,21 @@ def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr
               target_batch = target_batch.to(device, non_blocking=True)
               # get prediction from the model, given the inputs
               if rolllen == 1:
-                 predicted_batch = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                 if land == 'ExcLand':
+                    predicted_batch = h( input_batch ) * out_masks.to(device, non_blocking=True)
+                 else:
+                    predicted_batch = h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
               else:
                  if dimension != '2d' and model_style != 'UNet2dTransp':
                     sys.exit('Cannot currently use rolllen>1 with options other than 2d tansp network')
                  predicted_batch = torch.zeros(target_batch.shape, device=device)
                  for roll_time in range(rolllen):
-                    predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] = \
-                                                  h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                    if land == 'ExcLand':
+                       predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] = \
+                                                     h( input_batch ) * out_masks.to(device, non_blocking=True)
+                    else:
+                       predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] = \
+                                                     h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
                     for hist_time in range(histlen-1):
                        input_batch[:, hist_time*no_phys_in_channels:(hist_time+1)*no_phys_in_channels, :, :] =   \
                                  input_batch[:, (hist_time+1)*no_phys_in_channels:(hist_time+2)*no_phys_in_channels, :, :]
@@ -309,7 +323,7 @@ def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr
               current_best_loss = losses['val'][-1]
 
           # Save model if its been a while 
-          if ( epoch%save_freq == 0 or epoch == num_epochs+start_epoch-1 ) and epoch != start_epoch :
+          if ( epoch%save_freq == 0 or epoch == num_epochs+start_epoch-1 ) and epoch != 0 :
              pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(epoch)+'_SavedModel.pt'
              torch.save({
                          'epoch': epoch,
@@ -325,6 +339,36 @@ def TrainModel(model_name, model_style, dimension, histlen, rolllen, TEST, no_tr
    logging.info('End of train model')
    return(losses)
 
+def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses, best, seed_value):
+   os.environ['PYTHONHASHSEED'] = str(seed_value)
+   np.random.seed(seed_value)
+   torch.manual_seed(seed_value)
+   torch.cuda.manual_seed(seed_value)
+   torch.cuda.manual_seed_all(seed_value)
+   torch.backends.cudnn.enabled = False
+   torch.backends.cudnn.deterministic = True
+   torch.backends.cudnn.benchmark = False
+   torch.use_deterministic_algorithms(True, warn_only=True)
+   if best:
+      pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedBESTModel.pt'
+   else:
+      pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
+   checkpoint = torch.load(pkl_filename)
+   h.load_state_dict(checkpoint['model_state_dict'])
+   optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+   epoch = checkpoint['epoch']
+   loss = checkpoint['loss']
+   losses = checkpoint['losses']
+   current_best_loss = checkpoint['best_loss']
+
+   if tr_inf == 'tr':
+      h.train()
+   elif tr_inf == 'inf':
+      h.eval()
+
+   return losses, h, optimizer, current_best_loss
+
+
 def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method, channel_dim, mean_std_file, no_out_channels,
                 no_phys_in_channels, z_dim, land, seed):
 
@@ -334,20 +378,40 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range =  \
                                               ReadMeanStd(mean_std_file, dimension, no_phys_in_channels, no_out_channels, z_dim, seed)
 
-   h.train(False)
+   if isinstance(h, list):
+      for i in range(len(h)):
+         h[i].train(False)
+         if torch.cuda.is_available():
+            h[i] = h[i].cuda()
+   else:
+      h.train(False)
+      if torch.cuda.is_available():
+         h = h.cuda()
 
    with torch.no_grad():
       input_batch, target_batch, extrafluxes_batch, masks, out_masks = next(iter(data_loader))
       target_batch = target_batch.double()
-      predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )).to('cpu', non_blocking=True).double()
+      # Make prediction
+      if isinstance(h, list):
+         predicted_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ).to('cpu', non_blocking=True).double() 
+         for i in range(1, len(h)):
+            predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) ).to('cpu', non_blocking=True).double()
+         predicted_batch = predicted_batch / len(h)
+      else:
+         if land == 'ExcLand':
+            predicted_batch = h( input_batch ).to('cpu', non_blocking=True).double()
+         else:
+            predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )).to('cpu', non_blocking=True).double()
 
    # Denormalise and mask, if rolllen>1 (loss function calc over multiple steps) only take first set of predictions
-   target_batch = torch.where(out_masks==1, rr.RF_DeNormalise(target_batch[:, :no_out_channels, :, :],
-                                                              targets_mean, targets_std, targets_range,
-                                                              dimension, norm_method, seed), np.nan)
-   predicted_batch = torch.where(out_masks==1, rr.RF_DeNormalise(predicted_batch[:, :no_out_channels, :, :],
-                                                                 targets_mean, targets_std, targets_range,
-                                                                 dimension, norm_method, seed), np.nan)
+   target_batch = torch.where(out_masks==1, 
+                              rr.RF_DeNormalise(target_batch[:, :no_out_channels, :, :],
+                                                targets_mean, targets_std, targets_range, dimension, norm_method, seed),
+                              np.nan)
+   predicted_batch = torch.where(out_masks==1, 
+                                 rr.RF_DeNormalise(predicted_batch[:, :no_out_channels, :, :],
+                                                   targets_mean, targets_std, targets_range, dimension, norm_method, seed),
+                                 np.nan)
 
    if dimension == '2d':
       # reshape to give each variable its own dimension
@@ -386,7 +450,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
    
    ax_temp.set_xlabel('Truth')
    ax_temp.set_ylabel('Predictions')
-   ax_temp.set_title('Temperature')
+   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
    ax_temp.set_xlim( min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
                      max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) ) )
    ax_temp.set_ylim( min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
@@ -395,7 +459,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
 
    ax_U.set_xlabel('Truth')
    ax_U.set_ylabel('Predictions')
-   ax_U.set_title('East-West Velocity')
+   ax_U.set_title('East-West Velocity (m/s)')
    ax_U.set_xlim( min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
                   max( np.nanmax(targets[:,1,:,:,:]), np.nanmax(predictions[:,1,:,:,:]) ) )
    ax_U.set_ylim( min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
@@ -404,7 +468,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
 
    ax_V.set_xlabel('Truth')
    ax_V.set_ylabel('Predictions')
-   ax_V.set_title('North-South Velocity')
+   ax_V.set_title('North-South Velocity (m/s)')
    ax_V.set_xlim( min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
                   max( np.nanmax(targets[:,2,:,:,:]), np.nanmax(predictions[:,2,:,:,:]) ) )
    ax_V.set_ylim( min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
@@ -413,7 +477,7 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
 
    ax_Eta.set_xlabel('Truth')
    ax_Eta.set_ylabel('Predictions')
-   ax_Eta.set_title('Sea Surface Height')
+   ax_Eta.set_title('Sea Surface Height (m)')
    ax_Eta.set_xlim( min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
                     max( np.nanmax(targets[:,3,:,:,:]), np.nanmax(predictions[:,3,:,:,:]) ) )
    ax_Eta.set_ylim( min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
@@ -427,38 +491,6 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
-
-def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses, best, seed_value):
-
-   os.environ['PYTHONHASHSEED'] = str(seed_value)
-   np.random.seed(seed_value)
-   torch.manual_seed(seed_value)
-   torch.cuda.manual_seed(seed_value)
-   torch.cuda.manual_seed_all(seed_value)
-   torch.backends.cudnn.enabled = False
-   torch.backends.cudnn.deterministic = True
-   torch.backends.cudnn.benchmark = False
-   torch.use_deterministic_algorithms(True, warn_only=True)
-
-   if best:
-      pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedBESTModel.pt'
-   else:
-      pkl_filename = '../../../Channel_nn_Outputs/'+model_name+'/MODELS/'+model_name+'_epoch'+str(saved_epoch)+'_SavedModel.pt'
-   print(pkl_filename)
-   checkpoint = torch.load(pkl_filename)
-   h.load_state_dict(checkpoint['model_state_dict'])
-   optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-   epoch = checkpoint['epoch']
-   loss = checkpoint['loss']
-   losses = checkpoint['losses']
-   current_best_loss = checkpoint['best_loss']
-
-   if tr_inf == 'tr':
-      h.train()
-   elif tr_inf == 'inf':
-      h.eval()
-
-   return losses, h, optimizer, current_best_loss
 
 def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses):
    plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'
@@ -537,7 +569,10 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
                 predicted_tend_batch = predicted_tend_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) )
              predicted_tend_batch = predicted_tend_batch / len(h)
           else:
-             predicted_tend_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
+             if land == 'ExcLand':
+                predicted_tend_batch = h( input_batch ) 
+             else:
+                predicted_tend_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
           predicted_tend_batch = predicted_tend_batch.cpu().detach().numpy() 
 
           # Denormalise, if rolllen>1 (loss function calc over multiple steps) only take first step
@@ -769,6 +804,7 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
    logging.info('Iterating')
 
    landvalues = torch.tensor(landvalues)
+   output_count = 0
   
    if isinstance(h, list):
       for i in range(len(h)):
@@ -803,39 +839,59 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:histlen,:3*z_dim+1,:,:],
                                           inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                           dimension, norm_method, seed)
-      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:histlen,:3*z_dim+1,:,:]
+      out_iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:histlen:for_subsample,:3*z_dim+1,:,:],
+                                          inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
+                                          dimension, norm_method, seed)
+      MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:histlen:for_subsample,:3*z_dim+1,:,:]
    elif dimension == '2d':
+      out_iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:3*z_dim+1,:,:].unsqueeze(0),
+                                          inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1], 
+                                          dimension, norm_method, seed)
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:3*z_dim+1,:,:].unsqueeze(0),
                                           inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1], 
                                           dimension, norm_method, seed)
       MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:3*z_dim+1,:,:].unsqueeze(0)
       for histtime in range(1,histlen):
-          iterated_fields = torch.cat( (iterated_fields,
+         iterated_fields = torch.cat( (iterated_fields,
+                            rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0]
+                                                 [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0),
+                                              inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
+                                              dimension, norm_method, seed) ),
+                            axis = 0)
+         MITgcm_data = torch.cat( ( MITgcm_data,
+                                  Iterate_Dataset.__getitem__(start)[0]
+                                     [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0) ),
+                                  axis=0 )
+         if ( histtime%for_subsample == 0 ):
+            out_iterated_fields = torch.cat( (out_iterated_fields,
                                rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0]
                                                     [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0),
                                                  inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                                  dimension, norm_method, seed) ),
                                axis = 0)
-          MITgcm_data = torch.cat( ( MITgcm_data,
-                                     Iterate_Dataset.__getitem__(start)[0]
-                                        [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0) ),
-                                     axis=0 )
    elif dimension == '3d':
       iterated_fields = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0][:3*z_dim+1,:,:,:].unsqueeze(0),
                                           inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                           dimension, norm_method, seed)
       MITgcm_data = Iterate_Dataset.__getitem__(start)[0][:3*z_dim+1,:,:,:].unsqueeze(0)
       for histtime in range(1,histlen):
-          iterated_fields = torch.cat( (iterated_fields,
+         iterated_fields = torch.cat( (iterated_fields,
+                             rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0]
+                                                  [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:,:].unsqueeze(0),
+                                               inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
+                                               dimension, norm_method, seed) ),
+                             axis = 0)
+         MITgcm_data = torch.cat( (MITgcm_data, 
+                                 Iterate_Dataset.__getitem__(start)[0]
+                                    [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0) ),
+                                 axis=0)
+         if ( histtime%for_subsample == 0 ):
+            out_iterated_fields = torch.cat( (out_iterated_fields,
                                 rr.RF_DeNormalise(Iterate_Dataset.__getitem__(start)[0]
                                                      [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:,:].unsqueeze(0),
                                                   inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                                   dimension, norm_method, seed) ),
                                 axis = 0)
-          MITgcm_data = torch.cat( (MITgcm_data, 
-                                    Iterate_Dataset.__getitem__(start)[0]
-                                       [histtime*no_phys_in_channels:histtime*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0) ),
-                                    axis=0)
    predicted_increments = torch.zeros(target_sample.shape).unsqueeze(0)[:,:no_out_channels,:,:]
    true_increments = torch.zeros(target_sample.shape).unsqueeze(0)[:,:no_out_channels,:,:]
 
@@ -845,13 +901,16 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
          print(fortime)
          # Make prediction, for both multi model ensemble, or single model predictions
          if isinstance(h, list):
-            predicted = h[0]( torch.cat((input_sample, masks), axis=channel_dim)).cpu().detach()
+            predicted = h[0]( torch.cat((input_sample, masks), dim=channel_dim)).cpu().detach()
             for i in range(1, len(h)):
                predicted = predicted + \
-                           h[i]( torch.cat((input_sample, masks), axis=channel_dim)).cpu().detach()
+                           h[i]( torch.cat((input_sample, masks), dim=channel_dim)).cpu().detach()
             predicted = predicted / len(h)
          else:
-            predicted = h( torch.cat( (input_sample, masks), dim=channel_dim ) ).cpu().detach()
+            if land == 'ExcLand':
+               predicted = h( input_sample ).cpu().detach()
+            else:
+               predicted = h( torch.cat( (input_sample, masks), dim=channel_dim ) ).cpu().detach()
 
          # Denormalise 
          predicted = rr.RF_DeNormalise(predicted, targets_mean, targets_std, targets_range, dimension, norm_method, seed)
@@ -865,18 +924,35 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
          elif iterate_method == 'AB2':
             if fortime == start+histlen:
                if dimension == '2d':
-                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime+1)[0]
-                                                 [(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*z_dim+1,:,:].unsqueeze(0),
+                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime)[0][:3*z_dim+1,:,:].unsqueeze(0),
                                                  inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                                  dimension, norm_method, seed)
                elif dimension == '3d':
-                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime+1)[0]
-                                                 [(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels,:,:,:].unsqueeze(0),
-                                                 inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
+                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime)[0][:4,:,:,:].unsqueeze(0),
+                                                 inputs_mean[:4], inputs_std[:4], inputs_range[:4],
                                                  dimension, norm_method, seed)
             else: 
-               next_field = iterated_fields[-1] + 3./2. * predicted - 1./2. * old_predicted
+               next_field = iterared_fields[-1] + (3./2.+.1) * predicted - (1./2.+.1) * old_predicted
             old_predicted = predicted
+         elif iterate_method == 'AB3':
+            if fortime == start+histlen:
+               if dimension == '2d':
+                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime)[0][:3*z_dim+1,:,:].unsqueeze(0),
+                                                 inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
+                                                 dimension, norm_method, seed)
+               elif dimension == '3d':
+                  next_field = rr.RF_DeNormalise(Iterate_Dataset.__getitem__(fortime)[0][:4,:,:,:].unsqueeze(0),
+                                                 inputs_mean[:4], inputs_std[:4], inputs_range[:4],
+                                                 dimension, norm_method, seed)
+               old_predicted = predicted
+            elif fortime == start+histlen+1:
+               next_field = iterated_fields[-1] + (3./2.+.1) * predicted - (1./2.+.1) * old_predicted
+               old2_predicted = old_predicted
+               old_predicted = predicted
+            else:
+               next_field = iterated_fields[-1] + 23./12. * predicted - 16./12. * old_predicted + 5./12. * old2_predicted
+               old2_predicted = old_predicted
+               old_predicted = predicted
          # RK4 not set up to run with flux inputs - would need to work out what to pass in for fluxes....
          #elif iterate_method == 'RK4':
          #   if dimension == '2d':
@@ -935,28 +1011,32 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
          # Smooth field 
          if iterate_smooth != 0:
             for channel in range(next_field.shape[1]):
-               filter = gcm_filters.Filter( filter_scale=iterate_smooth, dx_min=10, filter_shape=gcm_filters.FilterShape.TAPER,
+               filter = gcm_filters.Filter( filter_scale=iterate_smooth, dx_min=10, filter_shape=gcm_filters.FilterShape.GAUSSIAN,
                                             grid_type=gcm_filters.GridType.REGULAR_WITH_LAND,
                                             grid_vars={'wet_mask': xr.DataArray(out_masks[channel,:,:], dims=['y','x'])},
                                             n_steps=smooth_steps )
                next_field[0,channel,:,:] = torch.from_numpy( filter.apply( xr.DataArray(next_field[0,channel,:,:], dims=['y', 'x'] ),
                                                              dims=['y', 'x']).values )
 
+         iterated_fields = torch.cat( ( iterated_fields, next_field ), axis=0 )
+         iterated_fields = iterated_fields[-2:]
          if ( fortime%for_subsample == 0 ):
             print('    '+str(fortime))
+            print('    '+str(output_count))
+            output_count = output_count+1
             # Cat prediction onto existing fields
-            iterated_fields = torch.cat( ( iterated_fields, next_field ), axis=0 )
+            out_iterated_fields = torch.cat( ( out_iterated_fields, next_field ), axis=0 )
             # Get MITgcm data for relevant step, take first set for histlen>1, as looking at relevant time step
             if model_style == 'ConvLSTM' or model_style == 'UNetConvLSTM':
                MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(fortime)[0][:1,:3*z_dim+1,:,:] ), axis=0)
                true_increments = torch.cat( ( true_increments, 
-                                             Iterate_Dataset.__getitem__(fortime)[0][0:1,:3*z_dim+1,:,:]
+                                             Iterate_Dataset.__getitem__(fortime+1)[0][0:1,:3*z_dim+1,:,:]
                                              - Iterate_Dataset.__getitem__(fortime)[0][0:1,:3*z_dim+1,:,:] ), axis=0)
             elif dimension == '2d':
                MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(fortime)[0][:3*z_dim+1,:,:].unsqueeze(0) ),
                                           axis=0 )
                true_increments = torch.cat( ( true_increments,
-                                              Iterate_Dataset.__getitem__(fortime)[0][:3*z_dim+1,:,:].unsqueeze(0)
+                                              Iterate_Dataset.__getitem__(fortime+1)[0][:3*z_dim+1,:,:].unsqueeze(0)
                                               - Iterate_Dataset.__getitem__(fortime)[0][:3*z_dim+1,:,:].unsqueeze(0)
                                             ),
                                            axis=0 )
@@ -964,7 +1044,7 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
                MITgcm_data = torch.cat( ( MITgcm_data, Iterate_Dataset.__getitem__(fortime)[0][:4,:,:,:].unsqueeze(0) ),
                                         axis=0 )
                true_increments = torch.cat( ( true_increments,
-                                              Iterate_Dataset.__getitem__(fortime)[0][:4,:,:,:].unsqueeze(0)
+                                              Iterate_Dataset.__getitem__(fortime+1)[0][:4,:,:,:].unsqueeze(0)
                                               - Iterate_Dataset.__getitem__(fortime)[0][:4,:,:,:].unsqueeze(0)
                                             ),
                                            axis=0 )
@@ -1014,14 +1094,16 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
                   +'_Forlen'+str(for_len)+'.nc'
    nc_file = nc4.Dataset(nc_filename,'w', format='NETCDF4') #'w' stands for write
    # Create Dimensions
-   nc_file.createDimension('T', for_len/for_subsample)
-   nc_file.createDimension('Tm', for_len/for_subsample-histlen+1)
+   print(for_len/for_subsample)
+   nc_file.createDimension('T', np.ceil(for_len/for_subsample))
+   nc_file.createDimension('Tm', np.ceil(for_len/for_subsample)-histlen+1)
    nc_file.createDimension('Z', da_Z.values.shape[0])
    nc_file.createDimension('Y', y_dim_used)
    nc_file.createDimension('X', da_X.values.shape[0])
 
    # Create variables
    nc_T = nc_file.createVariable('T', 'i4', 'T')
+   print(nc_T.shape)
    nc_Tm = nc_file.createVariable('Tm', 'i4', 'Tm')
    nc_Z = nc_file.createVariable('Z', 'i4', 'Z')
    nc_Y = nc_file.createVariable('Y', 'i4', 'Y')  
@@ -1058,7 +1140,11 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
    nc_EtaMask    = nc_file.createVariable( 'Eta_Mask'   , 'f4', ('Y', 'X')      )
 
    # Fill netcdf coordinate variables
-   nc_T[:] = np.arange(for_len/for_subsample)
+   print(np.ceil(for_len/for_subsample))
+   print(nc_T.shape)
+   print(np.arange(5))
+   print(np.arange(np.ceil(for_len/for_subsample)).shape)
+   nc_T[:] = np.arange(np.ceil(for_len/for_subsample))
    nc_Z[:] = da_Z.values
    nc_Y[:] = da_Y.values[:y_dim_used]
    nc_X[:] = da_X.values
@@ -1075,10 +1161,10 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
       nc_PredVInc[:,:,:,:]    = predicted_increments[:,2*z_dim:3*z_dim,:,:]
       nc_PredEtaInc[:,:,:]    = predicted_increments[:,3*z_dim,:,:]
       
-      nc_PredTempFld[:,:,:,:] = iterated_fields[:,0:z_dim,:,:]
-      nc_PredUFld[:,:,:,:]    = iterated_fields[:,1*z_dim:2*z_dim,:,:]
-      nc_PredVFld[:,:,:,:]    = iterated_fields[:,2*z_dim:3*z_dim,:,:]
-      nc_PredEtaFld[:,:,:]    = iterated_fields[:,3*z_dim,:,:]
+      nc_PredTempFld[:,:,:,:] = out_iterated_fields[:,0:z_dim,:,:]
+      nc_PredUFld[:,:,:,:]    = out_iterated_fields[:,1*z_dim:2*z_dim,:,:]
+      nc_PredVFld[:,:,:,:]    = out_iterated_fields[:,2*z_dim:3*z_dim,:,:]
+      nc_PredEtaFld[:,:,:]    = out_iterated_fields[:,3*z_dim,:,:]
       
       #nc_TrueTempInc[:,:,:,:] = MITgcm_data[histlen:,0:z_dim,:,:] - MITgcm_data[histlen-1:-1,0:z_dim,:,:] 
       #nc_TrueUInc[:,:,:,:]    = MITgcm_data[histlen:,1*z_dim:2*z_dim,:,:] - MITgcm_data[histlen-1:-1,1*z_dim:2*z_dim,:,:]
@@ -1089,10 +1175,10 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
       nc_TrueVInc[:,:,:,:]    = true_increments[:,2*z_dim:3*z_dim,:,:]
       nc_TrueEtaInc[:,:,:]    = true_increments[:,3*z_dim,:,:]
 
-      nc_TempErrors[:,:,:,:] = iterated_fields[:,0:z_dim,:,:] - MITgcm_data[:,0:z_dim,:,:]
-      nc_UErrors[:,:,:,:]    = iterated_fields[:,1*z_dim:2*z_dim,:,:] - MITgcm_data[:,1*z_dim:2*z_dim,:,:]
-      nc_VErrors[:,:,:,:]    = iterated_fields[:,2*z_dim:3*z_dim,:,:] - MITgcm_data[:,2*z_dim:3*z_dim,:,:]
-      nc_EtaErrors[:,:,:]    = iterated_fields[:,3*z_dim,:,:] - MITgcm_data[:,3*z_dim,:,:]
+      nc_TempErrors[:,:,:,:] = out_iterated_fields[:,0:z_dim,:,:] - MITgcm_data[:,0:z_dim,:,:]
+      nc_UErrors[:,:,:,:]    = out_iterated_fields[:,1*z_dim:2*z_dim,:,:] - MITgcm_data[:,1*z_dim:2*z_dim,:,:]
+      nc_VErrors[:,:,:,:]    = out_iterated_fields[:,2*z_dim:3*z_dim,:,:] - MITgcm_data[:,2*z_dim:3*z_dim,:,:]
+      nc_EtaErrors[:,:,:]    = out_iterated_fields[:,3*z_dim,:,:] - MITgcm_data[:,3*z_dim,:,:]
 
       nc_TempMask[:,:,:] = out_masks[0:z_dim,:,:]
       nc_UMask[:,:,:]    = out_masks[1*z_dim:2*z_dim,:,:]
@@ -1105,15 +1191,15 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
       nc_TrueV[:,:,:,:]    = MITgcm_data[:,2,:,:,:]
       nc_TrueEta[:,:,:]    = MITgcm_data[:,3,0,:,:]
 
-      nc_PredTempFld[:,:,:,:] = iterated_fields[:,0,:,:,:]
-      nc_PredUFld[:,:,:,:]    = iterated_fields[:,1,:,:,:]
-      nc_PredVFld[:,:,:,:]    = iterated_fields[:,2,:,:,:]
-      nc_PredEtaFld[:,:,:]    = iterated_fields[:,3,0,:,:]
+      nc_PredTempFld[:,:,:,:] = out_iterated_fields[:,0,:,:,:]
+      nc_PredUFld[:,:,:,:]    = out_iterated_fields[:,1,:,:,:]
+      nc_PredVFld[:,:,:,:]    = out_iterated_fields[:,2,:,:,:]
+      nc_PredEtaFld[:,:,:]    = out_iterated_fields[:,3,0,:,:]
       
-      nc_TempErrors[:,:,:,:] = iterated_fields[:,0,:,:,:] - MITgcm_data[:,0,:,:,:]
-      nc_UErrors[:,:,:,:]    = iterated_fields[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]
-      nc_VErrors[:,:,:,:]    = iterated_fields[:,2,:,:,:] - MITgcm_data[:,2,:,:,:]
-      nc_EtaErrors[:,:,:]    = iterated_fields[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]
+      nc_TempErrors[:,:,:,:] = out_iterated_fields[:,0,:,:,:] - MITgcm_data[:,0,:,:,:]
+      nc_UErrors[:,:,:,:]    = out_iterated_fields[:,1,:,:,:] - MITgcm_data[:,1,:,:,:]
+      nc_VErrors[:,:,:,:]    = out_iterated_fields[:,2,:,:,:] - MITgcm_data[:,2,:,:,:]
+      nc_EtaErrors[:,:,:]    = out_iterated_fields[:,3,0,:,:] - MITgcm_data[:,3,0,:,:]
 
       nc_TempMask[:,:,:] = out_masks[0,:,:,:]
       nc_UMask[:,:,:]    = out_masks[1,:,:,:]

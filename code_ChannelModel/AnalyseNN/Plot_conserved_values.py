@@ -19,20 +19,21 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 8, 6]
 
-model_dir_name = 'Spits_UNet2dtransp_histlen1_seed30475'
+model_dir_name = 'Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
 epochs = '200'
-for_len = '120'
+for_len = '180'
 iteration_method = 'simple'
-
+smoothing_level = '0'
+smooth_steps = '0'
 #-----------
 
-model_name = model_dir_name+'_'+epochs+'epochs_'+iteration_method
+model_name = model_dir_name+'_'+epochs+'epochs_'+iteration_method+'_smth'+smoothing_level+'stps'+smooth_steps
 
 rootdir = '../../../Channel_nn_Outputs/'+model_dir_name
 
 #------------------------
 #------------------------
-iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forecast'+str(for_len)+'.nc'
+iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forlen'+str(for_len)+'.nc'
 iter_ds = xr.open_dataset(iter_data_filename)
 da_True_Eta  = iter_ds['True_Eta']
 da_True_U    = iter_ds['True_U']

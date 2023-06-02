@@ -1,4 +1,4 @@
-base_name='Spits12hrly_UNet2dtransp_histlen1_predlen1_seed30475'
+base_name='Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
 trainorval='test'
 
 dir=../../../Channel_nn_Outputs/${base_name}/STATS/EXAMPLE_PREDICTIONS
@@ -6,7 +6,8 @@ dir=../../../Channel_nn_Outputs/${base_name}/STATS/EXAMPLE_PREDICTIONS
 #for level in {0..37}
 for level in 2
 do
-   for epochs in 10 20 40 50 100 150 200
+   #for epochs in 10 20 40 50 100 150 200
+   for epochs in 200
    do 
       model_name=${base_name}_${epochs}epochs
 
