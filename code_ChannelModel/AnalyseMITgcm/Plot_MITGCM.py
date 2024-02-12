@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Script to create plots for analysing MITgcm run. 
+# Plots means and sd from netcdf file created from AnalyseMITgcm.py, spatial fields at a set depth,
+# the difference between consecutive times at a set depth, y and x cross sections, time series of 
+# min and max temperatures, and a time series of the mean and max KE
+
 print('import packages')
 import sys
 sys.path.append('../Tools')
@@ -20,7 +25,8 @@ from netCDF4 import Dataset
 # Set plotting variables
 #------------------------
 # Note shape is 38, 108, 240 (z,y,x) and 36000 time steps (100 years)
-time = int(.5*36000)+1 
+# Want 5th field from test set to match that ploted for NN prediction analysis
+time = int(.9*36000)+5 
 point = [ 2, 50, 100]
 
 time_step = '12hrs'
@@ -176,9 +182,9 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time,0
 plt.savefig(rootdir+'PLOTS/Eta_time'+str(time), bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
-#-----------------------------
-# Plot spatial tendancy plots
-#-----------------------------
+#------------------------------------------------------------------------------
+# Plot spatial tendancy plots - difference betwwen two consecutive time fields
+#------------------------------------------------------------------------------
 level = 2
 print('plot tendancy plots')
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time+1,level,:,:]-da_T[time,level,:,:], np.nan),
@@ -213,9 +219,9 @@ plt.savefig(rootdir+'PLOTS/EtaTend_time'+str(time), bbox_inches = 'tight', pad_i
 plt.close()
 
    
-#----------------------------------
-# Plot diffs between time t and t+1
-#----------------------------------
+#-------------------------------------------------
+# Plot temp at time t and t+1, and the difference
+#-------------------------------------------------
 print('plot diffs between t and t+1')
 fig = ChnlPlt.plot_depth_fld_diff(da_T[time,level,:,:], 'Temp at time t', da_T[time+1,level,:,:], 'Temp at time t+1', level,
                                 da_X.values, da_Y.values, da_Z.values,

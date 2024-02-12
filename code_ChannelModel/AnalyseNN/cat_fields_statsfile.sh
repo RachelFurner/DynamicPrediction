@@ -1,7 +1,7 @@
 base_name='Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
 trainorval='test'
 
-dir=../../../Channel_nn_Outputs/${base_name}/STATS/EXAMPLE_PREDICTIONS
+dir=../../../Channel_nn_Outputs/${base_name}/STATS/EXAMPLE_FIELDS
 
 #for level in {0..37}
 for level in 2
@@ -22,6 +22,14 @@ do
       convert  ${dir}/${model_name}_PredTempTend_z${level}_${trainorval}.png  ${dir}/${model_name}_PredUTend_z${level}_${trainorval}.png  -append  ${dir}/tmp1.png
       convert  ${dir}/${model_name}_PredEtaTend_${trainorval}.png  ${dir}/${model_name}_PredVTend_z${level}_${trainorval}.png  -append  ${dir}/tmp2.png;
       convert  ${dir}/tmp1.png  ${dir}/tmp2.png  +append  ${dir}/${model_name}_PredTend_z${level}_${trainorval}_sq.png
+
+      convert  ${dir}/${model_name}_TempTend_diff_z${level}_${trainorval}.png  ${dir}/${model_name}_UTend_diff_z${level}_${trainorval}.png  -append  ${dir}/tmp1.png
+      convert  ${dir}/${model_name}_EtaTend_diff_${trainorval}.png  ${dir}/${model_name}_VTend_diff_z${level}_${trainorval}.png  -append  ${dir}/tmp2.png;
+      convert  ${dir}/tmp1.png  ${dir}/tmp2.png  +append  ${dir}/${model_name}_Tenddiff_z${level}_${trainorval}_sq.png
+
+      convert  ${dir}/${model_name}_TempError_z${level}_${trainorval}.png  ${dir}/${model_name}_UError_z${level}_${trainorval}.png  -append  ${dir}/tmp1.png
+      convert  ${dir}/${model_name}_EtaError_${trainorval}.png  ${dir}/${model_name}_VError_z${level}_${trainorval}.png  -append  ${dir}/tmp2.png;
+      convert  ${dir}/tmp1.png  ${dir}/tmp2.png  +append  ${dir}/${model_name}_Error_z${level}_${trainorval}_sq.png
 
       convert  ${dir}/${model_name}_TrueTemp_z${level}_${trainorval}.png  ${dir}/${model_name}_TrueEta_${trainorval}.png \
                ${dir}/${model_name}_TrueU_z${level}_${trainorval}.png  ${dir}/${model_name}_TrueV_z${level}_${trainorval}.png \

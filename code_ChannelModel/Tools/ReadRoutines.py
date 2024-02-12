@@ -11,6 +11,7 @@ import netCDF4 as nc4
 import sys
 sys.path.append('../CreateAndTrainModels')
 from WholeGridNetworkRegressorModules import *
+import numpy.lib.stride_tricks as npst
 
 class ReadProcData_Dataset(data.Dataset):
    
@@ -36,8 +37,12 @@ class ReadProcData_Dataset(data.Dataset):
        self.da_extrafluxes = self.ds['extra_fluxes']
        self.masks       = self.ds['masks'].values
        self.out_masks   = self.ds['out_masks'].values
+       self.bdy_masks   = self.ds['bdy_masks'].values
+       self.ext_bdy_masks   = self.ds['ext_bdy_masks'].values
        self.masks       = torch.from_numpy(self.masks)
        self.out_masks   = torch.from_numpy(self.out_masks)
+       self.bdy_masks   = torch.from_numpy(self.bdy_masks)
+       self.ext_bdy_masks   = torch.from_numpy(self.ext_bdy_masks)
        self.seed        = seed
 
    def __len__(self):
@@ -63,7 +68,7 @@ class ReadProcData_Dataset(data.Dataset):
        sample_target = torch.from_numpy(sample_target)
        sample_extrafluxes = torch.from_numpy(sample_extrafluxes)
 
-       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks
+       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks, self.bdy_masks, self.ext_bdy_masks
    
 
 # Create Dataset, which inherits the data.Dataset class
@@ -136,6 +141,45 @@ class MITgcm_Dataset(data.Dataset):
        print('self.y_dim; '+str(self.y_dim))
        print('self.x_dim; '+str(self.x_dim))
 
+
+       # Set up a mask identifying boundary points (ocean points adjacent to a land point)
+       # Boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
+       self.bdy_masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+       # set land points to zero, and ocean points to 1 using masks
+       self.bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 0, 1 )
+       # Set ocean interior to one
+       # create padded version of masks to deal with sliding window
+       padded_masks = np.zeros((self.z_dim, self.y_dim+2, self.x_dim+2))
+       padded_masks[:,1:-1,1:-1:]=self.masks[:,:,:]
+       # pad with 0 in y-dir - assume land
+       padded_masks[:,0,1:-1]=0
+       padded_masks[:,-1,1:-1]=0
+       # pad with circular padding x-dir; assume ocean
+       padded_masks[:,1:-1:,0]=self.masks[:,:,-1]
+       padded_masks[:,1:-1,-1]=self.masks[:,:,0]
+       # Use sliding window view to assess all points in neighbourhood of point, and set bdy_mask to 0 if all are ocean
+       # i.e. set bdy_mask to 0 if in ocean interior, else leave as previous bdy_mask value
+       self.bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,3,3)), axis=(3,4,5) ), 0, self.bdy_masks[:,:,:])
+
+       # Set up a mask identifying extended boundary points (ocean points within grid cells of a land point)
+       # Extended boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
+       self.ext_bdy_masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+       # set land points to zero, and ocean points to 1 using masks
+       self.ext_bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 0, 1 )
+       # Set ocean interior to one
+       # create padded version of masks to deal with sliding window
+       padded_masks = np.zeros((self.z_dim, self.y_dim+8, self.x_dim+8))
+       padded_masks[:,4:-4,4:-4:]=self.masks[:,:,:]
+       # pad with 0 in y-dir - assume land
+       padded_masks[:,:4,:]=0
+       padded_masks[:,-4:,:]=0
+       # pad with circular padding in x-dir
+       padded_masks[:,4:-4,:4]=self.masks[:,:,-4:]
+       padded_masks[:,4:-4,-4:]=self.masks[:,:,:4]
+       # Use sliding window view to assess all points in neighbourhood of point, and set ext_bdy_mask to 0 if all are ocean
+       # i.e. set ext_bdy_mask to 0 if in ocean interior, else leave as previous ext_bdy_mask value
+       self.ext_bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,9,9)), axis=(3,4,5) ), 0, self.ext_bdy_masks[:,:,:])
+
        if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
           self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
           self.masks = np.broadcast_to( self.masks, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
@@ -147,6 +191,8 @@ class MITgcm_Dataset(data.Dataset):
 
        self.masks = torch.from_numpy(self.masks)
        self.out_masks = torch.from_numpy(self.out_masks)
+       self.bdy_masks = torch.from_numpy(self.bdy_masks)
+       self.ext_bdy_masks = torch.from_numpy(self.ext_bdy_masks)
 
    def __len__(self):
        return int( (self.ds.sizes['T']-self.histlen) / self.stride )
@@ -166,7 +212,7 @@ class MITgcm_Dataset(data.Dataset):
        ds_InputSlice  = self.ds.isel(T=slice(idx*self.stride,idx*self.stride+self.histlen)) 
        ds_OutputSlice = self.ds.isel(T=slice(idx*self.stride+self.histlen,idx*self.stride+self.histlen+self.rolllen))
  
-       if self.land == 'IncLand' or self.land == 'Spits':
+       if self.land == 'IncLand' or self.land == 'Spits' or self.land == 'DiffSpits':
           # Read in the data
 
           da_T_in        = ds_InputSlice['THETA'].values[:,:,:,:] 
@@ -371,7 +417,7 @@ class MITgcm_Dataset(data.Dataset):
        if self.transform:
           sample_input, sample_target, sample_extrafluxes = self.transform({'input':sample_input,'target':sample_target,'extrafluxes':sample_extrafluxes})
  
-       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks
+       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks, self.bdy_masks, self.ext_bdy_masks
 
 def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histlen, rolllen, land, bdyweight, landvalues, grid_filename, dim, 
                        modelstyle, mean_std_file, z_dim, y_dim_used, no_phys_in_channels, no_out_channels, normmethod, model_name, seed):
@@ -461,6 +507,8 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Y', 'X') )
           nc_masks     = out_file.createVariable( 'masks',     'f4', ('histlen', 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
        elif dim == '2d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -470,6 +518,8 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Y', 'X') )
           nc_masks     = out_file.createVariable( 'masks',     'f4', ('Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
        elif dim == '3d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -479,10 +529,12 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Z', 'Y', 'X') )
           nc_masks     = out_file.createVariable( 'masks',     'f4', (1, 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Z', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
        out_file.close()
 
     # Fill Dataset
-    for input_batch, target_batch, extrafluxes_batch, masks, out_masks in MITgcm_loader:
+    for input_batch, target_batch, extrafluxes_batch, masks, out_masks, bdy_masks, ext_bdy_masks in MITgcm_loader:
        print('batch number : '+str(batch))
        out_file = nc4.Dataset(ProcDataFilename,'r+', format='NETCDF4')
        nc_inputs[batch*batch_size:(batch+1)*batch_size] = input_batch
@@ -494,6 +546,8 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           print(out_masks.shape)
           print(out_masks[0,].shape)
           nc_out_masks[:] = out_masks[0,]
+          nc_bdy_masks[:] = bdy_masks[0,]
+          nc_ext_bdy_masks[:] = ext_bdy_masks[0,]
        batch = batch+1
        out_file.close()
 

@@ -92,9 +92,9 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
        flds_max_value = max( np.nanmax(field1[:,:]), np.amax(field2[:,:]) )
 
     if diff_min_value == None: 
-       diff_min_value = -0.8*max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+       diff_min_value = -0.8*max( abs(np.nanmin(field2[:,:]-field1[:,:])), abs(np.nanmax(field2[:,:]-field1[:,:])) )
     if diff_max_value == None: 
-       diff_max_value =  0.8*max( abs(np.nanmin(field1[:,:]-field2[:,:])), abs(np.nanmax(field1[:,:]-field2[:,:])) )
+       diff_max_value =  0.8*max( abs(np.nanmin(field2[:,:]-field1[:,:])), abs(np.nanmax(field2[:,:]-field1[:,:])) )
 
     if cmap==None:
        cmap = 'viridis'
@@ -106,7 +106,7 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
        ax3 = plt.subplot(313)
        ax1, im1 = plot_depth_ax(ax1, field1, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
        ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
-       ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+       ax3, im3 = plot_depth_ax(ax3, field2-field1, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
    
        ax1.set_title(str(field1_name)+' at depth level '+str(level))
        ax2.set_title(str(field2_name)+' at depth level '+str(level))
@@ -131,7 +131,7 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
        ax2 = plt.subplot(211)
        ax3 = plt.subplot(212)
        ax2, im2 = plot_depth_ax(ax2, field2, x_labels, y_labels, depth_labels, flds_min_value, flds_max_value, cmap=cmap)
-       ax3, im3 = plot_depth_ax(ax3, field1-field2, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
+       ax3, im3 = plot_depth_ax(ax3, field2-field1, x_labels, y_labels, depth_labels, diff_min_value, diff_max_value, cmap='bwr')
 
        ax2.set_title(str(field2_name)+' at '+str(int(depth_labels[level]))+'m depth')
        ax3.set_title('The Difference')

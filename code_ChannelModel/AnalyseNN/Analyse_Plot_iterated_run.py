@@ -1,6 +1,20 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Script to read in iterated run data (nc files) from multiple runs, and 'truth' data from purturbed 
+# MITgcm runs.
+# Spatial plots of the predicted field, the true field, and the difference are plotted for each of the
+# runs, and for every required timestep. These can be catted together to show all variables at once,
+# and animated to give a video of the evolution of predicted fields, true fields, and the difference,
+# using cat_animate_iterations.sh
+# The script then plots a timeseries for a given point, for the truth, the various NN runs, and the 
+# perturbed MITgcm runs.
+# It also plots a timeseries of RMS error and CC; Showing how RMS error (between NN predictions and 
+# true MITgcm fields) evolves over time. And how the CC between MITgcm truth and NN predictions evolve
+# over time.
+# Finally the script prints (to the screen) the values of the RMS error and CC for various points along
+# the timeseries.
+
 print('import packages')
 import sys
 sys.path.append('../')
@@ -19,43 +33,37 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_names = ['Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'MultiModel_Spits12hrly_UNet2dtransp_histlen1_rolllen1',
-             'Spits12hrly_UNet2dtransp_histlen3_rolllen1_seed30475',
-             'Spits12hrly_UNet2dtransp_histlen1_rolllen3_seed30475',
-             'Spits12hrly_UNetConvLSTM_histlen5_rolllen1_seed30475']
-labels = ['Standard Network', 'smoothing', 'Multi-model average', '3 past fields', 'Rollout loss length 3', 'ConvLSTM length 5']
-epochs = ['200', '200', '200', '200', '200', '200']
-iteration_methods = ['simple', 'simple', 'simple', 'simple', 'simple', 'simple']
-smooth_levels = ['0', '20', '0', '0', '0', '0']
+#dir_names = ['Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
+#             'Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
+#             'MultiModel_Spits12hrly_UNet2dtransp_histlen1_rolllen1',
+#             'Spits12hrly_UNet2dtransp_histlen3_rolllen1_seed30475',
+#             'Spits12hrly_UNet2dtransp_histlen1_rolllen3_seed30475',
+#             'Spits12hrly_UNetConvLSTM_histlen5_rolllen1_seed30475']
+#labels = ['Standard Network', 'smoothing', 'Multi-model average', '3 past fields', 'Rollout loss length 3', 'ConvLSTM length 5']
+#epochs = ['200', '200', '200', '200', '200', '200']
+#iteration_methods = ['simple', 'simple', 'simple', 'simple', 'simple', 'simple']
+#smooth_levels = ['0', '20', '0', '0', '0', '0']
 
-#dir_names = ['MultiModel_Spits12hrly_UNet2dtransp_histlen1_rolllen1']
-#labels = ['Multi-model average']
-#epochs = ['200']
-#iteration_methods = ['simple']
-#smooth_levels = ['0']
-
-dir_names = ['Spitshrly_UNet2dtransp_histlen1_rolllen1_seed30475']
-labels = ['UNet']
+dir_names = ['Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475']
+labels = ['']
 epochs = ['200']
 iteration_methods = ['simple']
 smooth_levels = ['0']
 
-iteration_len = 200 
+iteration_len = 180 
 smooth_steps = '0'
 
 my_colors = ['red', 'cyan', 'orange', 'blue', 'green', 'purple']
 my_alphas = [ 1., 1., 1., 1., 1., 1., 1. ]
 
 plot_timeseries = True   
-plot_rms_timeseries = False
-print_spatially_av_rms = False
-print_cc = False
-plot_cc_timeseries = False
-make_animation_plots = False
-animation_end = 180
-ts_end = 180
+plot_rms_timeseries = True
+print_spatially_av_rms = True 
+print_cc = True 
+plot_cc_timeseries = True 
+make_animation_plots = True 
+animation_end = 43
+ts_end = 180 
 print_times = [28, 56, 84, 112]  # times to print, in terms of how many 12 hour jumps; 2,4,6,8 weeks
 
 #pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']

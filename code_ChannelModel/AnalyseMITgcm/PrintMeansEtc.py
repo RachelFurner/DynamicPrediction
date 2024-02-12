@@ -1,10 +1,12 @@
+# Script to print text of means, standard deviation, and range, from the
+# numpy file created through AnalyseMITgcm.py
+
 
 import numpy as np
 
 #mean_std_file = '../../../Channel_nn_Outputs/10min_MeanStd.npz'
 #mean_std_file = '../../../Channel_nn_Outputs/hrly_MeanStd.npz'
-mean_std_file = '../../../Channel_nn_Outputs/DATASETS/12hrly_MeanStd.npz_OLD'
-#mean_std_file = '../../../Channel_nn_Outputs/DATASETS/12hrly_MeanStd.npz'
+mean_std_file = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/Spits_12hrly_MeanStd.npz'
 mean_std_data = np.load(mean_std_file)
 inputs_mean  = mean_std_data['arr_0']
 inputs_std   = mean_std_data['arr_1']

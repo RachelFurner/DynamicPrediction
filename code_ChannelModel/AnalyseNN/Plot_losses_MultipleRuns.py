@@ -1,4 +1,5 @@
-# Script to load losses from multiple runs and plot on the same pane
+
+# Script to load training losses (over epochs) from multiple versions of the NN and plot on the same pane
 
 import pickle
 import matplotlib.pyplot as plt

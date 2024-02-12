@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# Script which reads on data from iteration nc files. Sums the SSH (this total should be conserved
+# due to mass convservation) and plots a timeseries of this from true trajectory and from predicted
+# iteration fields. Also calculates TKE (domain wide sum of u^2 + v^2) and plots a timeseries - this
+# isn't conserved as GCM is forced with varying winds, but NN model should vary in a similar way to
+# the GCM. 
+
 print('import packages')
 import sys
 sys.path.append('../')

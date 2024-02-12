@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# Part of a multifile set up to calculate Means and Std - split across mutliple parts to solve memory issues, not neat, but works!
+# Script to analyse training data (first 75% of dataset)
+# The script plots histograms of input and output data, Calculates Means and Std 
+# over the entire training set and saves to a numpy file (use print means to 
+# output them as text) which is read in and used during model training, and saves
+# spatial fields of the temporaly averaged dataset to a netcdf file
 
 print('import packages')
 import sys
@@ -15,27 +19,29 @@ import netCDF4 as nc4
 for_jump = '12hrly'
 #datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
 datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/700yr_WklyOutputting/'
 data_filename = datadir + for_jump + '_data.nc'
 #data_filename = datadir + for_jump + '_small_set.nc'
 grid_filename = datadir+'grid.nc'
 
 land = 'Spits'
-predictionjump = '12hrly' 
 out_filename = datadir+land+'_stats.nc'
-mean_std_file = datadir+land+'_'+predictionjump+'_MeanStd.npz'
+mean_std_file = datadir+land+'_'+for_jump+'_MeanStd.npz'
 
-init=False
+init=True 
 var_range=range(6)
 plotting_histograms = True 
-calc_stats = False
-nc_stats = False
+calc_stats = True 
+nc_stats = True 
 
+train_split=0.75
 #------------------------
 
-def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None, datarange=None):
+def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None, datarange=None, no_bins=None):
    plt.rcParams.update({'font.size': 22})
-   no_bins = 100
-   #no_bins = 33   # For wind forcing use less bins
+   if no_bins==None:
+      no_bins=100
+   print(varname)
    fig_histogram = plt.figure(figsize=(10, 8))
    ax1 = fig_histogram.add_subplot(111)
    ax1.hist(histogram_inputs, bins = no_bins)
@@ -72,7 +78,7 @@ if init:
    
    if nc_stats:
       ds_inputs = xr.open_dataset(data_filename)
-      ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
+      ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
       if land=='ExcLand':
          ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
          ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
@@ -116,7 +122,7 @@ for var in var_range:
    da_mask = ds_grid[MaskVarName[var]]
 
    ds_inputs = xr.open_dataset(data_filename)
-   ds_inputs = ds_inputs.isel( T=slice( 0, int(0.75*ds_inputs.dims['T']) ) )
+   ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
    if land=='ExcLand':
       ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
       ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
@@ -182,23 +188,26 @@ for var in var_range:
       inputs_mean  = mean_std_data['arr_0']
       inputs_std   = mean_std_data['arr_1']
       inputs_range = mean_std_data['arr_2']
-      plot_histograms( da.values.reshape(-1), VarName[var], ShortVarName[var]+'Inputs', inputs_mean[var], inputs_std[var], inputs_range[var] )
+      no_bins = 100
+      if ShortVarName[var] == 'utaux':
+         no_bins = 33   # For wind forcing use less bins
+      plot_histograms( da.values.reshape(-1), VarName[var], ShortVarName[var]+'Inputs', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
       plot_histograms( ( (da.values - inputs_mean[var])/inputs_std[var] ).reshape(-1),
-                       VarName[var], ShortVarName[var]+'Inputs_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                       VarName[var], ShortVarName[var]+'Inputs_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
       plot_histograms( ( (da.values - inputs_mean[var])/inputs_range[var] ).reshape(-1),
-                       VarName[var], ShortVarName[var]+'Inputs_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                       VarName[var], ShortVarName[var]+'Inputs_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
       # Also plot normed data
       if var <= 3:
          targets_mean  = mean_std_data['arr_3']
          targets_std   = mean_std_data['arr_4']
          targets_range = mean_std_data['arr_5']
          plot_histograms( (da.values[1:]-da.values[:-1]).reshape(-1), 'Change in '+VarName[var], ShortVarName[var]+'Targets', 
-                           inputs_mean[var], inputs_std[var], inputs_range[var])
+                           inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
          # Also plot normed data
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_std[var] ).reshape(-1),
-                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_range[var] ).reshape(-1),
-                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var] )
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
 
 mean_std_data = np.load(mean_std_file)
 inputs_mean  = mean_std_data['arr_0']
