@@ -17,10 +17,6 @@ from WholeGridNetworkRegressorModules import *
 from Models import CreateModel
 import numpy as np
 import xarray as xr
-#os.environ[ 'MPLCONFIGDIR' ] = '/data/hpcdata/users/racfur/tmp/'
-#import matplotlib
-#matplotlib.use('agg')
-#import matplotlib.pyplot as plt
 import netCDF4 as nc4
 import gc
 import argparse
@@ -72,7 +68,7 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     logging.info('Using device: '+device+'\n')
     
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
 
     args = parse_args()
 
@@ -119,11 +115,12 @@ if __name__ == "__main__":
     torch.use_deterministic_algorithms(True, warn_only=True)
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)+'_seed'+str(args.seed)
+    model_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+ \
+                 '_rolllen'+str(args.rolllen)+'_seed'+str(args.seed)
     # Amend some variables if testing code
     if args.test: 
        model_name = model_name+'_TEST'
-       for_len = min(for_len, 100)
+       for_len = min(for_len, 90 )
        args.epochs = min(args.epochs, 5)
     
     model_dir = '../../../Channel_nn_Outputs/'+model_name
@@ -131,12 +128,11 @@ if __name__ == "__main__":
        os.system("mkdir %s" % (model_dir))
        os.system("mkdir %s" % (model_dir+'/MODELS'))
        os.system("mkdir %s" % (model_dir+'/TRAINING_PLOTS'))
-       os.system("mkdir %s" % (model_dir+'/STATS'))
-       os.system("mkdir %s" % (model_dir+'/STATS/PLOTS'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST'))
        os.system("mkdir %s" % (model_dir+'/ITERATED_FORECAST/PLOTS'))
-       os.system("mkdir %s" % (model_dir+'/TRAIN_EVOLUTION'))
-       os.system("mkdir %s" % (model_dir+'/EXAMPLE_PREDICTIONS'))
+       os.system("mkdir %s" % (model_dir+'/STATS'))
+       os.system("mkdir %s" % (model_dir+'/STATS/PLOTS'))
+       os.system("mkdir %s" % (model_dir+'/STATS/EXAMPLE_FIELDS'))
     
     if args.trainmodel:
        if args.loadmodel: 
@@ -149,7 +145,7 @@ if __name__ == "__main__":
        start_epoch = args.savedepochs
        total_epochs = args.savedepochs
    
-    if args.land == 'IncLand' or args.land == 'Spits':
+    if args.land == 'IncLand' or args.land == 'Spits' or args.land == 'DiffSpits':
        y_dim_used = 104
     elif args.land == 'ExcLand':
        y_dim_used = 98
@@ -166,15 +162,18 @@ if __name__ == "__main__":
     if args.predictionjump == '12hrly':
        if args.land == 'Spits':
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+       elif args.land == 'DiffSpits':
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_DiffLandSpits/runs/50yr_Cntrl/'
        else:
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
     elif args.predictionjump == 'hrly':
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
     elif args.predictionjump == '10min':
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
-       subsample_rate = 3*subsample_rate # give larger subsample for such small timestepping, MITgcm dataset is longer so same amount of training/val samples
+       subsample_rate = 3*subsample_rate # larger subsample for small timestepping, MITgcm dataset longer so same amount of training/val samples
 
-    ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
+    ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+ \
+                       '_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
     if args.test: 
        MITgcm_filename = MITgcm_dir+args.predictionjump+'_small_set.nc'
        ProcDataFilename = ProcDataFilename+'_TEST.nc'
@@ -209,26 +208,26 @@ if __name__ == "__main__":
     z_dim = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038'] 
 
     if args.modelstyle == 'ConvLSTM' or args.modelstyle == 'UNetConvLSTM':
-       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux 
+       no_phys_in_channels = 3*z_dim + 3                       # Temp, U, V through depth, plus Eta, gTforc and taux 
        if args.land == 'ExcLand':
-          no_model_in_channels = no_phys_in_channels                  # Phys_in channels, no masks for excland version
+          no_model_in_channels = no_phys_in_channels           # Phys_in channels, no masks for excland version
        else:
-          no_model_in_channels = no_phys_in_channels + z_dim          # Phys_in channels plus masks
-       no_out_channels = 3*z_dim + 1                                  # Temp, U, V through depth, plus Eta
+          no_model_in_channels = no_phys_in_channels + z_dim   # Phys_in channels plus masks
+       no_out_channels = 3*z_dim + 1                           # Temp, U, V through depth, plus Eta
     elif args.dim == '2d':
-       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux
+       no_phys_in_channels = 3*z_dim + 3                       # Temp, U, V through depth, plus Eta, gTforc and taux
        if args.land == 'ExcLand':
           no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for excland version
        else:
           no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
-       no_out_channels = 3*z_dim+1                                    # Eta, plus Temp, U, V through depth (predict 1 step ahead, even for rolout loss)
+       no_out_channels = 3*z_dim+1                             # Eta, plus Temp, U, V through depth (predict 1 step ahead, even for rolout loss)
     elif args.dim == '3d':
-       no_phys_in_channels = 6                                        # Temp, U, V, Eta, gTforc and taux
+       no_phys_in_channels = 6                                 # Temp, U, V, Eta, gTforc and taux
        if args.land == 'ExcLand':
-          no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for Excland case
+          no_model_in_channels = args.histlen * no_phys_in_channels  # Phys_in channels for each past time, no masks for Excland case
        else:
           no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
-       no_out_channels = 4                                            # Temp, U, V, Eta just once
+       no_out_channels = 4                                     # Temp, U, V, Eta just once
    
     inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = \
                                           ReadMeanStd(mean_std_file, args.dim, no_phys_in_channels, no_out_channels, z_dim, args.seed)
@@ -293,8 +292,8 @@ if __name__ == "__main__":
     if args.loadmodel:
        if args.trainmodel:
           losses, h, optimizer, current_best_loss = LoadModel(model_name, h, optimizer, args.savedepochs, 'tr', losses, args.best, args.seed)
-          losses = TrainModel(model_name, args.modelstyle, args.dim, args.land, args.histlen, args.rolllen, args.test, no_tr_samples, no_val_samples, 
-                              save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, channel_dim, 
+          losses = TrainModel(model_name, args.modelstyle, args.dim, args.land, args.histlen, args.rolllen, args.test, no_tr_samples,
+                              no_val_samples, save_freq, train_loader, val_loader, h, optimizer, args.epochs, args.seed, losses, channel_dim, 
                               no_phys_in_channels, no_out_channels, args.wandb, start_epoch=start_epoch, current_best_loss=current_best_loss)
           plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses )
        else:
@@ -305,19 +304,6 @@ if __name__ == "__main__":
                            losses, channel_dim, no_phys_in_channels, no_out_channels, args.wandb)
        plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses)
    
-    #--------------------
-    # Plot scatter plots
-    #--------------------
-    if args.plotscatter:
-    
-       PlotScatter(model_name, args.dim, train_loader, h, total_epochs, 'training', args.normmethod, channel_dim,
-                   mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
-       if not args.test: 
-          PlotScatter(model_name, args.dim, val_loader, h, total_epochs, 'validation', args.normmethod, channel_dim,
-                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
-          PlotScatter(model_name, args.dim, test_loader, h, total_epochs, 'test', args.normmethod, channel_dim, 
-                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed)
-    
     #---------------------
     # Iteratively predict 
     #---------------------
@@ -326,8 +312,8 @@ if __name__ == "__main__":
        Iterate_Dataset = rr.MITgcm_Dataset( MITgcm_filename, 0., 1., 1, args.histlen, args.rolllen, args.land, args.bdyweight, landvalues,
                                             grid_filename, args.dim,  args.modelstyle, no_phys_in_channels, no_out_channels, args.seed,
                                             transform = transforms.Compose( [ rr.RF_Normalise_sample(inputs_mean, inputs_std, inputs_range,
-                                                                              targets_mean, targets_std, targets_range,
-                                                                              args.histlen, args.rolllen, no_phys_in_channels, no_out_channels, args.dim, 
+                                                                              targets_mean, targets_std, targets_range, args.histlen,
+                                                                              args.rolllen, no_phys_in_channels, no_out_channels, args.dim, 
                                                                               args.normmethod, args.modelstyle, args.seed)] ) )
     
        IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
@@ -337,28 +323,41 @@ if __name__ == "__main__":
     #------------------
     # Assess the model 
     #------------------
+    #RF_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=False,
+    #                                           num_workers=args.numworkers, pin_memory=True )
+    #RF_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=False, 
+    #                                           num_workers=args.numworkers, pin_memory=True )
+    #RF_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=False, 
+    #                                           num_workers=args.numworkers, pin_memory=True )
     if args.assess:
     
-       stats_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
-                                                  num_workers=args.numworkers, pin_memory=True )
-       if not args.test: 
-          stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                                  num_workers=args.numworkers, pin_memory=True )
-          stats_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                                  num_workers=args.numworkers, pin_memory=True )
-    
-       OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_train_loader, h, total_epochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, MITgcm_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
                    MITgcm_stats_filename, args.seed)
     
        if not args.test: 
-          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_val_loader, h, total_epochs, y_dim_used, args.dim, 
+
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'validation', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
                       MITgcm_stats_filename, args.seed)
-    
-          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_test_loader, h, total_epochs, y_dim_used, args.dim, 
+   
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, test_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
                       MITgcm_stats_filename, args.seed)
+    
+    #----------------------------
+    # Plot density scatter plots
+    #----------------------------
+    if args.plotscatter:
+    
+       if not args.test: 
+          PlotDensScatter( model_name, args.dim, test_loader, h, total_epochs, 'test', args.normmethod, channel_dim, mean_std_file,
+                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_test_samples/args.batchsize) )
+          PlotDensScatter( model_name, args.dim, val_loader, h, total_epochs, 'validation', args.normmethod, channel_dim, mean_std_file,
+                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_val_samples/args.batchsize) )
+
+       PlotDensScatter( model_name, args.dim, train_loader, h, total_epochs, 'training', args.normmethod, channel_dim, mean_std_file,
+                        no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_tr_samples/args.batchsize) )
     
     #------------------------------------------------------
     # Plot fields from various training steps of the model

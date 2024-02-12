@@ -25,6 +25,7 @@ os.environ[ 'MPLCONFIGDIR' ] = '/data/hpcdata/users/racfur/tmp/'
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import pickle
 
 def ReadMeanStd(mean_std_file, dim, no_phys_in_channels, no_out_channels, z_dim, seed_value):
@@ -82,7 +83,7 @@ def ReadMeanStd(mean_std_file, dim, no_phys_in_channels, no_out_channels, z_dim,
    return(inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range)
 
 def my_loss(output, target):
-   loss = torch.mean( (output - target)**2 )
+   loss = torch.sqrt(torch.mean( (output - target)**2 ))
    return loss
 
 def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST, no_tr_samples, no_val_samples, save_freq, train_loader,
@@ -114,11 +115,9 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
        losses['train_Eta'].append(0.)
        losses['val'].append(0.)
 
-       RF_batch_no = 0
-
        h.train(True)
 
-       for input_batch, target_batch, extrafluxes_batch, masks, out_masks in train_loader:
+       for input_batch, target_batch, extrafluxes_batch, masks, out_masks, _, _ in train_loader:
 
            # Clear gradient buffers - dont want to cummulate gradients
            optimizer.zero_grad()
@@ -147,14 +146,16 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
                                                        h( input_batch ) * out_masks.to(device, non_blocking=True)
                        else:
                           predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] =  \
-                                                       h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                                                  h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
                        for hist_time in range(histlen-1):
                           input_batch[:, hist_time*no_phys_in_channels:(hist_time+1)*no_phys_in_channels, :, :] =   \
                                     input_batch[:, (hist_time+1)*no_phys_in_channels:(hist_time+2)*no_phys_in_channels, :, :]
                        input_batch[:, (histlen-1)*no_phys_in_channels:, :, :] =  \
-                              torch.cat( ( (input_batch[:,(histlen-1)*no_phys_in_channels:histlen*no_phys_in_channels-2,:,:].to(device, non_blocking=True)
-                                            + predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:]),
-                                          extrafluxes_batch[:,roll_time*2:roll_time*2+2,:,:].to(device, non_blocking=True) ), dim=1 )
+                                    torch.cat( ( (input_batch[:,(histlen-1)*no_phys_in_channels:histlen*no_phys_in_channels-2,:,:].to(
+                                                                                                            device, non_blocking=True)
+                                                  + predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:]),
+                                                extrafluxes_batch[:,roll_time*2:roll_time*2+2,:,:].to(device, non_blocking=True) ),
+                                              dim=1 )
       	         
                  # Calculate and update loss values
                  
@@ -223,8 +224,6 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
            gc.collect()
            torch.cuda.empty_cache()
       
-           RF_batch_no = RF_batch_no + 1
-
            #print('test line 3')
            #print('')
            #print('')
@@ -257,12 +256,10 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
 
        #### Validation ######
    
-       RF_batch_no = 0
-       
        h.train(False)
 
        with torch.no_grad():
-          for input_batch, target_batch, extrafluxes_batch, masks, out_masks in val_loader:
+          for input_batch, target_batch, extrafluxes_batch, masks, out_masks, _, _ in val_loader:
    
               target_batch = target_batch.to(device, non_blocking=True)
               # get prediction from the model, given the inputs
@@ -278,17 +275,19 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
                  for roll_time in range(rolllen):
                     if land == 'ExcLand':
                        predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] = \
-                                                     h( input_batch ) * out_masks.to(device, non_blocking=True)
+                                 h( input_batch ) * out_masks.to(device, non_blocking=True)
                     else:
                        predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:] = \
-                                                     h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
+                                 h( torch.cat((input_batch, masks), dim=channel_dim) ) * out_masks.to(device, non_blocking=True)
                     for hist_time in range(histlen-1):
                        input_batch[:, hist_time*no_phys_in_channels:(hist_time+1)*no_phys_in_channels, :, :] =   \
                                  input_batch[:, (hist_time+1)*no_phys_in_channels:(hist_time+2)*no_phys_in_channels, :, :]
                     input_batch[:, (histlen-1)*no_phys_in_channels:, :, :] = \
-                              torch.cat( ( (input_batch[:,(histlen-1)*no_phys_in_channels:histlen*no_phys_in_channels-2,:,:].to(device, non_blocking=True)
-                                            + predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:]),
-                                          extrafluxes_batch[:,roll_time*2:roll_time*2+2,:,:].to(device, non_blocking=True) ), dim=1 )
+                                 torch.cat( ( (input_batch[:,(histlen-1)*no_phys_in_channels:histlen*no_phys_in_channels-2,:,:].to(
+                                                                                                         device, non_blocking=True)
+                                               + predicted_batch[:,roll_time*no_out_channels:(roll_time+1)*no_out_channels,:,:]),
+                                             extrafluxes_batch[:,roll_time*2:roll_time*2+2,:,:].to(device, non_blocking=True) ),
+                                           dim=1 )
           
               # get loss for the predicted_batch output
               losses['val'][-1] = losses['val'][-1] +  \
@@ -300,8 +299,6 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
               gc.collect()
               torch.cuda.empty_cache()
  
-              RF_batch_no = RF_batch_no + 1
-   
           if wandb:
              wandb.log({"val loss" : losses['val'][-1]/no_tr_samples})
           losses['val'][-1] = losses['val'][-1] / no_val_samples
@@ -369,10 +366,11 @@ def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses, best, seed_
    return losses, h, optimizer, current_best_loss
 
 
-def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method, channel_dim, mean_std_file, no_out_channels,
-                no_phys_in_channels, z_dim, land, seed):
+def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_method, channel_dim, mean_std_file, no_out_channels,
+                    no_phys_in_channels, z_dim, land, seed, no_batches):
 
-   logging.info('Making scatter plots')
+   logging.info('Making density scatter plots')
+   logging.info('No_batches; '+str(no_batches))
    plt.rcParams.update({'font.size': 14})
 
    inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range =  \
@@ -388,109 +386,440 @@ def PlotScatter(model_name, dimension, data_loader, h, epoch, title, norm_method
       if torch.cuda.is_available():
          h = h.cuda()
 
+   RF_batch_no = 0
    with torch.no_grad():
-      input_batch, target_batch, extrafluxes_batch, masks, out_masks = next(iter(data_loader))
-      target_batch = target_batch.double()
-      # Make prediction
-      if isinstance(h, list):
-         predicted_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ).to('cpu', non_blocking=True).double() 
-         for i in range(1, len(h)):
-            predicted_batch = predicted_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) ).to('cpu', non_blocking=True).double()
-         predicted_batch = predicted_batch / len(h)
-      else:
-         if land == 'ExcLand':
-            predicted_batch = h( input_batch ).to('cpu', non_blocking=True).double()
-         else:
-            predicted_batch = h( torch.cat( (input_batch, masks), dim=channel_dim )).to('cpu', non_blocking=True).double()
+      for input_batch, target_batch, extrafluxes_batch, masks, out_masks, bdy_masks, ext_bdy_masks in data_loader:
+         if RF_batch_no < 35: #memory limits, cap here to catch all of test and val, while also reducing run time
+            print(RF_batch_no)
 
-   # Denormalise and mask, if rolllen>1 (loss function calc over multiple steps) only take first set of predictions
-   target_batch = torch.where(out_masks==1, 
-                              rr.RF_DeNormalise(target_batch[:, :no_out_channels, :, :],
-                                                targets_mean, targets_std, targets_range, dimension, norm_method, seed),
-                              np.nan)
-   predicted_batch = torch.where(out_masks==1, 
-                                 rr.RF_DeNormalise(predicted_batch[:, :no_out_channels, :, :],
-                                                   targets_mean, targets_std, targets_range, dimension, norm_method, seed),
-                                 np.nan)
+            target_batch = target_batch.cpu().detach().numpy()
+            bdy_masks = bdy_masks[:,:,:,:].bool()
+            ext_bdy_masks = ext_bdy_masks[:,:,:,:].bool()
+   
+            # get prediction from the model, given the inputs
+            if isinstance(h, list):
+               pred_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ) 
+               for i in range(1, len(h)):
+                  pred_batch = pred_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) )
+               pred_batch = pred_batch / len(h)
+            else:
+               if land == 'ExcLand':
+                  pred_batch = h( input_batch ) 
+               else:
+                  pred_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
+            pred_batch = pred_batch.cpu().detach().numpy() 
+   
+            # Denormalise, if rolllen>1 (loss function calc over multiple steps) only take first step
+            target_batch = rr.RF_DeNormalise(target_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
+                                                  dimension, norm_method, seed)
+            pred_batch = rr.RF_DeNormalise(pred_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
+                                                     dimension, norm_method, seed)
+   
+            # Mask
+            target_batch = np.where( out_masks[0]==1, target_batch, np.nan)
+            pred_batch = np.where( out_masks[0]==1, pred_batch, np.nan)
+   
+            # Add summed error of this batch
+            target_batch = np.where( out_masks[0]==1, target_batch, np.nan)
+            pred_batch = np.where( out_masks[0]==1, pred_batch, np.nan)
+            if RF_batch_no==0:
+               targets      = target_batch
+               predictions  = pred_batch 
+            else:
+               targets     = np.concatenate( ( targets, target_batch ), axis=0)
+               predictions = np.concatenate( ( predictions, pred_batch ), axis=0)
+   
+         RF_batch_no = RF_batch_no+1
 
+   # Reshape 
    if dimension == '2d':
-      # reshape to give each variable its own dimension
-      targets = np.zeros((predicted_batch.shape[0], 4, z_dim, target_batch.shape[2], target_batch.shape[3] ))
-      predictions = np.zeros((predicted_batch.shape[0], 4, z_dim, target_batch.shape[2], target_batch.shape[3] ))
+      tmp_targets = np.zeros((targets.shape[0], 4, z_dim,targets.shape[2], targets.shape[3]))
+      tmp_predictions = np.zeros((predictions.shape[0], 4, z_dim, predictions.shape[2], predictions.shape[3]))
+      
       for i in range(3):
-         targets[:,i,:,:,:]  = target_batch[:,i*z_dim:(i+1)*z_dim,:,:] 
-         predictions[:,i,:,:,:] = predicted_batch[:,i*z_dim:(i+1)*z_dim,:,:] 
-      targets[:,3,:,:,:] = target_batch[:,3*z_dim:4*z_dim,:,:]
-      predictions[:,3,:,:,:] = predicted_batch[:,3*z_dim:4*z_dim,:,:]
+         tmp_targets[:,i,:,:,:] = targets[:,i*z_dim:(i+1)*z_dim,:,:]
+         tmp_predictions[:,i,:,:,:] = predictions[:,i*z_dim:(i+1)*z_dim,:,:]
+      tmp_targets[:,3,:,:,:] = targets[:,3*z_dim:(3*z_dim)+1,:,:]
+      tmp_predictions[:,3,:,:,:] = predictions[:,3*z_dim:(3*z_dim)+1,:,:]
 
-   elif dimension == '3d':
-      targets = target_batch[:,:,:,:,:].cpu().detach().numpy()
-      predictions = predicted_batch[:,:,:,:,:].cpu().detach().numpy()
+      targets = tmp_targets
+      predictions = tmp_predictions
 
-   fig_main = plt.figure(figsize=(9,9))
+   # Make plots of the full dataset
+   fig_main = plt.figure(figsize=(9,10))
    ax_temp  = fig_main.add_subplot(221)
    ax_U     = fig_main.add_subplot(223)
    ax_V     = fig_main.add_subplot(224)
    ax_Eta   = fig_main.add_subplot(222)
 
-   ax_temp.scatter(targets[:,0,:,:,:],
-                   predictions[:,0,:,:,:],
-                   edgecolors=(0, 0, 0), alpha=0.15, color='blue', label='Temperature')
-   ax_U.scatter(targets[:,1,:,:,:],
-                predictions[:,1,:,:,:],
-                edgecolors=(0, 0, 0), alpha=0.15, color='red', label='East-West Velocity')
-   ax_V.scatter(targets[:,2,:,:,:], 
-                predictions[:,2,:,:,:],
-                edgecolors=(0, 0, 0), alpha=0.15, color='orange', label='North-South Velocity')
-   ax_Eta.scatter(targets[:,3,0,:,:], 
-                  predictions[:,3,0,:,:],
-                  edgecolors=(0, 0, 0), alpha=0.15, color='purple', label='Sea Surface Height')
-   bottom = min( np.nanmin(targets), np.nanmin(predictions) )
-   top    = max( np.nanmax(targets), np.nanmax(predictions) )  
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:].reshape(-1),
+                             predictions[:,0,:,:,:].reshape(-1),
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_U = \
+              ax_U.hist2d(targets[:,1,:,:,:].reshape(-1),
+                          predictions[:,1,:,:,:].reshape(-1),
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:]), np.nanmax(predictions[:,1,:,:,:]) )],
+                                 [min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:]), np.nanmax(predictions[:,1,:,:,:]) )]],
+                          cmap='Reds', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_U, ax=(ax_U), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_V = \
+              ax_V.hist2d(targets[:,2,:,:,:].reshape(-1), 
+                          predictions[:,2,:,:,:].reshape(-1),
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:]), np.nanmax(predictions[:,2,:,:,:]) )],
+                                 [min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:]), np.nanmax(predictions[:,2,:,:,:]) )]],
+                          cmap='Oranges', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_V, ax=(ax_V), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_Eta = \
+              ax_Eta.hist2d(targets[:,3,0,:,:].reshape(-1), 
+                            predictions[:,3,0,:,:].reshape(-1),
+                            bins=(50, 50),
+                            range=[[min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
+                                    max( np.nanmax(targets[:,3,:,:,:]), np.nanmax(predictions[:,3,:,:,:]) )],
+                                   [min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
+                                    max( np.nanmax(targets[:,3,:,:,:]), np.nanmax(predictions[:,3,:,:,:]) )]],
+                            cmap='Purples', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_Eta, ax=(ax_Eta), shrink=0.9, location='bottom')
    
    ax_temp.set_xlabel('Truth')
    ax_temp.set_ylabel('Predictions')
    ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
-   ax_temp.set_xlim( min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
-                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) ) )
-   ax_temp.set_ylim( min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
-                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) ) )
-   ax_temp.plot([bottom, top], [bottom, top], 'k--', lw=1)#, color='black')
 
    ax_U.set_xlabel('Truth')
    ax_U.set_ylabel('Predictions')
    ax_U.set_title('East-West Velocity (m/s)')
-   ax_U.set_xlim( min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
-                  max( np.nanmax(targets[:,1,:,:,:]), np.nanmax(predictions[:,1,:,:,:]) ) )
-   ax_U.set_ylim( min( np.nanmin(targets[:,1,:,:,:]), np.nanmin(predictions[:,1,:,:,:]) ),
-                  max( np.nanmax(targets[:,1,:,:,:]), np.nanmax(predictions[:,1,:,:,:]) ) )
-   ax_U.plot([bottom, top], [bottom, top], 'k--', lw=1)#, color='black')
 
    ax_V.set_xlabel('Truth')
    ax_V.set_ylabel('Predictions')
    ax_V.set_title('North-South Velocity (m/s)')
-   ax_V.set_xlim( min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
-                  max( np.nanmax(targets[:,2,:,:,:]), np.nanmax(predictions[:,2,:,:,:]) ) )
-   ax_V.set_ylim( min( np.nanmin(targets[:,2,:,:,:]), np.nanmin(predictions[:,2,:,:,:]) ),
-                  max( np.nanmax(targets[:,2,:,:,:]), np.nanmax(predictions[:,2,:,:,:]) ) )
-   ax_V.plot([bottom, top], [bottom, top], 'k--', lw=1)#, color='black')
 
    ax_Eta.set_xlabel('Truth')
    ax_Eta.set_ylabel('Predictions')
    ax_Eta.set_title('Sea Surface Height (m)')
-   ax_Eta.set_xlim( min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
-                    max( np.nanmax(targets[:,3,:,:,:]), np.nanmax(predictions[:,3,:,:,:]) ) )
-   ax_Eta.set_ylim( min( np.nanmin(targets[:,3,:,:,:]), np.nanmin(predictions[:,3,:,:,:]) ),
-                    max( np.nanmax(targets[:,3,:,:,:]), np.nanmax(predictions[:,3,:,:,:]) ) )
-   ax_Eta.plot([bottom, top], [bottom, top], 'k--', lw=1)#, color='black')
 
    plt.tight_layout()
 
    plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
-               model_name+'_scatter_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               model_name+'_densescatter_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
+   # PLOT RESULTS FROM SPECIFIC AREAS
+   bdy_masks = bdy_masks[0:1,:,:,:]
+   bdy_masks = bdy_masks.bool().expand(targets.shape[0], bdy_masks.shape[1], bdy_masks.shape[2], bdy_masks.shape[3])
+   ext_bdy_masks = ext_bdy_masks[0:1,:,:,:]
+   ext_bdy_masks = ext_bdy_masks.bool().expand(targets.shape[0], ext_bdy_masks.shape[1], ext_bdy_masks.shape[2], ext_bdy_masks.shape[3])
+
+   # Make plots of the just near land points
+   fig_main = plt.figure(figsize=(9,10))
+   ax_temp  = fig_main.add_subplot(221)
+   ax_U     = fig_main.add_subplot(223)
+   ax_V     = fig_main.add_subplot(224)
+   ax_Eta   = fig_main.add_subplot(222)
+
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:][bdy_masks],
+                             predictions[:,0,:,:,:][bdy_masks],
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:][bdy_masks]), np.nanmin(predictions[:,0,:,:,:][bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][bdy_masks]), np.nanmax(predictions[:,0,:,:,:][bdy_masks]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:][bdy_masks]), np.nanmin(predictions[:,0,:,:,:][bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][bdy_masks]), np.nanmax(predictions[:,0,:,:,:][bdy_masks]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_U = \
+              ax_U.hist2d(targets[:,1,:,:,:][bdy_masks],
+                          predictions[:,1,:,:,:][bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,1,:,:,:][bdy_masks]), np.nanmin(predictions[:,1,:,:,:][bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][bdy_masks]), np.nanmax(predictions[:,1,:,:,:][bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,1,:,:,:][bdy_masks]), np.nanmin(predictions[:,1,:,:,:][bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][bdy_masks]), np.nanmax(predictions[:,1,:,:,:][bdy_masks]) )]],
+                          cmap='Reds', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_U, ax=(ax_U), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_V = \
+              ax_V.hist2d(targets[:,2,:,:,:][bdy_masks], 
+                          predictions[:,2,:,:,:][bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,2,:,:,:][bdy_masks]), np.nanmin(predictions[:,2,:,:,:][bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][bdy_masks]), np.nanmax(predictions[:,2,:,:,:][bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,2,:,:,:][bdy_masks]), np.nanmin(predictions[:,2,:,:,:][bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][bdy_masks]), np.nanmax(predictions[:,2,:,:,:][bdy_masks]) )]],
+                          cmap='Oranges', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_V, ax=(ax_V), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_Eta = \
+           ax_Eta.hist2d(targets[:,3,0,:,:][bdy_masks[:,0,:,:]], 
+                         predictions[:,3,0,:,:][bdy_masks[:,0,:,:]],
+                         bins=(50, 50),
+                         range=[[min( np.nanmin(targets[:,3,0,:,:][bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][bdy_masks[:,0,:,:]]) ),
+                                 max( np.nanmax(targets[:,3,0,:,:][bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][bdy_masks[:,0,:,:]]) )],
+                                [min( np.nanmin(targets[:,3,0,:,:][bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][bdy_masks[:,0,:,:]]) ),
+                                 max( np.nanmax(targets[:,3,0,:,:][bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][bdy_masks[:,0,:,:]]) )]],
+                            cmap='Purples', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_Eta, ax=(ax_Eta), shrink=0.9, location='bottom')
+   
+   ax_temp.set_xlabel('Truth')
+   ax_temp.set_ylabel('Predictions')
+   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+
+   ax_U.set_xlabel('Truth')
+   ax_U.set_ylabel('Predictions')
+   ax_U.set_title('East-West Velocity (m/s)')
+
+   ax_V.set_xlabel('Truth')
+   ax_V.set_ylabel('Predictions')
+   ax_V.set_title('North-South Velocity (m/s)')
+
+   ax_Eta.set_xlabel('Truth')
+   ax_Eta.set_ylabel('Predictions')
+   ax_Eta.set_title('Sea Surface Height (m)')
+
+   plt.tight_layout()
+
+   plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
+               model_name+'_densescatter_bdy_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
+
+   # Make plots of the ext_bdy_points dataset
+   fig_main = plt.figure(figsize=(9,10))
+   ax_temp  = fig_main.add_subplot(221)
+   ax_U     = fig_main.add_subplot(223)
+   ax_V     = fig_main.add_subplot(224)
+   ax_Eta   = fig_main.add_subplot(222)
+
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:][ext_bdy_masks],
+                             predictions[:,0,:,:,:][ext_bdy_masks],
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,0,:,:,:][ext_bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,0,:,:,:][ext_bdy_masks]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,0,:,:,:][ext_bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,0,:,:,:][ext_bdy_masks]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_U = \
+              ax_U.hist2d(targets[:,1,:,:,:][ext_bdy_masks],
+                          predictions[:,1,:,:,:][ext_bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,1,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,1,:,:,:][ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,1,:,:,:][ext_bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,1,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,1,:,:,:][ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,1,:,:,:][ext_bdy_masks]) )]],
+                          cmap='Reds', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_U, ax=(ax_U), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_V = \
+              ax_V.hist2d(targets[:,2,:,:,:][ext_bdy_masks], 
+                          predictions[:,2,:,:,:][ext_bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,2,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,2,:,:,:][ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,2,:,:,:][ext_bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,2,:,:,:][ext_bdy_masks]), np.nanmin(predictions[:,2,:,:,:][ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][ext_bdy_masks]), np.nanmax(predictions[:,2,:,:,:][ext_bdy_masks]) )]],
+                          cmap='Oranges', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_V, ax=(ax_V), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_Eta = \
+           ax_Eta.hist2d(targets[:,3,0,:,:][ext_bdy_masks[:,0,:,:]], 
+                         predictions[:,3,0,:,:][ext_bdy_masks[:,0,:,:]],
+                         bins=(50, 50),
+                         range=[[min( np.nanmin(targets[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]) ),
+                                 max( np.nanmax(targets[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]) )],
+                                [min( np.nanmin(targets[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]) ),
+                                 max( np.nanmax(targets[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][ext_bdy_masks[:,0,:,:]]) )]],
+                            cmap='Purples', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_Eta, ax=(ax_Eta), shrink=0.9, location='bottom')
+   
+   ax_temp.set_xlabel('Truth')
+   ax_temp.set_ylabel('Predictions')
+   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+
+   ax_U.set_xlabel('Truth')
+   ax_U.set_ylabel('Predictions')
+   ax_U.set_title('East-West Velocity (m/s)')
+
+   ax_V.set_xlabel('Truth')
+   ax_V.set_ylabel('Predictions')
+   ax_V.set_title('North-South Velocity (m/s)')
+
+   ax_Eta.set_xlabel('Truth')
+   ax_Eta.set_ylabel('Predictions')
+   ax_Eta.set_title('Sea Surface Height (m)')
+
+   plt.tight_layout()
+
+   plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
+               model_name+'_densescatter_extbdy_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
+
+   # Make plots of the non-ext_bdy_points dataset
+   fig_main = plt.figure(figsize=(9,10))
+   ax_temp  = fig_main.add_subplot(221)
+   ax_U     = fig_main.add_subplot(223)
+   ax_V     = fig_main.add_subplot(224)
+   ax_Eta   = fig_main.add_subplot(222)
+
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:][~ext_bdy_masks],
+                             predictions[:,0,:,:,:][~ext_bdy_masks],
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,0,:,:,:][~ext_bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,0,:,:,:][~ext_bdy_masks]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,0,:,:,:][~ext_bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,0,:,:,:][~ext_bdy_masks]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_U = \
+              ax_U.hist2d(targets[:,1,:,:,:][~ext_bdy_masks],
+                          predictions[:,1,:,:,:][~ext_bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,1,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,1,:,:,:][~ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,1,:,:,:][~ext_bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,1,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,1,:,:,:][~ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,1,:,:,:][~ext_bdy_masks]) )]],
+                          cmap='Reds', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_U, ax=(ax_U), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_V = \
+              ax_V.hist2d(targets[:,2,:,:,:][~ext_bdy_masks], 
+                          predictions[:,2,:,:,:][~ext_bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,2,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,2,:,:,:][~ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,2,:,:,:][~ext_bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,2,:,:,:][~ext_bdy_masks]), np.nanmin(predictions[:,2,:,:,:][~ext_bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][~ext_bdy_masks]), np.nanmax(predictions[:,2,:,:,:][~ext_bdy_masks]) )]],
+                          cmap='Oranges', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_V, ax=(ax_V), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_Eta = \
+         ax_Eta.hist2d(targets[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]], 
+                       predictions[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]],
+                       bins=(50, 50),
+                       range=[[min( np.nanmin(targets[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]) ),
+                               max( np.nanmax(targets[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]) )],
+                              [min( np.nanmin(targets[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]) ),
+                               max( np.nanmax(targets[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][~ext_bdy_masks[:,0,:,:]]) )]],
+                       cmap='Purples', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_Eta, ax=(ax_Eta), shrink=0.9, location='bottom')
+   
+   ax_temp.set_xlabel('Truth')
+   ax_temp.set_ylabel('Predictions')
+   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+
+   ax_U.set_xlabel('Truth')
+   ax_U.set_ylabel('Predictions')
+   ax_U.set_title('East-West Velocity (m/s)')
+
+   ax_V.set_xlabel('Truth')
+   ax_V.set_ylabel('Predictions')
+   ax_V.set_title('North-South Velocity (m/s)')
+
+   ax_Eta.set_xlabel('Truth')
+   ax_Eta.set_ylabel('Predictions')
+   ax_Eta.set_title('Sea Surface Height (m)')
+
+   plt.tight_layout()
+
+   plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
+               model_name+'_densescatter_nonextbdy_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
+
+   # Make plots of the non-bdy_points dataset
+   fig_main = plt.figure(figsize=(9,10))
+   ax_temp  = fig_main.add_subplot(221)
+   ax_U     = fig_main.add_subplot(223)
+   ax_V     = fig_main.add_subplot(224)
+   ax_Eta   = fig_main.add_subplot(222)
+
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:][~bdy_masks],
+                             predictions[:,0,:,:,:][~bdy_masks],
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:][~bdy_masks]), np.nanmin(predictions[:,0,:,:,:][~bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][~bdy_masks]), np.nanmax(predictions[:,0,:,:,:][~bdy_masks]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:][~bdy_masks]), np.nanmin(predictions[:,0,:,:,:][~bdy_masks]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:][~bdy_masks]), np.nanmax(predictions[:,0,:,:,:][~bdy_masks]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_U = \
+              ax_U.hist2d(targets[:,1,:,:,:][~bdy_masks],
+                          predictions[:,1,:,:,:][~bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,1,:,:,:][~bdy_masks]), np.nanmin(predictions[:,1,:,:,:][~bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][~bdy_masks]), np.nanmax(predictions[:,1,:,:,:][~bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,1,:,:,:][~bdy_masks]), np.nanmin(predictions[:,1,:,:,:][~bdy_masks]) ),
+                                  max( np.nanmax(targets[:,1,:,:,:][~bdy_masks]), np.nanmax(predictions[:,1,:,:,:][~bdy_masks]) )]],
+                          cmap='Reds', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_U, ax=(ax_U), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_V = \
+              ax_V.hist2d(targets[:,2,:,:,:][~bdy_masks], 
+                          predictions[:,2,:,:,:][~bdy_masks],
+                          bins=(50, 50),
+                          range=[[min( np.nanmin(targets[:,2,:,:,:][~bdy_masks]), np.nanmin(predictions[:,2,:,:,:][~bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][~bdy_masks]), np.nanmax(predictions[:,2,:,:,:][~bdy_masks]) )],
+                                 [min( np.nanmin(targets[:,2,:,:,:][~bdy_masks]), np.nanmin(predictions[:,2,:,:,:][~bdy_masks]) ),
+                                  max( np.nanmax(targets[:,2,:,:,:][~bdy_masks]), np.nanmax(predictions[:,2,:,:,:][~bdy_masks]) )]],
+                          cmap='Oranges', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_V, ax=(ax_V), shrink=0.9, location='bottom')
+
+   counts, xedges, yedges, im_Eta = \
+         ax_Eta.hist2d(targets[:,3,0,:,:][~bdy_masks[:,0,:,:]], 
+                       predictions[:,3,0,:,:][~bdy_masks[:,0,:,:]],
+                       bins=(50, 50),
+                       range=[[min( np.nanmin(targets[:,3,0,:,:][~bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][~bdy_masks[:,0,:,:]]) ),
+                               max( np.nanmax(targets[:,3,0,:,:][~bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][~bdy_masks[:,0,:,:]]) )],
+                              [min( np.nanmin(targets[:,3,0,:,:][~bdy_masks[:,0,:,:]]), np.nanmin(predictions[:,3,0,:,:][~bdy_masks[:,0,:,:]]) ),
+                               max( np.nanmax(targets[:,3,0,:,:][~bdy_masks[:,0,:,:]]), np.nanmax(predictions[:,3,0,:,:][~bdy_masks[:,0,:,:]]) )]],
+                       cmap='Purples', norm=colors.LogNorm() )
+   cb=plt.colorbar(im_Eta, ax=(ax_Eta), shrink=0.9, location='bottom')
+   
+   ax_temp.set_xlabel('Truth')
+   ax_temp.set_ylabel('Predictions')
+   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+
+   ax_U.set_xlabel('Truth')
+   ax_U.set_ylabel('Predictions')
+   ax_U.set_title('East-West Velocity (m/s)')
+
+   ax_V.set_xlabel('Truth')
+   ax_V.set_ylabel('Predictions')
+   ax_V.set_title('North-South Velocity (m/s)')
+
+   ax_Eta.set_xlabel('Truth')
+   ax_Eta.set_ylabel('Predictions')
+   ax_Eta.set_title('Sea Surface Height (m)')
+
+   plt.tight_layout()
+
+   plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
+               model_name+'_densescatter_nonbdy_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
 
 def plot_training_output(model_name, start_epoch, total_epochs, plot_freq, losses):
    plot_dir = '../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'
@@ -542,11 +871,29 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
    if land == 'ExcLand':
       da_Y = da_Y[3:101]
   
-   no_samples = 50   # We calculate stats over the entire dataset, but only output a subset of the samples based on no_samples
+   no_samples = 1100   # We calculate stats over the entire dataset, but only output this many samples - covers all of test and val sets.
    z_dim = da_Z.shape[0]
 
-   RF_batch_no = 0
-   count = 0
+   count_samples = count_3d = count_2d = 0
+   bdy_count_3d = bdy_count_2d = nonbdy_count_3d = nonbdy_count_2d = 0
+   extbdy_count_3d = extbdy_count_2d = nonextbdy_count_3d = nonextbdy_count_2d = 0
+   sumsq_er = pers_sumsq_er = 0
+   temp_sumsq_er = u_sumsq_er = v_sumsq_er = eta_sumsq_er = 0
+   pers_temp_sumsq_er = pers_u_sumsq_er = pers_v_sumsq_er = pers_eta_sumsq_er = 0
+   bdy_temp_sumsq_er = bdy_u_sumsq_er = bdy_v_sumsq_er = bdy_eta_sumsq_er = 0
+   pers_bdy_temp_sumsq_er = pers_bdy_u_sumsq_er = pers_bdy_v_sumsq_er = pers_bdy_eta_sumsq_er = 0
+   nonbdy_temp_sumsq_er = nonbdy_u_sumsq_er = nonbdy_v_sumsq_er = nonbdy_eta_sumsq_er = 0
+   pers_nonbdy_temp_sumsq_er = pers_nonbdy_u_sumsq_er = pers_nonbdy_v_sumsq_er = pers_nonbdy_eta_sumsq_er = 0
+   extbdy_temp_sumsq_er = extbdy_u_sumsq_er = extbdy_v_sumsq_er = extbdy_eta_sumsq_er = 0
+   pers_extbdy_temp_sumsq_er = pers_extbdy_u_sumsq_er = pers_extbdy_v_sumsq_er = pers_extbdy_eta_sumsq_er = 0
+   nonextbdy_temp_sumsq_er = nonextbdy_u_sumsq_er = nonextbdy_v_sumsq_er = nonextbdy_eta_sumsq_er = 0
+   pers_nonextbdy_temp_sumsq_er = pers_nonextbdy_u_sumsq_er = pers_nonextbdy_v_sumsq_er = pers_nonextbdy_eta_sumsq_er = 0
+   mean_targets_tend = 0
+   mean_temp_targets_tend = mean_u_targets_tend = mean_v_targets_tend = mean_eta_targets_tend = 0
+   mean_bdy_temp_targets_tend = mean_bdy_u_targets_tend = mean_bdy_v_targets_tend = mean_bdy_eta_targets_tend = 0
+   mean_nonbdy_temp_targets_tend = mean_nonbdy_u_targets_tend = mean_nonbdy_v_targets_tend = mean_nonbdy_eta_targets_tend = 0
+   mean_extbdy_temp_targets_tend = mean_extbdy_u_targets_tend = mean_extbdy_v_targets_tend = mean_extbdy_eta_targets_tend = 0
+   mean_nonextbdy_temp_targets_tend = mean_nonextbdy_u_targets_tend = mean_nonextbdy_v_targets_tend = mean_nonextbdy_eta_targets_tend = 0
 
    if isinstance(h, list):
       for i in range(len(h)):
@@ -558,28 +905,35 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
       if torch.cuda.is_available():
          h = h.cuda()
 
+   RF_batch_no = 0
    with torch.no_grad():
-      for input_batch, target_tend_batch, extrafluxes_batch, masks, out_masks in data_loader:
+      for input_batch, target_tend_batch, extrafluxes_batch, masks, out_masks, bdy_masks, ext_bdy_masks in data_loader:
           target_tend_batch = target_tend_batch.cpu().detach().numpy()
 
+          bdy_masks = bdy_masks[:,:,:,:].bool()
+          ext_bdy_masks = ext_bdy_masks[:,:,:,:].bool()
           # get prediction from the model, given the inputs
           if isinstance(h, list):
-             predicted_tend_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ) 
+             pred_tend_batch = h[0]( torch.cat( (input_batch, masks), dim=channel_dim) ) 
              for i in range(1, len(h)):
-                predicted_tend_batch = predicted_tend_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) )
-             predicted_tend_batch = predicted_tend_batch / len(h)
+                pred_tend_batch = pred_tend_batch + h[i]( torch.cat( (input_batch, masks ), dim=channel_dim) )
+             pred_tend_batch = pred_tend_batch / len(h)
           else:
              if land == 'ExcLand':
-                predicted_tend_batch = h( input_batch ) 
+                pred_tend_batch = h( input_batch ) 
              else:
-                predicted_tend_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
-          predicted_tend_batch = predicted_tend_batch.cpu().detach().numpy() 
+                pred_tend_batch = h( torch.cat( (input_batch, masks), dim=channel_dim) ) 
+          pred_tend_batch = pred_tend_batch.cpu().detach().numpy() 
 
           # Denormalise, if rolllen>1 (loss function calc over multiple steps) only take first step
           target_tend_batch = rr.RF_DeNormalise(target_tend_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
                                                 dimension, norm_method, seed)
-          predicted_tend_batch = rr.RF_DeNormalise(predicted_tend_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
+          pred_tend_batch = rr.RF_DeNormalise(pred_tend_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
                                                    dimension, norm_method, seed)
+
+          # Mask
+          target_tend_batch = np.where( out_masks[0]==1, target_tend_batch, np.nan)
+          pred_tend_batch = np.where( out_masks[0]==1, pred_tend_batch, np.nan)
 
           # Convert from increments to fields for outputting
           input_batch = input_batch#.cpu().detach().numpy()
@@ -589,7 +943,7 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
                                                                    inputs_mean[:3*z_dim+1], inputs_std[:3*z_dim+1], inputs_range[:3*z_dim+1],
                                                                    dimension, norm_method, seed )
              target_fld_batch = input_batch[:,-1,:3*z_dim+1,:,:] + target_tend_batch
-             predicted_fld_batch = input_batch[:,-1,:3*z_dim+1,:,:] + predicted_tend_batch
+             predicted_fld_batch = input_batch[:,-1,:3*z_dim+1,:,:] + pred_tend_batch
           elif dimension == '2d':
              input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*z_dim+1,:,:] = \
                                     rr.RF_DeNormalise( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*z_dim+1,:,:],
@@ -598,7 +952,7 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
              target_fld_batch = ( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*z_dim+1,:,:] 
                                   + target_tend_batch )
              predicted_fld_batch = ( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*z_dim+1,:,:]
-                                     + predicted_tend_batch )
+                                     + pred_tend_batch )
           elif dimension == '3d':
              input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*zdim+1,:,:,:] = \
                                       rr.RF_DeNormalise( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*zdim+1,:,:,:],
@@ -607,31 +961,336 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
              target_fld_batch = ( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*zdim+1,:,:,:]
                                   + target_tend_batch )
              predicted_fld_batch = ( input_batch[:,(histlen-1)*no_phys_in_channels:(histlen-1)*no_phys_in_channels+3*zdim+1,:,:,:]
-                                     + predicted_tend_batch )
+                                     + pred_tend_batch )
 
           # Add summed error of this batch
+          target_tend_batch = np.where( out_masks[0]==1, target_tend_batch, np.nan)
+          pred_tend_batch = np.where( out_masks[0]==1, pred_tend_batch, np.nan)
           if RF_batch_no==0:
-             targets_tend     = target_tend_batch
-             predictions_tend = predicted_tend_batch 
-             targets_fld      = target_fld_batch
-             predictions_fld  = predicted_fld_batch 
-             summed_sq_error = torch.sum( np.square(predicted_fld_batch-target_fld_batch), dim=0 ) 
+             nc_targets_tend      = target_tend_batch
+             nc_predictions_tend  = pred_tend_batch 
+             nc_targets_fld       = target_fld_batch
+             nc_predictions_fld   = predicted_fld_batch 
           else:
-             if count < no_samples:
-                targets_tend     = np.concatenate( ( targets_tend, target_tend_batch ), axis=0)
-                predictions_tend = np.concatenate( ( predictions_tend, predicted_tend_batch ), axis=0)
-                targets_fld      = np.concatenate( ( targets_fld, target_fld_batch ), axis=0)
-                predictions_fld  = np.concatenate( ( predictions_fld, predicted_fld_batch ), axis=0)
-             summed_sq_error = summed_sq_error + torch.sum( np.square(predicted_fld_batch-target_fld_batch), dim=0 )
+             if count_samples < no_samples:
+                nc_targets_tend     = np.concatenate( ( nc_targets_tend, target_tend_batch ), axis=0)
+                nc_predictions_tend = np.concatenate( ( nc_predictions_tend, pred_tend_batch ), axis=0)
+                nc_targets_fld      = np.concatenate( ( nc_targets_fld, target_fld_batch ), axis=0)
+                nc_predictions_fld  = np.concatenate( ( nc_predictions_fld, predicted_fld_batch ), axis=0)
+
+          sumsq_er = sumsq_er + torch.sum( np.square(predicted_fld_batch-target_fld_batch), dim=0 )
+          pers_sumsq_er = pers_sumsq_er + torch.sum( np.square(target_fld_batch), dim=0 )
+
+          temp_sumsq_er = temp_sumsq_er + np.nansum( np.square(pred_tend_batch[:,:z_dim,:,:] - 
+                                                                             target_tend_batch[:,:z_dim,:,:]) ) 
+          u_sumsq_er    = u_sumsq_er + np.nansum( np.square(pred_tend_batch[:,z_dim:2*z_dim,:,:] - 
+                                                                          target_tend_batch[:,z_dim:2*z_dim,:,:]) ) 
+          v_sumsq_er    = v_sumsq_er + np.nansum( np.square(pred_tend_batch[:,2*z_dim:3*z_dim,:,:] - 
+                                                                          target_tend_batch[:,2*z_dim:3*z_dim,:,:]) ) 
+          eta_sumsq_er  = eta_sumsq_er + np.nansum( np.square(pred_tend_batch[:,3*z_dim,:,:] - 
+                                                                            target_tend_batch[:,3*z_dim,:,:]) ) 
+          pers_temp_sumsq_er = pers_temp_sumsq_er + np.nansum( np.square(target_tend_batch[:,:z_dim,:,:]) )
+          pers_u_sumsq_er    = pers_u_sumsq_er + np.nansum( np.square(target_tend_batch[:,z_dim:2*z_dim,:,:]) ) 
+          pers_v_sumsq_er    = pers_v_sumsq_er + np.nansum( np.square(target_tend_batch[:,2*z_dim:3*z_dim,:,:]) ) 
+          pers_eta_sumsq_er  = pers_eta_sumsq_er + np.nansum( np.square(target_tend_batch[:,3*z_dim,:,:]) ) 
+
+          bdy_temp_sumsq_er = bdy_temp_sumsq_er + np.nansum( np.square(pred_tend_batch[:,:z_dim,:,:] - 
+                                                                       target_tend_batch[:,:z_dim,:,:])[bdy_masks] ) 
+          bdy_u_sumsq_er    = bdy_u_sumsq_er + np.nansum( np.square(pred_tend_batch[:,z_dim:2*z_dim,:,:] - 
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[bdy_masks] ) 
+          bdy_v_sumsq_er    = bdy_v_sumsq_er + np.nansum( np.square(pred_tend_batch[:,2*z_dim:3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[bdy_masks] ) 
+          bdy_eta_sumsq_er  = bdy_eta_sumsq_er + np.nansum( np.square(pred_tend_batch[:,3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,3*z_dim,:,:])[bdy_masks[:,0,:,:]] ) 
+          pers_bdy_temp_sumsq_er = pers_bdy_temp_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,:z_dim,:,:])[bdy_masks] ) 
+          pers_bdy_u_sumsq_er    = pers_bdy_u_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[bdy_masks] ) 
+          pers_bdy_v_sumsq_er    = pers_bdy_v_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[bdy_masks] ) 
+          pers_bdy_eta_sumsq_er  = pers_bdy_eta_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,3*z_dim,:,:])[bdy_masks[:,0,:,:]] ) 
+
+          nonbdy_temp_sumsq_er = nonbdy_temp_sumsq_er + np.nansum( np.square(pred_tend_batch[:,:z_dim,:,:] - 
+                                                                       target_tend_batch[:,:z_dim,:,:])[~bdy_masks] ) 
+          nonbdy_u_sumsq_er    = nonbdy_u_sumsq_er + np.nansum( np.square(pred_tend_batch[:,z_dim:2*z_dim,:,:] - 
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[~bdy_masks] ) 
+          nonbdy_v_sumsq_er    = nonbdy_v_sumsq_er + np.nansum( np.square(pred_tend_batch[:,2*z_dim:3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[~bdy_masks] )
+          nonbdy_eta_sumsq_er  = nonbdy_eta_sumsq_er + np.nansum( np.square(pred_tend_batch[:,3*z_dim,:,:] -
+                                                                       target_tend_batch[:,3*z_dim,:,:])[~bdy_masks[:,0,:,:]] )
+          pers_nonbdy_temp_sumsq_er = pers_nonbdy_temp_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,:z_dim,:,:])[~bdy_masks] ) 
+          pers_nonbdy_u_sumsq_er    = pers_nonbdy_u_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[~bdy_masks] ) 
+          pers_nonbdy_v_sumsq_er    = pers_nonbdy_v_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[~bdy_masks] )
+          pers_nonbdy_eta_sumsq_er  = pers_nonbdy_eta_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,3*z_dim,:,:])[~bdy_masks[:,0,:,:]] )
+
+          extbdy_temp_sumsq_er = extbdy_temp_sumsq_er + np.nansum( np.square(pred_tend_batch[:,:z_dim,:,:] - 
+                                                                       target_tend_batch[:,:z_dim,:,:])[ext_bdy_masks] ) 
+          extbdy_u_sumsq_er    = extbdy_u_sumsq_er + np.nansum( np.square(pred_tend_batch[:,z_dim:2*z_dim,:,:] - 
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[ext_bdy_masks] ) 
+          extbdy_v_sumsq_er    = extbdy_v_sumsq_er + np.nansum( np.square(pred_tend_batch[:,2*z_dim:3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[ext_bdy_masks] ) 
+          extbdy_eta_sumsq_er  = extbdy_eta_sumsq_er + np.nansum( np.square(pred_tend_batch[:,3*z_dim,:,:] -
+                                                                       target_tend_batch[:,3*z_dim,:,:])[ext_bdy_masks[:,0,:,:]] ) 
+          pers_extbdy_temp_sumsq_er = pers_extbdy_temp_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,:z_dim,:,:])[ext_bdy_masks] ) 
+          pers_extbdy_u_sumsq_er    = pers_extbdy_u_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[ext_bdy_masks] ) 
+          pers_extbdy_v_sumsq_er    = pers_extbdy_v_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[ext_bdy_masks] ) 
+          pers_extbdy_eta_sumsq_er  = pers_extbdy_eta_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,3*z_dim,:,:])[ext_bdy_masks[:,0,:,:]] ) 
+
+          nonextbdy_temp_sumsq_er = nonextbdy_temp_sumsq_er + np.nansum( np.square(pred_tend_batch[:,:z_dim,:,:] - 
+                                                                       target_tend_batch[:,:z_dim,:,:])[~ext_bdy_masks] ) 
+          nonextbdy_u_sumsq_er    = nonextbdy_u_sumsq_er + np.nansum( np.square(pred_tend_batch[:,z_dim:2*z_dim,:,:] - 
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[~ext_bdy_masks] ) 
+          nonextbdy_v_sumsq_er    = nonextbdy_v_sumsq_er + np.nansum( np.square(pred_tend_batch[:,2*z_dim:3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[~ext_bdy_masks] )
+          nonextbdy_eta_sumsq_er  = nonextbdy_eta_sumsq_er + np.nansum( np.square(pred_tend_batch[:,3*z_dim,:,:] - 
+                                                                       target_tend_batch[:,3*z_dim,:,:])[~ext_bdy_masks[:,0,:,:]] )
+          pers_nonextbdy_temp_sumsq_er = pers_nonextbdy_temp_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,:z_dim,:,:])[~ext_bdy_masks] ) 
+          pers_nonextbdy_u_sumsq_er    = pers_nonextbdy_u_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,z_dim:2*z_dim,:,:])[~ext_bdy_masks] ) 
+          pers_nonextbdy_v_sumsq_er    = pers_nonextbdy_v_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,2*z_dim:3*z_dim,:,:])[~ext_bdy_masks] )
+          pers_nonextbdy_eta_sumsq_er  = pers_nonextbdy_eta_sumsq_er + np.nansum( np.square(
+                                                                       target_tend_batch[:,3*z_dim,:,:])[~ext_bdy_masks[:,0,:,:]] )
+
+          mean_targets_tend             = mean_targets_tend             + np.nansum(target_tend_batch, axis=0)
+          mean_temp_targets_tend        = mean_temp_targets_tend        + np.nansum(target_tend_batch[:,:z_dim,:,:])
+          mean_u_targets_tend           = mean_u_targets_tend           + np.nansum(target_tend_batch[:,z_dim:2*z_dim,:,:])
+          mean_v_targets_tend           = mean_v_targets_tend           + np.nansum(target_tend_batch[:,2*z_dim:3*z_dim,:,:])
+          mean_eta_targets_tend         = mean_eta_targets_tend         + np.nansum(target_tend_batch[:,3*z_dim,:,:])
+          mean_bdy_temp_targets_tend    = mean_bdy_temp_targets_tend    + np.nansum(target_tend_batch[:,:z_dim,:,:][bdy_masks])
+          mean_bdy_u_targets_tend       = mean_bdy_u_targets_tend       + np.nansum(target_tend_batch[:,z_dim:2*z_dim,:,:][bdy_masks])
+          mean_bdy_v_targets_tend       = mean_bdy_v_targets_tend       + np.nansum(target_tend_batch[:,2*z_dim:3*z_dim,:,:][bdy_masks])
+          mean_bdy_eta_targets_tend     = mean_bdy_eta_targets_tend     + np.nansum(target_tend_batch[:,3*z_dim,:,:][bdy_masks[:,0,:,:]])
+          mean_nonbdy_temp_targets_tend = mean_nonbdy_temp_targets_tend + np.nansum(target_tend_batch[:,:z_dim,:,:][~bdy_masks])
+          mean_nonbdy_u_targets_tend    = mean_nonbdy_u_targets_tend    + np.nansum(target_tend_batch[:,z_dim:2*z_dim,:,:][~bdy_masks])
+          mean_nonbdy_v_targets_tend    = mean_nonbdy_v_targets_tend    + np.nansum(target_tend_batch[:,2*z_dim:3*z_dim,:,:][~bdy_masks])
+          mean_nonbdy_eta_targets_tend  = mean_nonbdy_eta_targets_tend  + np.nansum(target_tend_batch[:,3*z_dim,:,:][~bdy_masks[:,0,:,:]])
+          mean_extbdy_temp_targets_tend    = mean_extbdy_temp_targets_tend    + np.nansum(target_tend_batch[:,:z_dim,:,:][ext_bdy_masks])
+          mean_extbdy_u_targets_tend       = mean_extbdy_u_targets_tend       + np.nansum(target_tend_batch[:,z_dim:2*z_dim,:,:][ext_bdy_masks])
+          mean_extbdy_v_targets_tend       = mean_extbdy_v_targets_tend       + np.nansum(target_tend_batch[:,2*z_dim:3*z_dim,:,:][ext_bdy_masks])
+          mean_extbdy_eta_targets_tend     = mean_extbdy_eta_targets_tend     + np.nansum(target_tend_batch[:,3*z_dim,:,:][ext_bdy_masks[:,0,:,:]])
+          mean_nonextbdy_temp_targets_tend = mean_nonextbdy_temp_targets_tend + np.nansum(target_tend_batch[:,:z_dim,:,:][~ext_bdy_masks])
+          mean_nonextbdy_u_targets_tend    = mean_nonextbdy_u_targets_tend    + np.nansum(target_tend_batch[:,z_dim:2*z_dim,:,:][~ext_bdy_masks])
+          mean_nonextbdy_v_targets_tend    = mean_nonextbdy_v_targets_tend    + np.nansum(target_tend_batch[:,2*z_dim:3*z_dim,:,:][~ext_bdy_masks])
+          mean_nonextbdy_eta_targets_tend  = mean_nonextbdy_eta_targets_tend  + np.nansum(target_tend_batch[:,3*z_dim,:,:][~ext_bdy_masks[:,0,:,:]])
+
+          count_3d = count_3d + bdy_masks.shape[0]*bdy_masks.shape[1]*bdy_masks.shape[2]*bdy_masks.shape[3]
+          count_2d = count_2d + bdy_masks.shape[0]*bdy_masks.shape[2]*bdy_masks.shape[3]
+          bdy_count_3d = bdy_count_3d + torch.sum(bdy_masks[:,:,:,:])
+          bdy_count_2d = bdy_count_2d + torch.sum(bdy_masks[:,0,:,:])
+          nonbdy_count_3d = nonbdy_count_3d + torch.sum(~bdy_masks[:,:,:,:])
+          nonbdy_count_2d = nonbdy_count_2d + torch.sum(~bdy_masks[:,0,:,:])
+          extbdy_count_3d = extbdy_count_3d + torch.sum(ext_bdy_masks[:,:,:,:])
+          extbdy_count_2d = extbdy_count_2d + torch.sum(ext_bdy_masks[:,0,:,:])
+          nonextbdy_count_3d = nonextbdy_count_3d + torch.sum(~ext_bdy_masks[:,:,:,:])
+          nonextbdy_count_2d = nonextbdy_count_2d + torch.sum(~ext_bdy_masks[:,0,:,:])
 
           RF_batch_no = RF_batch_no+1
-          count = count + input_batch.shape[0]
+          count_samples = count_samples + input_batch.shape[0]
 
-   no_samples = min(no_samples, count) # Reduce no_samples if this is bigger than total samples!
+   no_samples = min(no_samples, count_samples) # Reduce no_samples if this is bigger than total samples!
   
-   rms_error = np.sqrt( np.divide(summed_sq_error, count) )
+   rms_error = np.sqrt( np.divide(sumsq_er, count_samples) )
+   pers_rms_error = np.sqrt( np.divide(pers_sumsq_er, count_samples) )
+
+   temp_rms_error = np.sqrt( np.divide(temp_sumsq_er, count_3d) )
+   u_rms_error    = np.sqrt( np.divide(u_sumsq_er, count_3d) )
+   v_rms_error    = np.sqrt( np.divide(v_sumsq_er, count_3d) )
+   eta_rms_error  = np.sqrt( np.divide(eta_sumsq_er, count_2d) )
+   pers_temp_rms_error = np.sqrt( np.divide(pers_temp_sumsq_er, count_3d) )
+   pers_u_rms_error    = np.sqrt( np.divide(pers_u_sumsq_er, count_3d) )
+   pers_v_rms_error    = np.sqrt( np.divide(pers_v_sumsq_er, count_3d) )
+   pers_eta_rms_error  = np.sqrt( np.divide(pers_eta_sumsq_er, count_2d) )
+
+   bdy_temp_rms_error = np.sqrt( np.divide(bdy_temp_sumsq_er, bdy_count_3d) )
+   bdy_u_rms_error    = np.sqrt( np.divide(bdy_u_sumsq_er, bdy_count_3d) )
+   bdy_v_rms_error    = np.sqrt( np.divide(bdy_v_sumsq_er, bdy_count_3d) )
+   bdy_eta_rms_error  = np.sqrt( np.divide(bdy_eta_sumsq_er, bdy_count_2d) )
+   pers_bdy_temp_rms_error = np.sqrt( np.divide(pers_bdy_temp_sumsq_er, bdy_count_3d) )
+   pers_bdy_u_rms_error    = np.sqrt( np.divide(pers_bdy_u_sumsq_er, bdy_count_3d) )
+   pers_bdy_v_rms_error    = np.sqrt( np.divide(pers_bdy_v_sumsq_er, bdy_count_3d) )
+   pers_bdy_eta_rms_error  = np.sqrt( np.divide(pers_bdy_eta_sumsq_er, bdy_count_2d) )
+
+   nonbdy_temp_rms_error = np.sqrt( np.divide(nonbdy_temp_sumsq_er, (count_3d-bdy_count_3d)) )
+   nonbdy_u_rms_error    = np.sqrt( np.divide(nonbdy_u_sumsq_er, (count_3d-bdy_count_3d)) )
+   nonbdy_v_rms_error    = np.sqrt( np.divide(nonbdy_v_sumsq_er, (count_3d-bdy_count_3d)) )
+   nonbdy_eta_rms_error  = np.sqrt( np.divide(nonbdy_eta_sumsq_er, (count_2d-bdy_count_2d)) )
+   pers_nonbdy_temp_rms_error = np.sqrt( np.divide(pers_nonbdy_temp_sumsq_er, (count_3d-bdy_count_3d)) )
+   pers_nonbdy_u_rms_error    = np.sqrt( np.divide(pers_nonbdy_u_sumsq_er, (count_3d-bdy_count_3d)) )
+   pers_nonbdy_v_rms_error    = np.sqrt( np.divide(pers_nonbdy_v_sumsq_er, (count_3d-bdy_count_3d)) )
+   pers_nonbdy_eta_rms_error  = np.sqrt( np.divide(pers_nonbdy_eta_sumsq_er, (count_2d-bdy_count_2d)) )
+
+   extbdy_temp_rms_error = np.sqrt( np.divide(extbdy_temp_sumsq_er, extbdy_count_3d) )
+   extbdy_u_rms_error    = np.sqrt( np.divide(extbdy_u_sumsq_er, extbdy_count_3d) )
+   extbdy_v_rms_error    = np.sqrt( np.divide(extbdy_v_sumsq_er, extbdy_count_3d) )
+   extbdy_eta_rms_error  = np.sqrt( np.divide(extbdy_eta_sumsq_er, extbdy_count_2d) )
+   pers_extbdy_temp_rms_error = np.sqrt( np.divide(pers_extbdy_temp_sumsq_er, extbdy_count_3d) )
+   pers_extbdy_u_rms_error    = np.sqrt( np.divide(pers_extbdy_u_sumsq_er, extbdy_count_3d) )
+   pers_extbdy_v_rms_error    = np.sqrt( np.divide(pers_extbdy_v_sumsq_er, extbdy_count_3d) )
+   pers_extbdy_eta_rms_error  = np.sqrt( np.divide(pers_extbdy_eta_sumsq_er, extbdy_count_2d) )
+
+   nonextbdy_temp_rms_error = np.sqrt( np.divide(nonextbdy_temp_sumsq_er, (count_3d-extbdy_count_3d)) )
+   nonextbdy_u_rms_error    = np.sqrt( np.divide(nonextbdy_u_sumsq_er, (count_3d-extbdy_count_3d)) )
+   nonextbdy_v_rms_error    = np.sqrt( np.divide(nonextbdy_v_sumsq_er, (count_3d-extbdy_count_3d)) )
+   nonextbdy_eta_rms_error  = np.sqrt( np.divide(nonextbdy_eta_sumsq_er, (count_2d-extbdy_count_2d)) )
+   pers_nonextbdy_temp_rms_error = np.sqrt( np.divide(pers_nonextbdy_temp_sumsq_er, (count_3d-extbdy_count_3d)) )
+   pers_nonextbdy_u_rms_error    = np.sqrt( np.divide(pers_nonextbdy_u_sumsq_er, (count_3d-extbdy_count_3d)) )
+   pers_nonextbdy_v_rms_error    = np.sqrt( np.divide(pers_nonextbdy_v_sumsq_er, (count_3d-extbdy_count_3d)) )
+   pers_nonextbdy_eta_rms_error  = np.sqrt( np.divide(pers_nonextbdy_eta_sumsq_er, (count_2d-extbdy_count_2d)) )
+
+   mean_targets_tend = np.divide(mean_targets_tend, count_samples)
    # mask rms error (for ease of viewing plots), leave for other variables so we can see what's happening
    rms_error = np.where( out_masks[0]==1, rms_error, np.nan)
+   mean_targets_tend = np.where( out_masks[0]==1, mean_targets_tend, np.nan)
+   mean_temp_targets_tend = mean_temp_targets_tend/count_3d
+   mean_u_targets_tend = mean_u_targets_tend/count_3d
+   mean_v_targets_tend = mean_v_targets_tend/count_3d
+   mean_eta_targets_tend = mean_eta_targets_tend/count_2d
+   mean_bdy_temp_targets_tend = mean_bdy_temp_targets_tend/count_3d
+   mean_bdy_u_targets_tend = mean_bdy_u_targets_tend/count_3d
+   mean_bdy_v_targets_tend = mean_bdy_v_targets_tend/count_3d
+   mean_bdy_eta_targets_tend = mean_bdy_eta_targets_tend/count_2d
+   mean_nonbdy_temp_targets_tend = mean_nonbdy_temp_targets_tend/count_3d
+   mean_nonbdy_u_targets_tend = mean_nonbdy_u_targets_tend/count_3d
+   mean_nonbdy_v_targets_tend = mean_nonbdy_v_targets_tend/count_3d
+   mean_nonbdy_eta_targets_tend = mean_nonbdy_eta_targets_tend/count_2d
+   mean_extbdy_temp_targets_tend = mean_extbdy_temp_targets_tend/count_3d
+   mean_extbdy_u_targets_tend = mean_extbdy_u_targets_tend/count_3d
+   mean_extbdy_v_targets_tend = mean_extbdy_v_targets_tend/count_3d
+   mean_extbdy_eta_targets_tend = mean_extbdy_eta_targets_tend/count_2d
+   mean_nonextbdy_temp_targets_tend = mean_nonextbdy_temp_targets_tend/count_3d
+   mean_nonextbdy_u_targets_tend = mean_nonextbdy_u_targets_tend/count_3d
+   mean_nonextbdy_v_targets_tend = mean_nonextbdy_v_targets_tend/count_3d
+   mean_nonextbdy_eta_targets_tend = mean_nonextbdy_eta_targets_tend/count_2d
+
+   print('')
+   print('count_samples ; '+str(count_samples))
+   print('count_3d ; '+str(count_3d))
+   print('count_2d ; '+str(count_2d))
+   print('bdy_count_3d ; '+str(bdy_count_3d))
+   print('bdy_count_2d ; '+str(bdy_count_2d))
+   print('nonbdy_count_3d ; '+str(nonbdy_count_3d))
+   print('nonbdy_count_2d ; '+str(nonbdy_count_2d))
+   print('extbdy_count_3d ; '+str(extbdy_count_3d))
+   print('extbdy_count_2d ; '+str(extbdy_count_2d))
+   print('nonextbdy_count_3d ; '+str(nonextbdy_count_3d))
+   print('nonextbdy_count_2d ; '+str(nonextbdy_count_2d))
+
+   print('')
+   print('mean_temp_targets_tend ; '+str(mean_temp_targets_tend))
+   print('mean_u_targets_tend ; '+str(mean_u_targets_tend))
+   print('mean_v_targets_tend ; '+str(mean_v_targets_tend))
+   print('mean_eta_targets_tend ; '+str(mean_eta_targets_tend))
+
+   print('')
+   print('temp_rms_error ; '+str(temp_rms_error))
+   print('u_rms_error    ; '+str(u_rms_error))
+   print('v_rms_error    ; '+str(v_rms_error))
+   print('eta_rms_error  ; '+str(eta_rms_error))
+   print('pers_temp_rms_error ; '+str(pers_temp_rms_error))
+   print('pers_u_rms_error    ; '+str(pers_u_rms_error))
+   print('pers_v_rms_error    ; '+str(pers_v_rms_error))
+   print('pers_eta_rms_error  ; '+str(pers_eta_rms_error))
+
+   print('')
+   print('bdy_temp_rms_error ; '+str(bdy_temp_rms_error))
+   print('bdy_u_rms_error    ; '+str(bdy_u_rms_error))
+   print('bdy_v_rms_error    ; '+str(bdy_v_rms_error))
+   print('bdy_eta_rms_error  ; '+str(bdy_eta_rms_error))
+   print('pers_bdy_temp_rms_error ; '+str(pers_bdy_temp_rms_error))
+   print('pers_bdy_u_rms_error    ; '+str(pers_bdy_u_rms_error))
+   print('pers_bdy_v_rms_error    ; '+str(pers_bdy_v_rms_error))
+   print('pers_bdy_eta_rms_error  ; '+str(pers_bdy_eta_rms_error))
+
+   print('')
+   print('nonbdy_temp_rms_error ; '+str(nonbdy_temp_rms_error))
+   print('nonbdy_u_rms_error    ; '+str(nonbdy_u_rms_error))
+   print('nonbdy_v_rms_error    ; '+str(nonbdy_v_rms_error))
+   print('nonbdy_eta_rms_error  ; '+str(nonbdy_eta_rms_error))
+   print('pers_nonbdy_temp_rms_error ; '+str(pers_nonbdy_temp_rms_error))
+   print('pers_nonbdy_u_rms_error    ; '+str(pers_nonbdy_u_rms_error))
+   print('pers_nonbdy_v_rms_error    ; '+str(pers_nonbdy_v_rms_error))
+   print('pers_nonbdy_eta_rms_error  ; '+str(pers_nonbdy_eta_rms_error))
+
+   print('')
+   print('extbdy_temp_rms_error ; '+str(extbdy_temp_rms_error))
+   print('extbdy_u_rms_error    ; '+str(extbdy_u_rms_error))
+   print('extbdy_v_rms_error    ; '+str(extbdy_v_rms_error))
+   print('extbdy_eta_rms_error  ; '+str(extbdy_eta_rms_error))
+   print('pers_extbdy_temp_rms_error ; '+str(pers_extbdy_temp_rms_error))
+   print('pers_extbdy_u_rms_error    ; '+str(pers_extbdy_u_rms_error))
+   print('pers_extbdy_v_rms_error    ; '+str(pers_extbdy_v_rms_error))
+   print('pers_extbdy_eta_rms_error  ; '+str(pers_extbdy_eta_rms_error))
+
+   print('')
+   print('nonextbdy_temp_rms_error ; '+str(nonextbdy_temp_rms_error))
+   print('nonextbdy_u_rms_error    ; '+str(nonextbdy_u_rms_error))
+   print('nonextbdy_v_rms_error    ; '+str(nonextbdy_v_rms_error))
+   print('nonextbdy_eta_rms_error  ; '+str(nonextbdy_eta_rms_error))
+   print('pers_nonextbdy_temp_rms_error ; '+str(pers_nonextbdy_temp_rms_error))
+   print('pers_nonextbdy_u_rms_error    ; '+str(pers_nonextbdy_u_rms_error))
+   print('pers_nonextbdy_v_rms_error    ; '+str(pers_nonextbdy_v_rms_error))
+   print('pers_nonextbdy_eta_rms_error  ; '+str(pers_nonextbdy_eta_rms_error))
+
+   print('')
+   print('normalised_temp_rms_error ; '+str(temp_rms_error/mean_temp_targets_tend))
+   print('normalised_u_rms_error    ; '+str(u_rms_error/mean_u_targets_tend))
+   print('normalised_v_rms_error    ; '+str(v_rms_error/mean_v_targets_tend))
+   print('normalised_eta_rms_error  ; '+str(eta_rms_error/mean_eta_targets_tend))
+   print('pers_normalised_temp_rms_error ; '+str(pers_temp_rms_error/mean_temp_targets_tend))
+   print('pers_normalised_u_rms_error    ; '+str(pers_u_rms_error/mean_u_targets_tend))
+   print('pers_normalised_v_rms_error    ; '+str(pers_v_rms_error/mean_v_targets_tend))
+   print('pers_normalised_eta_rms_error  ; '+str(pers_eta_rms_error/mean_eta_targets_tend))
+
+   print('')
+   print('normalised_bdy_temp_rms_error ; '+str(bdy_temp_rms_error/mean_bdy_temp_targets_tend))
+   print('normalised_bdy_u_rms_error    ; '+str(bdy_u_rms_error/mean_bdy_u_targets_tend))
+   print('normalised_bdy_v_rms_error    ; '+str(bdy_v_rms_error/mean_bdy_v_targets_tend))
+   print('normalised_bdy_eta_rms_error  ; '+str(bdy_eta_rms_error/mean_bdy_eta_targets_tend))
+   print('pers_normalised_bdy_temp_rms_error ; '+str(pers_bdy_temp_rms_error/mean_bdy_temp_targets_tend))
+   print('pers_normalised_bdy_u_rms_error    ; '+str(pers_bdy_u_rms_error/mean_bdy_u_targets_tend))
+   print('pers_normalised_bdy_v_rms_error    ; '+str(pers_bdy_v_rms_error/mean_bdy_v_targets_tend))
+   print('pers_normalised_bdy_eta_rms_error  ; '+str(pers_bdy_eta_rms_error/mean_bdy_eta_targets_tend))
+
+   print('')
+   print('normalised_nonbdy_temp_rms_error ; '+str(nonbdy_temp_rms_error/mean_nonbdy_temp_targets_tend))
+   print('normalised_nonbdy_u_rms_error    ; '+str(nonbdy_u_rms_error/mean_nonbdy_u_targets_tend))
+   print('normalised_nonbdy_v_rms_error    ; '+str(nonbdy_v_rms_error/mean_nonbdy_v_targets_tend))
+   print('normalised_nonbdy_eta_rms_error  ; '+str(nonbdy_eta_rms_error/mean_nonbdy_eta_targets_tend))
+   print('pers_normalised_nonbdy_temp_rms_error ; '+str(pers_nonbdy_temp_rms_error/mean_nonbdy_temp_targets_tend))
+   print('pers_normalised_nonbdy_u_rms_error    ; '+str(pers_nonbdy_u_rms_error/mean_nonbdy_u_targets_tend))
+   print('pers_normalised_nonbdy_v_rms_error    ; '+str(pers_nonbdy_v_rms_error/mean_nonbdy_v_targets_tend))
+   print('pers_normalised_nonbdy_eta_rms_error  ; '+str(pers_nonbdy_eta_rms_error/mean_nonbdy_eta_targets_tend))
+
+   print('')
+   print('normalised_extbdy_temp_rms_error ; '+str(extbdy_temp_rms_error/mean_extbdy_temp_targets_tend))
+   print('normalised_extbdy_u_rms_error    ; '+str(extbdy_u_rms_error/mean_extbdy_u_targets_tend))
+   print('normalised_extbdy_v_rms_error    ; '+str(extbdy_v_rms_error/mean_extbdy_v_targets_tend))
+   print('normalised_extbdy_eta_rms_error  ; '+str(extbdy_eta_rms_error/mean_extbdy_eta_targets_tend))
+   print('pers_normalised_extbdy_temp_rms_error ; '+str(pers_extbdy_temp_rms_error/mean_extbdy_temp_targets_tend))
+   print('pers_normalised_extbdy_u_rms_error    ; '+str(pers_extbdy_u_rms_error/mean_extbdy_u_targets_tend))
+   print('pers_normalised_extbdy_v_rms_error    ; '+str(pers_extbdy_v_rms_error/mean_extbdy_v_targets_tend))
+   print('pers_normalised_extbdy_eta_rms_error  ; '+str(pers_extbdy_eta_rms_error/mean_extbdy_eta_targets_tend))
+
+   print('')
+   print('normalised_nonextbdy_temp_rms_error ; '+str(nonextbdy_temp_rms_error/mean_nonextbdy_temp_targets_tend))
+   print('normalised_nonextbdy_u_rms_error    ; '+str(nonextbdy_u_rms_error/mean_nonextbdy_u_targets_tend))
+   print('normalised_nonextbdy_v_rms_error    ; '+str(nonextbdy_v_rms_error/mean_nonextbdy_v_targets_tend))
+   print('normalised_nonextbdy_eta_rms_error  ; '+str(nonextbdy_eta_rms_error/mean_nonextbdy_eta_targets_tend))
+   print('pers_normalised_nonextbdy_temp_rms_error ; '+str(pers_nonextbdy_temp_rms_error/mean_nonextbdy_temp_targets_tend))
+   print('pers_normalised_nonextbdy_u_rms_error    ; '+str(pers_nonextbdy_u_rms_error/mean_nonextbdy_u_targets_tend))
+   print('pers_normalised_nonextbdy_v_rms_error    ; '+str(pers_nonextbdy_v_rms_error/mean_nonextbdy_v_targets_tend))
+   print('pers_normalised_nonextbdy_eta_rms_error  ; '+str(pers_nonextbdy_eta_rms_error/mean_nonextbdy_eta_targets_tend))
 
    # Set up netcdf files
    nc_filename = '../../../Channel_nn_Outputs/'+model_name+'/STATS/'+model_name+'_'+str(no_epochs)+'epochs_StatsOutput_'+file_append+'.nc'
@@ -693,6 +1352,16 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
    nc_Scaled_V_RMS   = nc_file.createVariable( 'Scaled_V_RMS'  , 'f4', ('Z', 'Y', 'X')      )
    nc_Scaled_EtaRMS  = nc_file.createVariable( 'ScaledEtaRMS'  , 'f4', ('Y', 'X')           )
 
+   nc_MeanObsTempTend = nc_file.createVariable( 'MeanTempTend' , 'f4', ('Z', 'Y', 'X')      )
+   nc_MeanObsUTend    = nc_file.createVariable( 'MeanUTend'    , 'f4', ('Z', 'Y', 'X')      )
+   nc_MeanObsVTend    = nc_file.createVariable( 'MeanVTend'    , 'f4', ('Z', 'Y', 'X')      )
+   nc_MeanObsEtaTend  = nc_file.createVariable( 'MeanEtaTend'  , 'f4', ('Y', 'X')           )
+
+   nc_Normalised_Temp_RMS = nc_file.createVariable( 'NormTempRMS' , 'f4', ('Z', 'Y', 'X')      )
+   nc_Normalised_U_RMS    = nc_file.createVariable( 'NormURMS'    , 'f4', ('Z', 'Y', 'X')      )
+   nc_Normalised_V_RMS    = nc_file.createVariable( 'NormVRMS'    , 'f4', ('Z', 'Y', 'X')      )
+   nc_Normalised_Eta_RMS  = nc_file.createVariable( 'NormEtaRMS'  , 'f4', ('Y', 'X')           )
+
    # Fill variables
    nc_T[:] = np.arange(no_samples)
    nc_Z[:] = da_Z.values
@@ -700,48 +1369,48 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
    nc_X[:] = da_X.values
 
    if dimension=='2d':
-      nc_TrueTemp[:,:,:,:] = targets_fld[:no_samples,0:z_dim,:,:] 
-      nc_TrueU[:,:,:,:]    = targets_fld[:no_samples,1*z_dim:2*z_dim,:,:]
-      nc_TrueV[:,:,:,:]    = targets_fld[:no_samples,2*z_dim:3*z_dim,:,:]
-      nc_TrueEta[:,:,:]    = targets_fld[:no_samples,3*z_dim,:,:]
+      nc_TrueTemp[:,:,:,:] = nc_targets_fld[:no_samples,0:z_dim,:,:] 
+      nc_TrueU[:,:,:,:]    = nc_targets_fld[:no_samples,1*z_dim:2*z_dim,:,:]
+      nc_TrueV[:,:,:,:]    = nc_targets_fld[:no_samples,2*z_dim:3*z_dim,:,:]
+      nc_TrueEta[:,:,:]    = nc_targets_fld[:no_samples,3*z_dim,:,:]
 
-      nc_TrueTempTend[:,:,:,:] = targets_tend[:no_samples,0:z_dim,:,:] 
-      nc_TrueUTend[:,:,:,:]    = targets_tend[:no_samples,1*z_dim:2*z_dim,:,:]
-      nc_TrueVTend[:,:,:,:]    = targets_tend[:no_samples,2*z_dim:3*z_dim,:,:]
-      nc_TrueEtaTend[:,:,:]    = targets_tend[:no_samples,3*z_dim,:,:]
+      nc_TrueTempTend[:,:,:,:] = nc_targets_tend[:no_samples,0:z_dim,:,:] 
+      nc_TrueUTend[:,:,:,:]    = nc_targets_tend[:no_samples,1*z_dim:2*z_dim,:,:]
+      nc_TrueVTend[:,:,:,:]    = nc_targets_tend[:no_samples,2*z_dim:3*z_dim,:,:]
+      nc_TrueEtaTend[:,:,:]    = nc_targets_tend[:no_samples,3*z_dim,:,:]
 
       nc_TempMask[:,:,:] = out_masks[0,0:z_dim,:,:]
       nc_UMask[:,:,:]    = out_masks[0,1*z_dim:2*z_dim,:,:]
       nc_VMask[:,:,:]    = out_masks[0,2*z_dim:3*z_dim,:,:]
       nc_EtaMask[:,:]    = out_masks[0,3*z_dim,:,:]
 
-      nc_PredTemp[:,:,:,:] = predictions_fld[:no_samples,0:z_dim,:,:]
-      nc_PredU[:,:,:,:]    = predictions_fld[:no_samples,1*z_dim:2*z_dim,:,:]
-      nc_PredV[:,:,:,:]    = predictions_fld[:no_samples,2*z_dim:3*z_dim,:,:]
-      nc_PredEta[:,:,:]    = predictions_fld[:no_samples,3*z_dim,:,:]
+      nc_PredTemp[:,:,:,:] = nc_predictions_fld[:no_samples,0:z_dim,:,:]
+      nc_PredU[:,:,:,:]    = nc_predictions_fld[:no_samples,1*z_dim:2*z_dim,:,:]
+      nc_PredV[:,:,:,:]    = nc_predictions_fld[:no_samples,2*z_dim:3*z_dim,:,:]
+      nc_PredEta[:,:,:]    = nc_predictions_fld[:no_samples,3*z_dim,:,:]
  
-      nc_PredTempTend[:,:,:,:] = predictions_tend[:no_samples,0:z_dim,:,:]
-      nc_PredUTend[:,:,:,:]    = predictions_tend[:no_samples,1*z_dim:2*z_dim,:,:]
-      nc_PredVTend[:,:,:,:]    = predictions_tend[:no_samples,2*z_dim:3*z_dim,:,:]
-      nc_PredEtaTend[:,:,:]    = predictions_tend[:no_samples,3*z_dim,:,:]
+      nc_PredTempTend[:,:,:,:] = nc_predictions_tend[:no_samples,0:z_dim,:,:]
+      nc_PredUTend[:,:,:,:]    = nc_predictions_tend[:no_samples,1*z_dim:2*z_dim,:,:]
+      nc_PredVTend[:,:,:,:]    = nc_predictions_tend[:no_samples,2*z_dim:3*z_dim,:,:]
+      nc_PredEtaTend[:,:,:]    = nc_predictions_tend[:no_samples,3*z_dim,:,:]
  
-      nc_TempErrors[:,:,:,:] = ( predictions_fld[:no_samples,0:z_dim,:,:]
-                                 - targets_fld[:no_samples,0:z_dim,:,:] )
-      nc_UErrors[:,:,:,:]    = ( predictions_fld[:no_samples,1*z_dim:2*z_dim,:,:]
-                                 - targets_fld[:no_samples,1*z_dim:2*z_dim,:,:] )
-      nc_VErrors[:,:,:,:]    = ( predictions_fld[:no_samples,2*z_dim:3*z_dim,:,:] 
-                                 - targets_fld[:no_samples,2*z_dim:3*z_dim,:,:] )
-      nc_EtaErrors[:,:,:]    = ( predictions_fld[:no_samples,3*z_dim,:,:] 
-                                 - targets_fld[:no_samples,3*z_dim,:,:] )
+      nc_TempErrors[:,:,:,:] = ( nc_predictions_fld[:no_samples,0:z_dim,:,:]
+                                 - nc_targets_fld[:no_samples,0:z_dim,:,:] )
+      nc_UErrors[:,:,:,:]    = ( nc_predictions_fld[:no_samples,1*z_dim:2*z_dim,:,:]
+                                 - nc_targets_fld[:no_samples,1*z_dim:2*z_dim,:,:] )
+      nc_VErrors[:,:,:,:]    = ( nc_predictions_fld[:no_samples,2*z_dim:3*z_dim,:,:] 
+                                 - nc_targets_fld[:no_samples,2*z_dim:3*z_dim,:,:] )
+      nc_EtaErrors[:,:,:]    = ( nc_predictions_fld[:no_samples,3*z_dim,:,:] 
+                                 - nc_targets_fld[:no_samples,3*z_dim,:,:] )
 
-      nc_TempErrorsTend[:,:,:,:] = ( predictions_tend[:no_samples,0:z_dim,:,:]
-                                     - targets_tend[:no_samples,0:z_dim,:,:] )
-      nc_UErrorsTend[:,:,:,:]    = ( predictions_tend[:no_samples,1*z_dim:2*z_dim,:,:]
-                                     - targets_tend[:no_samples,1*z_dim:2*z_dim,:,:] )
-      nc_VErrorsTend[:,:,:,:]    = ( predictions_tend[:no_samples,2*z_dim:3*z_dim,:,:] 
-                                     - targets_tend[:no_samples,2*z_dim:3*z_dim,:,:] )
-      nc_EtaErrorsTend[:,:,:]    = ( predictions_tend[:no_samples,3*z_dim,:,:] 
-                                     - targets_tend[:no_samples,3*z_dim,:,:] )
+      nc_TempErrorsTend[:,:,:,:] = ( nc_predictions_tend[:no_samples,0:z_dim,:,:]
+                                     - nc_targets_tend[:no_samples,0:z_dim,:,:] )
+      nc_UErrorsTend[:,:,:,:]    = ( nc_predictions_tend[:no_samples,1*z_dim:2*z_dim,:,:]
+                                     - nc_targets_tend[:no_samples,1*z_dim:2*z_dim,:,:] )
+      nc_VErrorsTend[:,:,:,:]    = ( nc_predictions_tend[:no_samples,2*z_dim:3*z_dim,:,:] 
+                                     - nc_targets_tend[:no_samples,2*z_dim:3*z_dim,:,:] )
+      nc_EtaErrorsTend[:,:,:]    = ( nc_predictions_tend[:no_samples,3*z_dim,:,:] 
+                                     - nc_targets_tend[:no_samples,3*z_dim,:,:] )
 
       nc_TempRMS[:,:,:] = rms_error[0:z_dim,:,:]
       nc_U_RMS[:,:,:]   = rms_error[1*z_dim:2*z_dim,:,:] 
@@ -757,40 +1426,50 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
       nc_Scaled_V_RMS[:,:,:]   = rms_error[2*z_dim:3*z_dim,:,:] / MITgcm_StdVVel
       nc_Scaled_EtaRMS[:,:]    = rms_error[3*z_dim,:,:] / MITgcm_stats_ds['StdEta'].values
 
-   elif dimension=='3d':
-      nc_TrueTemp[:,:,:,:] = targets_fld[:no_samples,0,:,:,:] 
-      nc_TrueU[:,:,:,:]    = targets_fld[:no_samples,1,:,:,:]
-      nc_TrueV[:,:,:,:]    = targets_fld[:no_samples,2,:,:,:]
-      nc_TrueEta[:,:,:]    = targets_fld[:no_samples,3,0,:,:]
+      nc_MeanObsTempTend[:,:,:] = mean_targets_tend[0:z_dim,:,:]
+      nc_MeanObsUTend[:,:,:]    = mean_targets_tend[1*z_dim:2*z_dim,:,:]
+      nc_MeanObsVTend[:,:,:]    = mean_targets_tend[2*z_dim:3*z_dim,:,:]
+      nc_MeanObsEtaTend[:,:]    = mean_targets_tend[3*z_dim,:,:]
 
-      nc_TrueTempTend[:,:,:,:] = targets_tend[:no_samples,0,:,:,:] 
-      nc_TrueUTend[:,:,:,:]    = targets_tend[:no_samples,1,:,:,:]
-      nc_TrueVTend[:,:,:,:]    = targets_tend[:no_samples,2,:,:,:]
-      nc_TrueEtaTend[:,:,:]    = targets_tend[:no_samples,3,0,:,:]
+      nc_Normalised_Temp_RMS[:,:,:] = rms_error[0:z_dim,:,:] / np.nanmean(mean_targets_tend[0:z_dim,:,:])
+      nc_Normalised_U_RMS[:,:,:]    = rms_error[1*z_dim:2*z_dim,:,:] / np.nanmean(mean_targets_tend[1*z_dim:2*z_dim,:,:])
+      nc_Normalised_V_RMS[:,:,:]    = rms_error[2*z_dim:3*z_dim,:,:] / np.nanmean(mean_targets_tend[2*z_dim:3*z_dim,:,:])
+      nc_Normalised_Eta_RMS[:,:]    = rms_error[3*z_dim,:,:] / np.nanmean(mean_targets_tend[3*z_dim,:,:])
+
+   elif dimension=='3d':
+      nc_TrueTemp[:,:,:,:] = nc_targets_fld[:no_samples,0,:,:,:] 
+      nc_TrueU[:,:,:,:]    = nc_targets_fld[:no_samples,1,:,:,:]
+      nc_TrueV[:,:,:,:]    = nc_targets_fld[:no_samples,2,:,:,:]
+      nc_TrueEta[:,:,:]    = nc_targets_fld[:no_samples,3,0,:,:]
+
+      nc_TrueTempTend[:,:,:,:] = nc_targets_tend[:no_samples,0,:,:,:] 
+      nc_TrueUTend[:,:,:,:]    = nc_targets_tend[:no_samples,1,:,:,:]
+      nc_TrueVTend[:,:,:,:]    = nc_targets_tend[:no_samples,2,:,:,:]
+      nc_TrueEtaTend[:,:,:]    = nc_targets_tend[:no_samples,3,0,:,:]
 
       nc_TempMask[:,:,:] = out_masks[0,0,:,:,:]
       nc_UMask[:,:,:]    = out_masks[0,1,:,:,:]
       nc_VMask[:,:,:]    = out_masks[0,2,:,:,:]
       nc_EtaMask[:,:]    = out_masks[0,3,0,:,:]
 
-      nc_PredTemp[:,:,:,:] = predictions_fld[:no_samples,0,:,:,:]
-      nc_PredU[:,:,:,:]    = predictions_fld[:no_samples,1,:,:,:]
-      nc_PredV[:,:,:,:]    = predictions_fld[:no_samples,2,:,:,:]
-      nc_PredEta[:,:,:]    = predictions_fld[:no_samples,3,0,:,:]
+      nc_PredTemp[:,:,:,:] = nc_predictions_fld[:no_samples,0,:,:,:]
+      nc_PredU[:,:,:,:]    = nc_predictions_fld[:no_samples,1,:,:,:]
+      nc_PredV[:,:,:,:]    = nc_predictions_fld[:no_samples,2,:,:,:]
+      nc_PredEta[:,:,:]    = nc_predictions_fld[:no_samples,3,0,:,:]
  
-      nc_PredTempTend[:,:,:,:] = predictions_tend[:no_samples,0,:,:,:]
-      nc_PredUTend[:,:,:,:]    = predictions_tend[:no_samples,1,:,:,:]
-      nc_PredVTend[:,:,:,:]    = predictions_tend[:no_samples,2,:,:,:]
-      nc_PredEtaTend[:,:,:]    = predictions_tend[:no_samples,3,0,:,:]
+      nc_PredTempTend[:,:,:,:] = nc_predictions_tend[:no_samples,0,:,:,:]
+      nc_PredUTend[:,:,:,:]    = nc_predictions_tend[:no_samples,1,:,:,:]
+      nc_PredVTend[:,:,:,:]    = nc_predictions_tend[:no_samples,2,:,:,:]
+      nc_PredEtaTend[:,:,:]    = nc_predictions_tend[:no_samples,3,0,:,:]
  
-      nc_TempErrors[:,:,:,:] = ( predictions_fld[:no_samples,0,:,:,:]
-                                 - targets_fld[:no_samples,0,:,:,:] )
-      nc_UErrors[:,:,:,:]    = ( predictions_fld[:no_samples,1,:,:,:]
-                                 - targets_fld[:no_samples,1,:,:,:] )
-      nc_VErrors[:,:,:,:]    = ( predictions_fld[:no_samples,2,:,:,:] 
-                                 - targets_fld[:no_samples,2,:,:,:] )
-      nc_EtaErrors[:,:,:]    = ( predictions_fld[:no_samples,3,0,:,:] 
-                                 - targets_fld[:no_samples,3,0,:,:] )
+      nc_TempErrors[:,:,:,:] = ( nc_predictions_fld[:no_samples,0,:,:,:]
+                                 - nc_targets_fld[:no_samples,0,:,:,:] )
+      nc_UErrors[:,:,:,:]    = ( nc_predictions_fld[:no_samples,1,:,:,:]
+                                 - nc_targets_fld[:no_samples,1,:,:,:] )
+      nc_VErrors[:,:,:,:]    = ( nc_predictions_fld[:no_samples,2,:,:,:] 
+                                 - nc_targets_fld[:no_samples,2,:,:,:] )
+      nc_EtaErrors[:,:,:]    = ( nc_predictions_fld[:no_samples,3,0,:,:] 
+                                 - nc_targets_fld[:no_samples,3,0,:,:] )
 
       nc_TempRMS[:,:,:] = rms_error[0,:,:,:]
       nc_U_RMS[:,:,:]   = rms_error[1,:,:,:] 
@@ -830,7 +1509,7 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
                                    ReadMeanStd(mean_std_file, dimension, no_phys_in_channels, no_out_channels, da_Z.shape[0], seed)
    
    # Read in data from MITgcm dataset (take 0th entry, as others are target, masks etc) and save as first entry in both arrays
-   input_sample, target_sample, extra_fluxes_sample, masks, out_masks = Iterate_Dataset.__getitem__(start)
+   input_sample, target_sample, extra_fluxes_sample, masks, out_masks, bdy_masks, ext_bdy_masks = Iterate_Dataset.__getitem__(start)
 
    # Give extra dimension at front (number of samples - here 1)
    input_sample = input_sample.unsqueeze(0).float()
