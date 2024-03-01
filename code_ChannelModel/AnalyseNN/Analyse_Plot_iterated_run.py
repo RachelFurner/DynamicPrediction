@@ -136,8 +136,8 @@ for model in dir_names:
 
    if count==0:
       Temp_dict['MITgcm Temperature'] = masked_True_Temp[:ts_end]
-      UVel_dict['MITgcm East-West Velocity'] = masked_True_U[:ts_end]
-      VVel_dict['MITgcm North-South Velocity'] = masked_True_V[:ts_end]
+      UVel_dict['MITgcm Eastward Velocity'] = masked_True_U[:ts_end]
+      VVel_dict['MITgcm Northward Velocity'] = masked_True_V[:ts_end]
       Eta_dict['MITgcm Sea Surface Height'] = masked_True_Eta[:ts_end]
       colors.append('black')
       alphas.append(1)
@@ -159,7 +159,7 @@ for model in dir_names:
    RMS_UVel_dict[labels[count]] = UVel_RMS
    RMS_VVel_dict[labels[count]] = VVel_RMS
    RMS_Eta_dict[labels[count]] = Eta_RMS
-   RMS_dict = { 'Temperature RMS':Temp_RMS, 'East-West Velocity RMS':UVel_RMS, 'North-South Velocity RMS':VVel_RMS, 'Sea Surface Height RMS':Eta_RMS }
+   RMS_dict = { 'Temperature RMS':Temp_RMS, 'Eastward Velocity RMS':UVel_RMS, 'Northward Velocity RMS':VVel_RMS, 'Sea Surface Height RMS':Eta_RMS }
 
    if print_cc or plot_cc_timeseries:
       CC_Temp_dict[labels[count]] = np.zeros(ts_end)
@@ -193,8 +193,8 @@ for model in dir_names:
                      bbox_inches = 'tight', pad_inches = 0.1)
          plt.close()
          
-         fig = ChnPlt.plot_depth_fld_diff(masked_True_U[time,level,:,:], 'MITgcm East-West Velocity',
-                                          masked_Pred_U[time,level,:,:], 'Predicted East-West Velocity',
+         fig = ChnPlt.plot_depth_fld_diff(masked_True_U[time,level,:,:], 'MITgcm Eastward Velocity',
+                                          masked_Pred_U[time,level,:,:], 'Predicted Eastward Velocity',
                                           level, da_X.values, da_Y.values, da_Z.values,
                                           flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
                                           #flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-1. , diff_max_value=1. , extend='both' )
@@ -202,8 +202,8 @@ for model in dir_names:
                      bbox_inches = 'tight', pad_inches = 0.1)
          plt.close()
          
-         fig = ChnPlt.plot_depth_fld_diff(masked_True_V[time,level,:,:], 'MITgcm North-South Velocity',
-                                          masked_Pred_V[time,level,:,:], 'Predicted North-South Velocity',
+         fig = ChnPlt.plot_depth_fld_diff(masked_True_V[time,level,:,:], 'MITgcm Northward Velocity',
+                                          masked_Pred_V[time,level,:,:], 'Predicted Northward Velocity',
                                           level, da_X.values, da_Y.values, da_Z.values, title=None,
                                           flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-0.5, diff_max_value=0.5, extend='both' )
                                           #flds_min_value=-1.2, flds_max_value=1.2, diff_min_value=-1.0, diff_max_value=1.0, extend='both' )
@@ -280,7 +280,7 @@ if plot_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( point, ts_end, UVel_dict, y_label='East-West\nVelocity $(m s^{-1})$', colors=colors, alphas=alphas ) 
+   fig = ChnPlt.plt_timeseries( point, ts_end, UVel_dict, y_label='Eastward\nVelocity $(m s^{-1})$', colors=colors, alphas=alphas ) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
@@ -288,7 +288,7 @@ if plot_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/U_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( point, ts_end, VVel_dict, y_label='North-South\nVelocity $(m s^{-1})$', colors=colors, alphas=alphas ) 
+   fig = ChnPlt.plt_timeseries( point, ts_end, VVel_dict, y_label='Northward\nVelocity $(m s^{-1})$', colors=colors, alphas=alphas ) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_end)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
@@ -317,7 +317,7 @@ if plot_rms_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_RMS_timeseries_'+str(ts_end)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( [], ts_end, RMS_UVel_dict, y_label='East-West Velocity\nRMS error $(m s^{-1})$',
+   fig = ChnPlt.plt_timeseries( [], ts_end, RMS_UVel_dict, y_label='Eastward Velocity\nRMS error $(m s^{-1})$',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[0,0.3] ) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_RMS_timeseries_'+str(ts_end)+'.png',
@@ -326,7 +326,7 @@ if plot_rms_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/U_RMS_timeseries_'+str(ts_end)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( [], ts_end, RMS_VVel_dict, y_label='North-South Velocity\nRMS error $(m s^{-1})$',
+   fig = ChnPlt.plt_timeseries( [], ts_end, RMS_VVel_dict, y_label='Northward Velocity\nRMS error $(m s^{-1})$',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[0,0.3]) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_RMS_timeseries_'+str(ts_end)+'.png',
@@ -357,7 +357,7 @@ if plot_cc_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_CC_timeseries_'+str(ts_end)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( [], ts_end, CC_UVel_dict, y_label='East-West Velocity\nCC error $(m s^{-1})$',
+   fig = ChnPlt.plt_timeseries( [], ts_end, CC_UVel_dict, y_label='Eastward Velocity\nCC error $(m s^{-1})$',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[-0.1,1.1] ) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_U_CC_timeseries_'+str(ts_end)+'.png',
@@ -366,7 +366,7 @@ if plot_cc_timeseries:
       plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/U_CC_timeseries_'+str(ts_end)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
 
-   fig = ChnPlt.plt_timeseries( [], ts_end, CC_VVel_dict, y_label='North-South Velocity\nCC error $(m s^{-1})$',
+   fig = ChnPlt.plt_timeseries( [], ts_end, CC_VVel_dict, y_label='Northward Velocity\nCC error $(m s^{-1})$',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[-0.1,1.1]) 
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_V_CC_timeseries_'+str(ts_end)+'.png',

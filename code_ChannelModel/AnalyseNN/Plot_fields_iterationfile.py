@@ -30,7 +30,7 @@ dir_name = 'Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
 #dir_name = 'MultiModel_Spits12hrly_UNet2dtransp_histlen1_rolllen1'
 epochs = '200'
 iteration_len = 180 
-animation_end = 30   
+animation_end = 45   
 model_name = dir_name+'_'+epochs+'epochs'
 filename = model_name+'_simple_smth0stps0'
 
@@ -84,14 +84,14 @@ for time in range(0,animation_end):
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_Pred_U[time,level,:,:], 'East-West Velocity',
+   fig = ChnPlt.plot_depth_fld(masked_Pred_U[time,level,:,:], 'Eastward Velocity',
                                level, da_X.values, da_Y.values, da_Z.values,
                                min_value=-1.2, max_value=1.2)
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+filename+'_U_level'+str(level)+'_time'+f'{time:03}'+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_Pred_V[time,level,:,:], 'North-South Velocity',
+   fig = ChnPlt.plot_depth_fld(masked_Pred_V[time,level,:,:], 'Northward Velocity',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
                                min_value=-1.2, max_value=1.2)
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+filename+'_V_level'+str(level)+'_time'+f'{time:03}'+'.png',
@@ -117,7 +117,7 @@ for time in range(0,animation_end):
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_True_U[time,level,:,:], 'East-West Velocity',
+   fig = ChnPlt.plot_depth_fld(masked_True_U[time,level,:,:], 'Eastward Velocity',
                                level, da_X.values, da_Y.values, da_Z.values,
                                min_value=-1.2, max_value=1.2, extend='both')
                                #min_value=-0.3, max_value=0.3, extend='both')
@@ -125,7 +125,7 @@ for time in range(0,animation_end):
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
-   fig = ChnPlt.plot_depth_fld(masked_True_V[time,level,:,:], 'North-South Velocity',
+   fig = ChnPlt.plot_depth_fld(masked_True_V[time,level,:,:], 'Northward Velocity',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
                                min_value=-1.2, max_value=1.2, extend = 'both')
                                #min_value=-0.3, max_value=0.3, extend = 'both')
