@@ -6,8 +6,8 @@ dir=../../../Channel_nn_Outputs/${base_name}/STATS/EXAMPLE_FIELDS
 #for level in {0..37}
 for level in 2
 do
-   for epochs in 10 50 200
-   #for epochs in 200
+   #for epochs in 10 50 200
+   for epochs in 200
    do 
       model_name=${base_name}_${epochs}epochs
 

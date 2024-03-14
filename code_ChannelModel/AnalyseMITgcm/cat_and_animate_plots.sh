@@ -3,7 +3,7 @@
 # of fields themselves for a specific time point
 
 dir=/data/hpcdata/users/racfur/DynamicPrediction/MITGCM_Analysis_Channel/12hrs/PLOTS
-timeslice = 32405
+timeslice=32405
 
 for level in {0..37}
 do

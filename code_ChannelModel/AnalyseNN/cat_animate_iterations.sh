@@ -3,11 +3,11 @@ model_name='Spits12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
 epochs='200'
 iteration_method='simple'
 smoothing_level='0'
-smoothing_steps='0'
+smoothing_s.png='0'
 dir='/data/hpcdata/users/racfur/DynamicPrediction/Channel_nn_Outputs/'$model_name'/ITERATED_FORECAST'
-plot_name=${model_name}_${epochs}epochs_${iteration_method}_smth${smoothing_level}stps${smoothing_steps}
+plot_name=${model_name}_${epochs}epochs_${iteration_method}_smth${smoothing_level}stps${smoothing_s.png}
 #plot_name=truefields_${model_name}_${epochs}epochs
-#plot_name=predfields_${model_name}_${epochs}epochs_${iteration_method}_smth${smoothing_level}stps${smoothing_steps}
+#plot_name=predfields_${model_name}_${epochs}epochs_${iteration_method}_smth${smoothing_level}stps${smoothing_s.png}
 
 for time in {000..119}
 do

@@ -51,7 +51,7 @@ iteration_methods = ['simple']
 smooth_levels = ['0']
 
 iteration_len = 180 
-smooth_steps = '0'
+smooth_s.png = '0'
 
 my_colors = ['red', 'cyan', 'orange', 'blue', 'green', 'purple']
 my_alphas = [ 1., 1., 1., 1., 1., 1., 1. ]
@@ -100,7 +100,7 @@ print('reading in NN iteration data')
 #-------------------------------------
 count=0
 for model in dir_names:
-   model_name = model+'_'+epochs[count]+'epochs_'+iteration_methods[count]+'_smth'+smooth_levels[count]+'stps'+smooth_steps
+   model_name = model+'_'+epochs[count]+'epochs_'+iteration_methods[count]+'_smth'+smooth_levels[count]+'stps'+smooth_s.png
    rootdir = '../../../Channel_nn_Outputs/'+model
    
    iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forlen'+str(iteration_len)+'.nc'

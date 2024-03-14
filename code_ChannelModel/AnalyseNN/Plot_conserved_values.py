@@ -30,10 +30,10 @@ epochs = '200'
 for_len = '180'
 iteration_method = 'simple'
 smoothing_level = '0'
-smooth_steps = '0'
+smooth_s.png = '0'
 #-----------
 
-model_name = model_dir_name+'_'+epochs+'epochs_'+iteration_method+'_smth'+smoothing_level+'stps'+smooth_steps
+model_name = model_dir_name+'_'+epochs+'epochs_'+iteration_method+'_smth'+smoothing_level+'stps'+smooth_s.png
 
 rootdir = '../../../Channel_nn_Outputs/'+model_dir_name
 

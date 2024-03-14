@@ -6,8 +6,8 @@
 # can be catted into sets of variables for each time stamp, and animated to give a video of temporal evolution
 # using the cat_animate_iterations.sh script.
 # This script differs in purpose to Analyse_Plot_iterated_run.py. This script plots only the predicted fields
-# and then the true fields, as individual png files, whereas Analyse_Plot_iterated_run.py plots the predicted, 
-# true and difference fields together in a single png, as well as timeseries and calculates some stats
+# and then the true fields, as individual.png files, whereas Analyse_Plot_iterated_run.py plots the predicted, 
+# true and difference fields together in a single.png, as well as timeseries and calculates some stats
 
 print('import packages')
 import sys

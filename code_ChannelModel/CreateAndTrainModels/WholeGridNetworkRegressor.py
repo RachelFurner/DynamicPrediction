@@ -212,14 +212,14 @@ if __name__ == "__main__":
        if args.land == 'ExcLand':
           no_model_in_channels = no_phys_in_channels           # Phys_in channels, no masks for excland version
        else:
-          no_model_in_channels = no_phys_in_channels + z_dim   # Phys_in channels plus masks
+          no_model_in_channels = no_phys_in_channels + 3*z_dim   # Phys_in channels plus masks
        no_out_channels = 3*z_dim + 1                           # Temp, U, V through depth, plus Eta
     elif args.dim == '2d':
        no_phys_in_channels = 3*z_dim + 3                       # Temp, U, V through depth, plus Eta, gTforc and taux
        if args.land == 'ExcLand':
           no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for excland version
        else:
-          no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
+          no_model_in_channels = args.histlen * no_phys_in_channels + 3*z_dim # Phys_in channels for each past time, plus masks
        no_out_channels = 3*z_dim+1                             # Eta, plus Temp, U, V through depth (predict 1 step ahead, even for rolout loss)
     elif args.dim == '3d':
        no_phys_in_channels = 6                                 # Temp, U, V, Eta, gTforc and taux
@@ -331,19 +331,17 @@ if __name__ == "__main__":
     #                                           num_workers=args.numworkers, pin_memory=True )
     if args.assess:
     
-       OutputStats(model_name, args.modelstyle, MITgcm_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
-                   args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                   MITgcm_stats_filename, args.seed)
-    
        if not args.test: 
-
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, test_loader, h, total_epochs, y_dim_used, args.dim, 
+                      args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
+                      MITgcm_stats_filename, args.seed)
           OutputStats(model_name, args.modelstyle, MITgcm_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'validation', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
                       MITgcm_stats_filename, args.seed)
    
-          OutputStats(model_name, args.modelstyle, MITgcm_filename, test_loader, h, total_epochs, y_dim_used, args.dim, 
-                      args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                      MITgcm_stats_filename, args.seed)
+       OutputStats(model_name, args.modelstyle, MITgcm_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
+                   args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
+                   MITgcm_stats_filename, args.seed)
     
     #----------------------------
     # Plot density scatter plots

@@ -35,14 +35,16 @@ class ReadProcData_Dataset(data.Dataset):
        self.da_inputs   = self.ds['inputs']
        self.da_targets  = self.ds['targets']
        self.da_extrafluxes = self.ds['extra_fluxes']
-       self.masks       = self.ds['masks'].values
+       self.Tmask       = self.ds['Tmask'].values
+       self.Umask       = self.ds['Umask'].values
+       self.Vmask       = self.ds['Vmask'].values
        self.out_masks   = self.ds['out_masks'].values
        self.bdy_masks   = self.ds['bdy_masks'].values
-       self.ext_bdy_masks   = self.ds['ext_bdy_masks'].values
-       self.masks       = torch.from_numpy(self.masks)
+       self.Tmask       = torch.from_numpy(self.Tmask)
+       self.Umask       = torch.from_numpy(self.Umask)
+       self.Vmask       = torch.from_numpy(self.Vmask)
        self.out_masks   = torch.from_numpy(self.out_masks)
        self.bdy_masks   = torch.from_numpy(self.bdy_masks)
-       self.ext_bdy_masks   = torch.from_numpy(self.ext_bdy_masks)
        self.seed        = seed
 
    def __len__(self):
@@ -68,7 +70,8 @@ class ReadProcData_Dataset(data.Dataset):
        sample_target = torch.from_numpy(sample_target)
        sample_extrafluxes = torch.from_numpy(sample_extrafluxes)
 
-       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks, self.bdy_masks, self.ext_bdy_masks
+       return sample_input, sample_target, sample_extrafluxes, self.Tmask, self.Umask, self.Vmask,       \
+              self.out_masks, self.bdy_masks
    
 
 # Create Dataset, which inherits the data.Dataset class
@@ -121,6 +124,8 @@ class MITgcm_Dataset(data.Dataset):
        self.no_out_channels = no_out_channels
 
        HfacC = self.grid_ds['HFacC'].values
+       HfacW = self.grid_ds['HFacW'].values
+       HfacS = self.grid_ds['HFacS'].values
 
        if self.land == 'ExcLand':
           # Set dims based on T grid
@@ -128,71 +133,62 @@ class MITgcm_Dataset(data.Dataset):
           self.y_dim = (self.ds['THETA'].isel(T=0).values[:,3:101,:]).shape[1] 
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,3:101,:]).shape[2]
           # set mask, initialise as ocean (ones) everywhere
-          self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Tmask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Umask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Vmask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
        else:
           # Set dims based on T grid
           self.z_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[0]
           self.y_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[1]
           self.x_dim = (self.ds['THETA'].isel(T=0).values[:,:,:]).shape[2]
-          # set mask, initialise as ocean (ones) everywhere
-          self.masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-          self.masks[:,:,:] = np.where( HfacC > 0., 1, 0 )
+          # set masks, initialise as ocean (ones) everywhere
+          self.Tmask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Tmask[:,:,:] = np.where( HfacC > 0., 1, 0 )
+          self.Umask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Umask[:,:,:] = np.where( HfacW[:,:,:-1] > 0., 1, 0 )
+          self.Vmask = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
+          self.Vmask[:,:,:] = np.where( HfacS[:,:-1,:] > 0., 1, 0 )
        print('self.z_dim; '+str(self.z_dim))
        print('self.y_dim; '+str(self.y_dim))
        print('self.x_dim; '+str(self.x_dim))
 
+       if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
+          self.out_masks = np.concatenate( (self.Tmask, self.Umask, self.Vmask, self.Tmask[0:1,:,:]), axis=0)
+          self.Tmask = np.broadcast_to( self.Tmask, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
+          self.Umask = np.broadcast_to( self.Umask, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
+          self.Vmask = np.broadcast_to( self.Vmask, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
+       elif self.dim == '2d':
+          self.out_masks = np.concatenate( (self.Tmask, self.Umask, self.Vmask, self.Tmask[0:1,:,:]), axis=0)
+       elif self.dim == '3d':
+          self.out_masks = np.stack( (self.Tmask, self.Umask, self.Vmask, self.Tmask), axis=0)
+          self.Tmask = np.expand_dims( self.Tmask, axis=0 )  # Add channel dimension at front for catting onto inputs later
+          self.Umask = np.expand_dims( self.Umask, axis=0 )  # Add channel dimension at front for catting onto inputs later
+          self.Vmask = np.expand_dims( self.Vmask, axis=0 )  # Add channel dimension at front for catting onto inputs later
 
        # Set up a mask identifying boundary points (ocean points adjacent to a land point)
        # Boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
-       self.bdy_masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       # set land points to zero, and ocean points to 1 using masks
-       self.bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 0, 1 )
+       # Start with out_mask - a full variable channel mask, with land as zero, ocean as 1
+       self.bdy_masks = np.ones(self.out_masks.shape)
+       self.bdy_masks[:] = self.out_masks[:]
        # Set ocean interior to one
        # create padded version of masks to deal with sliding window
-       padded_masks = np.zeros((self.z_dim, self.y_dim+2, self.x_dim+2))
-       padded_masks[:,1:-1,1:-1:]=self.masks[:,:,:]
+       padded_masks = np.zeros((self.z_dim*3+1, self.y_dim+2, self.x_dim+2))
+       padded_masks[:,1:-1,1:-1:] = self.out_masks[:,:,:]
        # pad with 0 in y-dir - assume land
-       padded_masks[:,0,1:-1]=0
-       padded_masks[:,-1,1:-1]=0
+       padded_masks[:,0,1:-1] = 0
+       padded_masks[:,-1,1:-1] = 0
        # pad with circular padding x-dir; assume ocean
-       padded_masks[:,1:-1:,0]=self.masks[:,:,-1]
-       padded_masks[:,1:-1,-1]=self.masks[:,:,0]
+       padded_masks[:,1:-1:,0] = self.out_masks[:,:,-1]
+       padded_masks[:,1:-1,-1] = self.out_masks[:,:,0]
        # Use sliding window view to assess all points in neighbourhood of point, and set bdy_mask to 0 if all are ocean
        # i.e. set bdy_mask to 0 if in ocean interior, else leave as previous bdy_mask value
        self.bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,3,3)), axis=(3,4,5) ), 0, self.bdy_masks[:,:,:])
 
-       # Set up a mask identifying extended boundary points (ocean points within grid cells of a land point)
-       # Extended boundary points are set to bdy_weight, non-boundary points (land, and ocean interior) are one
-       self.ext_bdy_masks = np.ones(( self.z_dim, self.y_dim, self.x_dim ))
-       # set land points to zero, and ocean points to 1 using masks
-       self.ext_bdy_masks[:,:,:] = np.where( self.masks[:,:,:]==0, 0, 1 )
-       # Set ocean interior to one
-       # create padded version of masks to deal with sliding window
-       padded_masks = np.zeros((self.z_dim, self.y_dim+8, self.x_dim+8))
-       padded_masks[:,4:-4,4:-4:]=self.masks[:,:,:]
-       # pad with 0 in y-dir - assume land
-       padded_masks[:,:4,:]=0
-       padded_masks[:,-4:,:]=0
-       # pad with circular padding in x-dir
-       padded_masks[:,4:-4,:4]=self.masks[:,:,-4:]
-       padded_masks[:,4:-4,-4:]=self.masks[:,:,:4]
-       # Use sliding window view to assess all points in neighbourhood of point, and set ext_bdy_mask to 0 if all are ocean
-       # i.e. set ext_bdy_mask to 0 if in ocean interior, else leave as previous ext_bdy_mask value
-       self.ext_bdy_masks[:,:,:] = np.where( np.all( npst.sliding_window_view(padded_masks,(1,9,9)), axis=(3,4,5) ), 0, self.ext_bdy_masks[:,:,:])
-
-       if self.model_style == 'ConvLSTM' or self.model_style == 'UNetConvLSTM':
-          self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
-          self.masks = np.broadcast_to( self.masks, (self.histlen, self.z_dim, self.y_dim, self.x_dim) )
-       elif self.dim == '2d':
-          self.out_masks = np.concatenate( (self.masks, self.masks, self.masks, self.masks[0:1,:,:]), axis=0)
-       elif self.dim == '3d':
-          self.out_masks = np.stack( (self.masks, self.masks, self.masks, self.masks), axis=0)
-          self.masks = np.expand_dims( self.masks, axis=0 )  # Add channel dimension at front for catting onto inputs later
-
-       self.masks = torch.from_numpy(self.masks)
+       self.Tmask = torch.from_numpy(self.Tmask)
+       self.Umask = torch.from_numpy(self.Umask)
+       self.Vmask = torch.from_numpy(self.Vmask)
        self.out_masks = torch.from_numpy(self.out_masks)
        self.bdy_masks = torch.from_numpy(self.bdy_masks)
-       self.ext_bdy_masks = torch.from_numpy(self.ext_bdy_masks)
 
    def __len__(self):
        return int( (self.ds.sizes['T']-self.histlen) / self.stride )
@@ -215,51 +211,39 @@ class MITgcm_Dataset(data.Dataset):
        if self.land == 'IncLand' or self.land == 'Spits' or self.land == 'DiffSpits':
           # Read in the data
 
-          da_T_in        = ds_InputSlice['THETA'].values[:,:,:,:] 
-          da_U_in_tmp    = ds_InputSlice['UVEL'].values[:,:,:,:]
-          da_U_in        = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:])   # average x dir onto same grid as T points
-          da_V_in_tmp    = ds_InputSlice['VVEL'].values[:,:,:,:]
-          da_V_in        = 0.5 * (da_V_in_tmp[:,:,:-1,:]+da_V_in_tmp[:,:,1:,:])   # average y dir onto same grid as T points
-          da_Eta_in      = ds_InputSlice['ETAN'].values[:,0,:,:]
-          da_gtForc_in   = ds_InputSlice['gT_Forc'].values[:,0,:,:]
-          da_taux_tmp    = ds_InputSlice['oceTAUX'].values[:,0,:,:]
-          da_taux_in     = 0.5 * (da_taux_tmp[:,:,:-1]+da_taux_tmp[:,:,1:])
+          da_T_in      = ds_InputSlice['THETA'].values[:,:,:,:] 
+          da_U_in      = ds_InputSlice['UVEL'].values[:,:,:,:-1]   # Leave off last point, as a repeat of first point, and covered by circular padding
+          da_V_in      = ds_InputSlice['VVEL'].values[:,:,:-1,:]   # Leave off last point, its land so doesn't matter 
+          da_Eta_in    = ds_InputSlice['ETAN'].values[:,0,:,:]
+          da_gtForc_in = ds_InputSlice['gT_Forc'].values[:,0,:,:]
+          da_taux_in   = ds_InputSlice['oceTAUX'].values[:,0,:,:-1]
 
           da_T_out_tmp   = ds_OutputSlice['THETA'].values[:,:,:,:]
-          da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,:,:]
-          da_U_out_tmp   = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
-          da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,:,:]
-          da_V_out_tmp   = 0.5 * (da_V_out_tmp[:,:,:-1,:]+da_V_out_tmp[:,:,1:,:]) # average to get onto same grid as T points
+          da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,:,:-1]
+          da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,:-1,:]
           da_Eta_out_tmp = ds_OutputSlice['ETAN'].values[:,0,:,:]
        
           da_gtForc_extra = ds_OutputSlice['gT_Forc'].values[:,0,:,:]
-          da_taux_tmp     = ds_OutputSlice['oceTAUX'].values[:,0,:,:]
-          da_taux_extra   = 0.5 * (da_taux_tmp[:,:,:-1]+da_taux_tmp[:,:,1:])
+          da_taux_extra   = ds_OutputSlice['oceTAUX'].values[:,0,:,:-1]
 
        elif self.land == 'ExcLand':
           # Just cut out the ocean parts of the grid
    
           # Read in the data
           da_T_in      = ds_InputSlice['THETA'].values[:,:,3:101,:] 
-          da_U_in_tmp  = ds_InputSlice['UVEL'].values[:,:,3:101,:]
-          da_U_in      = 0.5 * (da_U_in_tmp[:,:,:,:-1]+da_U_in_tmp[:,:,:,1:]) # average x dir onto same grid as T points  
-          da_V_in_tmp  = ds_InputSlice['VVEL'].values[:,:,3:102,:]             # Extra land point in y dir compared to other variables
-          da_V_in      = 0.5 * (da_V_in_tmp[:,:,:-1,:]+da_V_in_tmp[:,:,1:,:]) # average y dir onto same grid as T points  
+          da_U_in      = ds_InputSlice['UVEL'].values[:,:,3:101,:-1]
+          da_V_in      = ds_InputSlice['VVEL'].values[:,:,3:101,:]             # Extra land point in y dir compared to other variables
           da_Eta_in    = ds_InputSlice['ETAN'].values[:,0,3:101,:]
           da_gtForc_in = ds_InputSlice['gT_Forc'].values[:,0,3:101,:]
-          da_taux_tmp  = ds_InputSlice['oceTAUX'].values[:,0,3:101,:]
-          da_taux_in   = 0.5 * (da_taux_tmp[:,:,:-1]+da_taux_tmp[:,:,1:])     # average x dir onto same grid as T points
+          da_taux_in   = ds_InputSlice['oceTAUX'].values[:,0,3:101,:-1]
 
           da_T_out_tmp   = ds_OutputSlice['THETA'].values[:,:,3:101,:]
-          da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,3:101,:]
-          da_U_out_tmp   = 0.5 * (da_U_out_tmp[:,:,:,:-1]+da_U_out_tmp[:,:,:,1:]) # average to get onto same grid as T points
-          da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,3:102,:]              # Extra land point at South
-          da_V_out_tmp   = 0.5 * (da_V_out_tmp[:,:,:-1,:]+da_V_out_tmp[:,:,1:,:]) # average to get onto same grid as T points
+          da_U_out_tmp   = ds_OutputSlice['UVEL'].values[:,:,3:101,:-1]
+          da_V_out_tmp   = ds_OutputSlice['VVEL'].values[:,:,3:101,:]              # Extra land point at South
           da_Eta_out_tmp = ds_OutputSlice['ETAN'].values[:,0,3:101,:]
 
           da_gtForc_extra = ds_OutputSlice['gT_Forc'].values[:,0,3:101,:]
-          da_taux_tmp     = ds_OutputSlice['oceTAUX'].values[:,0,3:101,:]
-          da_taux_extra   = 0.5 * (da_taux_tmp[:,:,:-1]+da_taux_tmp[:,:,1:])
+          da_taux_tmp     = ds_OutputSlice['oceTAUX'].values[:,0,3:101,:-1]
 
        da_T_out       = np.zeros(da_T_out_tmp.shape)
        da_U_out       = np.zeros(da_U_out_tmp.shape)
@@ -310,17 +294,17 @@ class MITgcm_Dataset(data.Dataset):
                                              da_Eta_out[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
 
           # Mask data
-          sample_input[:,:self.z_dim,:,:] = np.where( self.masks==1, sample_input[:,:self.z_dim,:,:],
+          sample_input[:,:self.z_dim,:,:] = np.where( self.Tmask==1, sample_input[:,:self.z_dim,:,:],
                                                       np.expand_dims( self.land_values[:self.z_dim], axis=(0,2,3) ) )
-          sample_input[:,self.z_dim:self.z_dim*2,:,:] = np.where( self.masks==1, sample_input[:,self.z_dim:self.z_dim*2,:,:],
+          sample_input[:,self.z_dim:self.z_dim*2,:,:] = np.where( self.Umask==1, sample_input[:,self.z_dim:self.z_dim*2,:,:],
                                                                   np.expand_dims( self.land_values[self.z_dim:self.z_dim*2], axis=(0,2,3) ) )
-          sample_input[:,self.z_dim*2:self.z_dim*3,:,:] = np.where( self.masks==1, sample_input[:,self.z_dim*2:self.z_dim*3,:,:],
+          sample_input[:,self.z_dim*2:self.z_dim*3,:,:] = np.where( self.Vmask==1, sample_input[:,self.z_dim*2:self.z_dim*3,:,:],
                                                                     np.expand_dims( self.land_values[self.z_dim*2:self.z_dim*3], axis=(0,2,3) ) )
-          sample_input[:,self.z_dim*3,:,:] = np.where( self.masks[:,0,:,:]==1, sample_input[:,self.z_dim*3,:,:],
+          sample_input[:,self.z_dim*3,:,:] = np.where( self.Tmask[:,0,:,:]==1, sample_input[:,self.z_dim*3,:,:],
                                                        np.expand_dims( self.land_values[self.z_dim*3], axis=(0,1,2) ) )
-          sample_input[:,self.z_dim*3+1,:,:] = np.where( self.masks[:,0,:,:]==1, sample_input[:,self.z_dim*3+1,:,:],
+          sample_input[:,self.z_dim*3+1,:,:] = np.where( self.Tmask[:,0,:,:]==1, sample_input[:,self.z_dim*3+1,:,:],
                                                          np.expand_dims( self.land_values[self.z_dim*3+1], axis=(0,1,2) ) )
-          sample_input[:,self.z_dim*3+2,:,:] = np.where( self.masks[:,0,:,:]==1, sample_input[:,self.z_dim*3+2,:,:],
+          sample_input[:,self.z_dim*3+2,:,:] = np.where( self.Umask[:,0,:,:]==1, sample_input[:,self.z_dim*3+2,:,:],
                                                          np.expand_dims( self.land_values[self.z_dim*3+2], axis=(0,1,2) ) )
 
           for time in range(self.rolllen):
@@ -337,27 +321,27 @@ class MITgcm_Dataset(data.Dataset):
 
              for time in range(self.histlen):
                 sample_input[ (self.z_dim*3+3)*time : (self.z_dim*3+3)*time+self.z_dim, :, : ]  = \
-                               np.where( self.masks==1, da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim),
+                               np.where( self.Tmask==1, da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[0:self.z_dim], axis=(1,2)) )
          
                 sample_input[ (self.z_dim*3+3)*time+self.z_dim : (self.z_dim*3+3)*time+2*self.z_dim, :, : ]  = \
-                               np.where( self.masks==1, da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim), 
+                               np.where( self.Umask==1, da_U_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim), 
                                          np.expand_dims( self.land_values[self.z_dim:2*self.z_dim], axis=(1,2)) )
          
                 sample_input[ (self.z_dim*3+3)*time+2*self.z_dim : (self.z_dim*3+3)*time+3*self.z_dim, :, : ]  = \
-                               np.where( self.masks==1, da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim),
+                               np.where( self.Vmask==1, da_V_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[2*self.z_dim:3*self.z_dim], axis=(1,2)) )
          
                 sample_input[ (self.z_dim*3+3)*time+3*self.z_dim, :, : ] = \
-                               np.where( self.masks[0,:,:]==1, da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
+                               np.where( self.Tmask[0,:,:]==1, da_Eta_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[3*self.z_dim], axis=(0,1,2)) )
          
                 sample_input[ (self.z_dim*3+3)*time+3*self.z_dim+1, :, : ] = \
-                               np.where( self.masks[0,:,:]==1, da_gtForc_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
+                               np.where( self.Tmask[0,:,:]==1, da_gtForc_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[3*self.z_dim+1], axis=(0,1,2)) )    
 
                 sample_input[ (self.z_dim*3+3)*time+3*self.z_dim+2, :, : ] = \
-                               np.where( self.masks[0,:,:]==1, da_taux_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
+                               np.where( self.Umask[0,:,:]==1, da_taux_in[time,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[3*self.z_dim+2] , axis=(0,1,2)) )
 
              for time in range(self.rolllen):
@@ -371,11 +355,11 @@ class MITgcm_Dataset(data.Dataset):
                                                 da_Eta_out[time,:,:].reshape(-1,self.y_dim,self.x_dim)              
       
                 sample_extrafluxes[ 2*time, :, : ] = \
-                                    np.where( self.masks[0,:,:]==1, da_gtForc_extra[time,:,:].reshape(-1,self.y_dim,self.x_dim),
+                                    np.where( self.Tmask[0,:,:]==1, da_gtForc_extra[time,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[3*self.z_dim+1], axis=(0,1,2)) )    
 
                 sample_extrafluxes[ 2*time+1, :, : ] = \
-                                     np.where( self.masks[0,:,:]==1, da_taux_extra[time,:,:].reshape(-1,self.y_dim,self.x_dim),
+                                     np.where( self.Umask[0,:,:]==1, da_taux_extra[time,:,:].reshape(-1,self.y_dim,self.x_dim),
                                          np.expand_dims( self.land_values[3*self.z_dim+2] , axis=(0,1,2)) )
 
              # mask values
@@ -417,7 +401,7 @@ class MITgcm_Dataset(data.Dataset):
        if self.transform:
           sample_input, sample_target, sample_extrafluxes = self.transform({'input':sample_input,'target':sample_target,'extrafluxes':sample_extrafluxes})
  
-       return sample_input, sample_target, sample_extrafluxes, self.masks, self.out_masks, self.bdy_masks, self.ext_bdy_masks
+       return sample_input, sample_target, sample_extrafluxes, self.Tmask, self.Umask, self.Vmask, self.out_masks, self.bdy_masks
 
 def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histlen, rolllen, land, bdyweight, landvalues, grid_filename, dim, 
                        modelstyle, mean_std_file, z_dim, y_dim_used, no_phys_in_channels, no_out_channels, normmethod, model_name, seed):
@@ -505,10 +489,11 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'histlen', 'in_channels', 'Y', 'X') )
           nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Y', 'X') )
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Y', 'X') )
-          nc_masks     = out_file.createVariable( 'masks',     'f4', ('histlen', 'Z', 'Y', 'X') )
+          nc_Tmask     = out_file.createVariable( 'Tmask',     'f4', ('histlen', 'Z', 'Y', 'X') )
+          nc_Umask     = out_file.createVariable( 'Umask',     'f4', ('histlen', 'Z', 'Y', 'X') )
+          nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', ('histlen', 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
-          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
        elif dim == '2d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -516,10 +501,11 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'in_channels', 'Y', 'X') )
           nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Y', 'X') )
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Y', 'X') )
-          nc_masks     = out_file.createVariable( 'masks',     'f4', ('Z', 'Y', 'X') )
+          nc_Tmask     = out_file.createVariable( 'Tmask',     'f4', ('Z', 'Y', 'X') )
+          nc_Umask     = out_file.createVariable( 'Umask',     'f4', ('Z', 'Y', 'X') )
+          nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', ('Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
-          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
        elif dim == '3d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -527,27 +513,26 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_inputs    = out_file.createVariable( 'inputs',    'f4', ('samples', 'in_channels', 'Z', 'Y', 'X') )
           nc_targets   = out_file.createVariable( 'targets',   'f4', ('samples', 'out_channels', 'Z', 'Y', 'X') )
           nc_extrafluxes = out_file.createVariable( 'extra_fluxes',   'f4', ('samples', 'flux_channels', 'Z', 'Y', 'X') )
-          nc_masks     = out_file.createVariable( 'masks',     'f4', (1, 'Z', 'Y', 'X') )
+          nc_Tmask     = out_file.createVariable( 'Tmask',     'f4', (1, 'Z', 'Y', 'X') )
+          nc_Umask     = out_file.createVariable( 'Umask',     'f4', (1, 'Z', 'Y', 'X') )
+          nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', (1, 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Z', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('Z', 'Y', 'X') )
-          nc_ext_bdy_masks = out_file.createVariable( 'ext_bdy_masks', 'f4', ('Z', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
        out_file.close()
 
     # Fill Dataset
-    for input_batch, target_batch, extrafluxes_batch, masks, out_masks, bdy_masks, ext_bdy_masks in MITgcm_loader:
+    for input_batch, target_batch, extrafluxes_batch, Tmask, Umask, Vmask, out_masks, bdy_masks in MITgcm_loader:
        print('batch number : '+str(batch))
        out_file = nc4.Dataset(ProcDataFilename,'r+', format='NETCDF4')
        nc_inputs[batch*batch_size:(batch+1)*batch_size] = input_batch
        nc_targets[batch*batch_size:(batch+1)*batch_size] = target_batch
        nc_extrafluxes[batch*batch_size:(batch+1)*batch_size] = extrafluxes_batch
        if batch == 0:
-          nc_masks[:] = masks[0,]
-          print(nc_out_masks.shape)
-          print(out_masks.shape)
-          print(out_masks[0,].shape)
+          nc_Tmask[:] = Tmask[0,]
+          nc_Umask[:] = Umask[0,]
+          nc_Vmask[:] = Vmask[0,]
           nc_out_masks[:] = out_masks[0,]
           nc_bdy_masks[:] = bdy_masks[0,]
-          nc_ext_bdy_masks[:] = ext_bdy_masks[0,]
        batch = batch+1
        out_file.close()
 

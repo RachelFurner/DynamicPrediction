@@ -28,11 +28,11 @@ land = 'Spits'
 out_filename = datadir+land+'_stats.nc'
 mean_std_file = datadir+land+'_'+for_jump+'_MeanStd.npz'
 
-init=True 
+init=False
 var_range=range(6)
 plotting_histograms = True 
-calc_stats = True 
-nc_stats = True 
+calc_stats = False
+nc_stats = False
 
 train_split=0.75
 #------------------------
@@ -56,7 +56,7 @@ def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None
 
 #------------------------
    
-VarName = ['Temperature ('+u'\xb0'+'C)', 'East-West Velocity (m/s)', 'North-South Velocity (m/s)', 'Sea Surface Height (m)',
+VarName = ['Temperature ('+u'\xb0'+'C)', 'Eastward Velocity (m/s)', 'Northward Velocity (m/s)', 'Sea Surface Height (m)',
            'Temperature Flux ('+u'\xb0'+'C/s)', 'Wind Forcing $\mathregular{N/m^{2}}$']
 ShortVarName = ['Temp', 'UVel', 'VVel', 'Eta', 'gT_Forc', 'utaux']
 ncVarName = ['THETA', 'UVEL', 'VVEL', 'ETAN', 'gT_Forc', 'oceTAUX']

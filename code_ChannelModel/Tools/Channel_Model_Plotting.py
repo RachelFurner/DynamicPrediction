@@ -28,6 +28,10 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, min_value=None, m
     if not max_value:
        max_value = np.nanmax(field[:,:])   # Highest value
 
+    print('RF in plot_depth_ax')
+    print(min_value)
+    print(max_value)
+
     if norm == 'log':
        im = ax.pcolormesh(field[:,:], norm=colors.LogNorm(vmin=min_value, vmax=max_value), cmap=cmap)
     else:
@@ -78,7 +82,8 @@ def plot_depth_fld(field, field_name, level, x_labels, y_labels, depth_labels,
        plt.suptitle(title, fontsize=14)
 
     plt.tight_layout()
-    plt.subplots_adjust(wspace=0.01,hspace=0.01)
+    #plt.subplots_adjust(wspace=0.01,hspace=0.01)
+    plt.subplots_adjust(left=0.1, right=0.9, bottom=0.07, top=0.95, wspace=0.3, hspace=0.3)
 
     return(fig, ax, im)
 
@@ -124,7 +129,8 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
           plt.suptitle(title, fontsize=14)
    
        plt.tight_layout()
-       plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
+       #plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
+       plt.subplots_adjust(left=0.1, right=0.9, bottom=0.07, top=0.95, wspace=0.3, hspace=0.3)
 
     if panes == 2:
        fig = plt.figure(figsize=(8,10))
@@ -148,7 +154,8 @@ def plot_depth_fld_diff(field1, field1_name, field2, field2_name, level, x_label
           plt.suptitle(title, fontsize=14)
 
        plt.tight_layout()
-       plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
+       #plt.subplots_adjust(hspace = 0.3, right=0.9, bottom=0.07, top=0.95)
+       plt.subplots_adjust(left=0.1, right=0.9, bottom=0.07, top=0.95, wspace=0.3, hspace=0.3)
 
     return(fig)
 
