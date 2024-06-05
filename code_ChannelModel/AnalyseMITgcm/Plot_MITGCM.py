@@ -33,7 +33,7 @@ time_step = '12hrs'
 
 #----------------------
 
-datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+datadir  = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
 data_filename=datadir + '12hrly_data.nc'
 #data_filename=datadir + '12hrly_small_set.nc'
 grid_filename=datadir + 'grid.nc'
@@ -81,34 +81,34 @@ ds_stats = xr.open_dataset(stats_file)
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['MeanEta'][0,:,:], np.nan), 'Mean Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value= -max( abs(np.amin(ds_stats['MeanEta'][0,:,:])), np.amax(ds_stats['MeanEta'][0,:,:]) ),
-                                     max_value=  max( abs(np.amin(ds_stats['MeanEta'][0,:,:])), np.amax(ds_stats['MeanEta'][0,:,:]) ) )
+                                     minmax = [-max( abs(np.amin(ds_stats['MeanEta'][0,:,:])), np.amax(ds_stats['MeanEta'][0,:,:]) ),
+                                                max( abs(np.amin(ds_stats['MeanEta'][0,:,:])), np.amax(ds_stats['MeanEta'][0,:,:]) )] )
 plt.savefig(rootdir+'PLOTS/MeanEta.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
    
 for level in range(38):
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['MeanTemp'][level,:,:], np.nan), 'Mean Temperature ('+u'\xb0'+'C)', level,
                                         da_X.values, da_Y.values, da_Z.values,
-                                        title=None, min_value=None, max_value=None)
-                                        #title=None, min_value=0.0, max_value=6.5, extend='both', cmap='bwr')
+                                        title=None)
+                                        #title=None, minmax = [0.0, 6.5], extend='both', cmap='bwr')
    plt.savefig(rootdir+'PLOTS/MeanTemp_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['MeanUVel'][level,:,:], np.nan), 'Mean Eastward Velocity (m/s)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, cmap='PRGn',
-                                        min_value=-0.3, max_value=0.3, extend='both')
-                                        #min_value= -max( abs(np.amin(ds_stats['MeanUVel'][level,:,:])), np.amax(ds_stats['MeanUVel'][level,:,:]) ),
-                                        #max_value=  max( abs(np.amin(ds_stats['MeanUVel'][level,:,:])), np.amax(ds_stats['MeanUVel'][level,:,:]) )   )
+                                        minmax = [-0.3, 0.3], extend='both')
+                                        #minmax = [ -max( abs(np.amin(ds_stats['MeanUVel'][level,:,:])), np.amax(ds_stats['MeanUVel'][level,:,:]) ),
+                                        #            max( abs(np.amin(ds_stats['MeanUVel'][level,:,:])), np.amax(ds_stats['MeanUVel'][level,:,:]) ) ]   )
    plt.savefig(rootdir+'PLOTS/MeanUVel_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean Northward Velocity (m/s)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, cmap='PRGn',
-                                        min_value=-0.1, max_value=0.1, extend='both')
-                                        #min_value= -max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) ),
-                                        #max_value=  max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) )   )
+                                        minmax = [-0.1, 0.1], extend='both')
+                                        #minmax = [ -max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) ),
+                                        #            max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) ) ]   )
    plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
@@ -117,29 +117,29 @@ for level in range(38):
 #-----------
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds_stats['StdEta'][0,:,:], np.nan), 'Std Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
-                                     title=None, min_value=None, max_value=None)
+                                     title=None)
 plt.savefig(rootdir+'PLOTS/StdEta.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
    
 for level in range(38):
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., ds_stats['StdTemp'][level,:,:], np.nan), 'Std Temperature ('+u'\xb0'+'C)', level,
                                       da_X.values, da_Y.values, da_Z.values,
-                                      title=None, min_value=None, max_value=None)
-                                      #title=None, min_value=0.0, max_value=0.8, extend='both')
+                                      title=None)
+                                      #title=None, minmax = [0.0, 0.8], extend='both')
    plt.savefig(rootdir+'PLOTS/StdTemp_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds_stats['StdUVel'][level,:,:], np.nan), 'Std Eastward Velocity (m/s)', level,
                                       da_X.values, da_Y.values, da_Z.values,
-                                      title=None, min_value=None, max_value=None)
-                                      #title=None, min_value=0.0, max_value=0.3, extend='both')
+                                      title=None)
+                                      #title=None, minmax = [0.0,0.3], extend='both')
    plt.savefig(rootdir+'PLOTS/StdUVel_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['StdVVel'][level,:,:], np.nan), 'Std Northward Velocity (m/s)', level,
                                       da_X.values, da_Y.values, da_Z.values,
-                                      title=None, min_value=None, max_value=None)
-                                      #title=None, min_value=0.0, max_value=0.32, extend='both')
+                                      title=None)
+                                      #title=None, minmax = [0.0, 0.32], extend='both')
    plt.savefig(rootdir+'PLOTS/StdVVel_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
@@ -153,32 +153,32 @@ x_coord = point[2]
 print('plot spatial depth plots')
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time,level,:,:], np.nan), 'Temperature ('+u'\xb0'+'C)', level,
                                      da_X.values, da_Y.values, da_Z.values,
-                                     title=None, min_value=0.0, max_value=6.3)
+                                     title=None, minmax = [0.0,  6.3])
 plt.savefig(rootdir+'PLOTS/Temp_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][time,level,:,:], np.nan), 'Eastward Velocity (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value = -0.5, max_value = 0.5, extend='both')
-                                     #min_value= -max( abs(np.amin(ds['UVEL'][level,:,:])), np.amax(ds['UVEL'][level,:,:]) ),
-                                     #max_value=  max( abs(np.amin(ds['UVEL'][level,:,:])), np.amax(ds['UVEL'][level,:,:]) )   )
+                                     minmax = [-0.5, 0.5], extend='both')
+                                     #minmax = [ -max( abs(np.amin(ds['UVEL'][level,:,:])), np.amax(ds['UVEL'][level,:,:]) ),
+                                     #            max( abs(np.amin(ds['UVEL'][level,:,:])), np.amax(ds['UVEL'][level,:,:]) ) ]  )
 plt.savefig(rootdir+'PLOTS/UVel_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][time,level,:,:], np.nan), 'Northward Velocity (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value = -0.5, max_value = 0.5, extend='both')
-                                     #min_value= -max( abs(np.amin(ds['VVEL'][level,:,:])), np.amax(ds['VVEL'][level,:,:]) ),
-                                     #max_value=  max( abs(np.amin(ds['VVEL'][level,:,:])), np.amax(ds['VVEL'][level,:,:]) )   )
+                                     minmax = [-0.5, 0.5], extend='both')
+                                     #minmax = [ -max( abs(np.amin(ds['VVEL'][level,:,:])), np.amax(ds['VVEL'][level,:,:]) ),
+                                     #            max( abs(np.amin(ds['VVEL'][level,:,:])), np.amax(ds['VVEL'][level,:,:]) ) ]  )
 plt.savefig(rootdir+'PLOTS/VVel_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time,0,:,:], np.nan), 'Sea Surface Height (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value = -0.8, max_value = 0.8)
+                                     minmax = [-0.8, 0.8])
 plt.savefig(rootdir+'PLOTS/Eta_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
@@ -190,7 +190,7 @@ print('plot tendancy plots')
 fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[level,:,:]>0., da_T[time+1,level,:,:]-da_T[time,level,:,:], np.nan),
                                      'Temperature Increment ('+u'\xb0'+'C)', level,
                                      da_X.values, da_Y.values, da_Z.values,
-                                     title=None, min_value=-0.6, max_value=0.6, cmap='PRGn', extend='both')
+                                     title=None, minmax = [-0.6,  0.6], cmap='PRGn', extend='both')
 plt.savefig(rootdir+'PLOTS/TempTend_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
@@ -198,7 +198,7 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacW[level,:,:]>0., ds['UVEL'][ti
                                      'Eastward Velocity Increment (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value=-0.2, max_value=0.2, extend='both')
+                                     minmax = [-0.2,  0.2], extend='both')
 plt.savefig(rootdir+'PLOTS/UVelTend_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
@@ -206,7 +206,7 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds['VVEL'][ti
                                      'Northward Velocity Increment (m/s)', level,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value=-0.3, max_value=0.3, extend='both')
+                                     minmax = [-0.3,  0.3], extend='both')
 plt.savefig(rootdir+'PLOTS/VVelTend_z'+str(level)+'_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
@@ -214,7 +214,7 @@ fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacC[0,:,:]>0., ds['ETAN'][time+1
                                      'Sea Surface Height Increment (m)', 0,
                                      da_X.values, da_Y.values, da_Z.values,
                                      title=None, cmap='PRGn',
-                                     min_value=-0.08, max_value=0.08, extend='both')
+                                     minmax = [-0.08,  0.08], extend='both')
 plt.savefig(rootdir+'PLOTS/EtaTend_time'+str(time)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 
@@ -244,7 +244,7 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_DiffInTime_x'+str(x_coord)+
 print('plot y cross section plots')
 fig, ax, im = ChnlPlt.plot_yconst_crss_sec(da_T[time,:,:,:], 'Temperature', y_coord,
                                          da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=None, max_value=None)
+                                         title=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------
@@ -253,7 +253,7 @@ plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_y'+str(y_coord)+'.png', bbo
 print('plot x cross section plots')
 fig, ax, im = ChnlPlt.plot_xconst_crss_sec(da_T[time,:,:,:], 'Temperature', x_coord,
                                          da_X.values, da_Y.values, da_Z.values,
-                                         title=None, min_value=None, max_value=None)
+                                         title=None)
 plt.savefig(rootdir+'PLOTS/'+time_step+'_Temperature_x'+str(x_coord)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 
 #-----------------------------------------

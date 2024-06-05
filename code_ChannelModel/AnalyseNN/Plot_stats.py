@@ -30,6 +30,9 @@ trainorval='test'
 
 rootdir = '../../../Channel_nn_Outputs/'+dir_name+'/STATS/'
 
+#MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'+\
+#                  'Dataset_'+part_dir_name+'.nc'
+#grid_filename   = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/grid.nc'
 MITgcm_filename = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'+\
                   'Dataset_'+part_dir_name+'.nc'
 grid_filename   = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/grid.nc'
@@ -75,29 +78,29 @@ depths = grid_ds['RC']
 for level in [2]:
    fig, ax, im = ChnPlt.plot_depth_fld(masked_Temp_RMS[level,:,:], 'Temperature RMS Errors ('+u'\xb0'+'C)', level,
                                        da_X.values, da_Y.values, depths, title=None, extend='max',
-                                       min_value=0.0, max_value=0.025)                  # For 200 epochs plot
-                                       #norm='log', min_value=0.001, max_value=0.15)     # for evolution over epochs plot
+                                       minmax = [0.0, 0.025])                  # For 200 epochs plot
+                                       #norm='log', minmax = [0.001,  0.15])     # for evolution over epochs plot
    plt.savefig(rootdir+'PLOTS/'+model_name+'_Temp_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnPlt.plot_depth_fld(masked_U_RMS[level,:,:], 'Eastward Velocity RMS Errors (m/s)', level,
                                        da_X.values, da_Y.values, depths, title=None, extend='max',
-                                       min_value=0.0, max_value=0.005)                  # For 200 epochs plot 
-                                       #norm='log', min_value=0.0001, max_value=0.05)    # for evolution over epochs plot 
+                                       minmax = [0.0, 0.007] )                  # For 200 epochs plot 
+                                       #norm='log', minmax = [0.0001,  0.05])    # for evolution over epochs plot 
    plt.savefig(rootdir+'PLOTS/'+model_name+'_U_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig, ax, im = ChnPlt.plot_depth_fld(masked_V_RMS[level,:,:], 'Northward Velocity RMS Errors (m/s)', level,
                                        da_X.values, da_Y.values, depths, title=None, extend='max',
-                                       min_value=0.0, max_value=0.006)                  # For 200 epochs plot 
-                                       #norm='log', min_value=0.0001, max_value=0.05)    # for evolution over epochs plot 
+                                       minmax = [0.0, 0.007 ])                  # For 200 epochs plot 
+                                       #norm='log', minmax = [0.0001,  0.05])    # for evolution over epochs plot 
    plt.savefig(rootdir+'PLOTS/'+model_name+'_V_RMS_z'+str(level)+'_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
 fig, ax, im = ChnPlt.plot_depth_fld(masked_Eta_RMS[:,:], 'Sea Surface Height RMS Errors (m)', 0,
                                     da_X.values, da_Y.values, depths, title=None, extend='max',
-                                    min_value=0.0, max_value=0.0012)                  # For 200 epochs plot 
-                                    #norm='log', min_value=0.0001, max_value=0.02)     # for evolution over epochs plot 
+                                    minmax = [0.0,  0.0012])                  # For 200 epochs plot 
+                                    #norm='log', minmax = [0.0001,  0.02])     # for evolution over epochs plot 
 plt.savefig(rootdir+'PLOTS/'+model_name+'_Eta_RMS_'+trainorval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
 plt.close()
 

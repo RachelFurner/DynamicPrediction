@@ -86,25 +86,25 @@ for epochs in epochs_list:
    print('check')
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_Temp.values[time,level,:,:], np.nan), 'MITgcm Temperature ('+u'\xb0'+'C)',
                                level, da_X.values, da_Y.values, depths, title=None,
-                               min_value=0.0, max_value=6.3)
+                               minmax = [0, 6.3])
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueTemp_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_U.values[time,level,:,:], np.nan), 'MITgcm Eastward Velocity (m/s)', 
                                level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                               min_value = -0.5, max_value = 0.5, extend='both')
+                               minmax = [-0.5, 0.5], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueU_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_V.values[time,level,:,:], np.nan), 'MITgcm Northward Velocity (m/s)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value = -0.5, max_value = 0.5, extend='both')
+                               minmax = [-0.5, 0.5], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueV_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_Eta.values[time,:,:], np.nan), 'MITgcm Sea Surface Height (m)',
                                0, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value = -0.8, max_value = 0.8)
+                               minmax = [-0.8, 0.8])
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueEta_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -114,28 +114,28 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_Temp_Tend.values[time,level,:,:], np.nan),
                                'MITgcm Temperature Increment ('+u'\xb0'+'C)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.6, max_value=0.6, extend='both')
+                               minmax = [-0.6, 0.6], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueTempTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_U_Tend.values[time,level,:,:], np.nan),
                                'MITgcm Eastward Velocity Increment (m/s)', 
                                level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                               min_value=-0.2, max_value=0.2, extend='both')
+                               minmax = [-0.2, 0.2], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueUTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_V_Tend.values[time,level,:,:], np.nan),
                                'MITgcm Northward Velocity Increment (m/s)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.3, max_value=0.3, extend='both')
+                               minmax = [-0.3, 0.3], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueVTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_True_Eta_Tend.values[time,:,:], np.nan),
                                'MITgcm Sea Surface Height Increment (m)',
                                0, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.08, max_value=0.08, extend='both')
+                               minmax = [-0.08, 0.08], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TrueEtaTend_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -144,25 +144,25 @@ for epochs in epochs_list:
    #-----------------------
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_Temp.values[time,level,:,:], np.nan), 'Predicted Temperature ('+u'\xb0'+'C)',
                                level, da_X.values, da_Y.values, depths, title=None,
-                               min_value=0.0, max_value=6.3)
+                               minmax = [0.0, 6.3] )
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredTemp_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_U.values[time,level,:,:], np.nan), 'Predicted Eastward Velocity (m/s)', 
                                level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                               min_value = -0.5, max_value = 0.5, extend='both')
+                               minmax = [-0.5, 0.5], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredU_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_V.values[time,level,:,:], np.nan), 'Predicted Northward Velocity (m/s)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value = -0.5, max_value = 0.5, extend='both')
+                               minmax = [-0.5, 0.5], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredV_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_Eta.values[time,:,:], np.nan), 'Predicted Sea Surface Height (m)',
                                0, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value = -0.8, max_value = 0.8)
+                               minmax = [-0.8, 0.8])
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredEta_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -172,28 +172,28 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_Temp_Tend.values[time,level,:,:], np.nan),
                                'Predicted Temperature Increment ('+u'\xb0'+'C)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.6, max_value=0.6, extend='both')
+                               minmax = [-0.6, 0.6], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredTempTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_U_Tend.values[time,level,:,:], np.nan),
                                'Predicted Eastward Velocity Increment (m/s)', 
                                level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                               min_value=-0.2, max_value=0.2, extend='both')
+                               minmax = [-0.2, 0.2], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredUTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_V_Tend.values[time,level,:,:], np.nan),
                                'Predicted Northward Velocity Increment (m/s)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.3, max_value=0.3, extend='both')
+                               minmax = [-0.3, 0.3], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredVTend_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, da_Pred_Eta_Tend.values[time,:,:], np.nan),
                                'Predicted Sea Surface Height Increment (m)',
                                0, da_X.values, da_Y.values, depths, title=None, cmap='PRGn',
-                               min_value=-0.08, max_value=0.08, extend='both')
+                               minmax = [-0.08, 0.08], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_PredEtaTend_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -203,32 +203,32 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, (da_Pred_Temp_Tend.values[time,level,:,:]-da_True_Temp_Tend.values[time,level,:,:]), np.nan),
                                'Temperature Errors ('+u'\xb0'+'C)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='bwr',
-                               min_value=-0.05, max_value=0.05, extend='both')
-                               #min_value=-0.1, max_value=0.1, extend='both')
+                               minmax = [-0.05, 0.05], extend='both')
+                               #minmax = [-0.1, 0.1], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TempError_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, (da_Pred_U_Tend.values[time,level,:,:]-da_True_U_Tend.values[time,level,:,:]), np.nan),
                                'Eastward Velocity Errors (m/s)', 
                                level, da_X.values, da_Y.values, depths, cmap='bwr',
-                               min_value = -0.01, max_value = 0.01, extend='both')
-                               #min_value = -0.01, max_value = 0.01, extend='both')
+                               minmax = [-0.01, 0.01], extend='both')
+                               #minmax = [-0.01, 0.01], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_UError_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, (da_Pred_V_Tend.values[time,level,:,:]-da_True_V_Tend.values[time,level,:,:]), np.nan),
                                'Northward Velocity Errors (m/s)',
                                level, da_X.values, da_Y.values, depths, title=None, cmap='bwr',
-                               min_value = -0.01, max_value = 0.01, extend='both')
-                               #min_value = -0.01, max_value = 0.01, extend='both')
+                               minmax = [-0.01, 0.01], extend='both')
+                               #minmax = [-0.01, 0.01], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_VError_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld(np.where(masks[level,:,:]==1, (da_Pred_Eta_Tend.values[time,:,:]-da_True_Eta_Tend.values[time,:,:]), np.nan),
                                'Sea Surface Height Errors (m)',
                                0, da_X.values, da_Y.values, depths, title=None, cmap='bwr',
-                               min_value = -0.006, max_value = 0.006, extend='both')
-                               #min_value = -0.005, max_value = 0.005, extend='both')
+                               minmax = [-0.006, 0.006], extend='both')
+                               #minmax = [-0.005, 0.005], extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_EtaError_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -239,28 +239,28 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_Temp.values[time,level,:,:], np.nan), 'MITgcm Temperature',
                                     np.where(masks[level,:,:]==1, da_Pred_Temp.values[time,level,:,:], np.nan), 'Predicted Temperature',
                                     level, da_X.values, da_Y.values, depths,
-                                    flds_max_value=-0.6, flds_min_value=0.6, diff_min_value=-0.1, diff_max_value=0.1, panes=2, extend='both')
+                                    flds_minmax= [-0.6, 0.6], diff_minmax = [-0.1, 0.1], panes=2, extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_Temp_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_U.values[time,level,:,:], np.nan), 'MITgcm Eastward Velocity', 
                                     np.where(masks[level,:,:]==1, da_Pred_U.values[time,level,:,:], np.nan), 'Predicted Eastward Velocity',
                                     level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                                    flds_max_value=-0.2, flds_min_value=0.2, diff_min_value=-0.025, diff_max_value=0.025, panes=2, extend='both')
+                                    flds_minmax = [-0.2, 0.2], diff_minmax = [-0.025, 0.025], panes=2, extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_U_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_V.values[time,level,:,:], np.nan), 'MITgcm Northward Velocity',
                                     np.where(masks[level,:,:]==1, da_Pred_V.values[time,level,:,:], np.nan), 'Predicted Northward Velocity',
                                     level, da_X.values, da_Y.values, depths, cmap='PRGn',
-                                    flds_max_value=-0.3, flds_min_value=0.3, diff_min_value=-0.025, diff_max_value=0.025, panes=2, extend='both')
+                                    flds_minmax = [-0.3, 0.3], diff_minmax = [-0.025, 0.025], panes=2, extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_V_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_Eta.values[time,:,:], np.nan), 'MITgcm Sea Surface Height',
                                     np.where(masks[level,:,:]==1, da_Pred_Eta.values[time,:,:], np.nan), 'Predicted Sea Surface Height',
                                     0, da_X.values, da_Y.values, depths, cmap='PRGn',
-                                    flds_max_value=-0.08, flds_min_value=0.08, diff_min_value=-0.006, diff_max_value=0.006, panes=2, extend='both')
+                                    flds_minmax = [-0.08, 0.08], diff_minmax = [-0.006, 0.006], panes=2, extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_Eta_diff_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -271,7 +271,7 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_Temp_Tend.values[time,level,:,:], np.nan), 'MITgcm Temperature Increment',
                                     np.where(masks[level,:,:]==1, da_Pred_Temp_Tend.values[time,level,:,:], np.nan), 'Predicted Temperature Increment',
                                     level, da_X.values, da_Y.values, depths,
-                                    flds_max_value=-0.6, flds_min_value=0.6, diff_min_value=-0.1, diff_max_value=0.1,
+                                    flds_minmax = [-0.6, 0.6], diff_minmax = [-0.1, 0.1],
                                     panes=2, cmap='PRGn', extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_TempTend_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
@@ -279,7 +279,7 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_U_Tend.values[time,level,:,:], np.nan), 'MITgcm Eastward Velocity Increment', 
                                     np.where(masks[level,:,:]==1, da_Pred_U_Tend.values[time,level,:,:], np.nan), 'Predicted Eastward Velocity Increment',
                                     level, da_X.values, da_Y.values, depths,
-                                    flds_max_value=-0.2, flds_min_value=0.2, diff_min_value=-0.025, diff_max_value=0.025,
+                                    flds_minmax = [-0.2, 0.2], diff_minmax = [-0.025, 0.025],
                                     panes=2, cmap='PRGn', extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_UTend_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
@@ -287,7 +287,7 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_V_Tend.values[time,level,:,:], np.nan), 'MITgcm Northward Velocity Increment',
                                     np.where(masks[level,:,:]==1, da_Pred_V_Tend.values[time,level,:,:], np.nan), 'Predicted Northward Velocity Increment',
                                     level, da_X.values, da_Y.values, depths,
-                                    flds_max_value=-0.3, flds_min_value=0.3, diff_min_value=-0.025, diff_max_value=0.025,
+                                    flds_minmax = [-0.3, 0.3], diff_minmax = [-0.025, 0.025],
                                     panes=2, cmap='PRGn', extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_VTend_diff_z'+str(level)+'_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
@@ -295,7 +295,7 @@ for epochs in epochs_list:
    fig = ChnPlt.plot_depth_fld_diff(np.where(masks[level,:,:]==1, da_True_Eta_Tend.values[time,:,:], np.nan), 'MITgcm Sea Surface Height Increment',
                                     np.where(masks[level,:,:]==1, da_Pred_Eta_Tend.values[time,:,:], np.nan), 'Predicted Sea Surface Height Increment',
                                     0, da_X.values, da_Y.values, depths,
-                                    flds_max_value=-0.08, flds_min_value=0.08, diff_min_value=-0.006, diff_max_value=0.006,
+                                    flds_minmax = [-0.08, 0.08], diff_minmax = [-0.006, 0.006],
                                     panes=2, cmap='PRGn', extend='both')
    plt.savefig(rootdir+'EXAMPLE_FIELDS/'+model_name+'_EtaTend_diff_'+trainval+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()

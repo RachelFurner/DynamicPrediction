@@ -35,42 +35,17 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 point = [ 2, 48, 120]
 
-dir_names = ['IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen1_rolllen3_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen3_rolllen1_seed30475',
-             'IncLand12hrly_UNetConvLSTM_histlen3_rolllen1_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'MultiModel_average_IncLand12hrly_UNet2dtransp_histlen1_rolllen1',
-             'MultiModel_random_IncLand12hrly_UNet2dtransp_histlen1_rolllen1']
+time_jumps = [6, 12, 24]
 
-labels = ['Standard UNet', 'Rollout loss UNet', 'Past fields UNet', 'ConvLSTM', 
-          'Smoothed UNet', 'AB2 iterated UNet', 'Multi-model average', 'Random multi-model']
-epochs = ['200', '200', '200', '200',
-          '200', '200', '200', '200']
-iteration_methods = ['simple', 'simple', 'simple', 'simple',
-                     'simple', 'AB2', 'simple', 'simple']
-smooth_levels = ['0', '0', '0', '0', 
-                 '20', '0', '0', '0']
-smooth_steps = '0'
-iteration_len = [180, 180, 180, 180, 180, 180, 180, 180]  
-my_xaxis = [np.arange(0,90,.5), np.arange(0,90,.5), np.arange(0,90,.5), np.arange(0,90,.5),
-            np.arange(0,90,.5), np.arange(0,90,.5), np.arange(0,90,.5), np.arange(0,90,.5)]
-my_ts_ends = [90*2, 90*2, 90*2, 90*2, 90*2, 90*2, 90*2, 90*2]
-
-dir_names = ['IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475']
-labels = ['12 hourly timesteps']
-epochs = ['200']
-iteration_methods = ['simple']
-smooth_levels = ['0']
-smooth_steps = '0'
-iteration_len = [180]  
-my_xaxis = [np.arange(0,90,.5)]
-my_ts_ends = [90*2]
+labels = ['6 hourly', '12 hourly', '24 hourly']
+epochs = ['200', '200', '200']
+iteration_len = [360, 180, 90]  
 
 my_colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'lime', 'brown', 'orange']
 my_alphas = [ 1., 1., 1., 1., 1., 1., 1., 1., 1. ]
 
+my_xaxis = [np.arange(0,70,.25), np.arange(0,90,.5), np.arange(0,90,1)]
+my_ts_ends = [70*4, 90*2, 90]
 
 plot_timeseries = True   
 plot_rms_timeseries = True 
@@ -80,9 +55,9 @@ plot_cc_timeseries = True
 make_animation_plots = False 
 power_spectrum = False
 plot_conserved = True 
-animation_end = 6*2*7+1
+animation_end = 6*2*7
 ts_days = 90   
-print_times = [28, 56, 84, 112]  # times to print, in terms of how many 12 hour jumps; 2,4,6,8 weeks
+print_days = [7, 14, 28]  # times to print, in terms of how many days
 
 #pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']
 pert_list = []
@@ -112,12 +87,14 @@ RMS_ts_ends = []
 print('reading in NN iteration data')
 #-------------------------------------
 count=0
-for model in dir_names:
+for jump in time_jumps:
+
    print(' ')
    print(' ')
-   print(model)
+   print(jump)
    print(' ')
-   model_name = model+'_'+epochs[count]+'epochs_'+iteration_methods[count]+'_smth'+smooth_levels[count]+'stps'+smooth_steps
+   model = 'IncLand'+str(jump)+'hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
+   model_name = model+'_'+epochs[count]+'epochs_simple_smth0stps0'
    rootdir = '../../../Channel_nn_Outputs/'+model
    
    iter_data_filename=rootdir+'/ITERATED_FORECAST/'+model_name+'_Forlen'+str(iteration_len[count])+'.nc'
@@ -140,35 +117,34 @@ for model in dir_names:
    da_V_mask   = iter_ds['V_Mask']
    masked_True_V = np.where( da_V_mask.values==0, np.nan, da_true_V.values )
 
-   if count==0:
-      Temp_dict['MITgcm Temperature'] = masked_True_Temp[:ts_days*2]
-      Mass_dict['MITgcm SSH'] = np.nansum( masked_True_Eta[:ts_days*2], axis=(1,2) )
-      TKE_dict['MITgcm TKE'] = np.nansum( np.add( np.square(masked_True_U[:ts_days*2]), np.square(masked_True_V[:ts_days*2]) ), axis=(1,2,3) )
+   if count == 0:
+      Temp_dict['MITgcm Temperature'] = masked_True_Temp[:ts_days*int(24/jump)]
+      Mass_dict['MITgcm SSH'] = np.nansum( masked_True_Eta[:ts_days*int(24/jump)], axis=(1,2) )
+      TKE_dict['MITgcm TKE'] = np.nansum( np.add( np.square(masked_True_U[:ts_days*int(24/jump)]),
+                                                          np.square(masked_True_V[:ts_days*int(24/jump)]) ), axis=(1,2,3) )
       colors.append('black')
       alphas.append(1)
-      xaxis.append(np.arange(0,90,.5))
+      xaxis.append(np.arange(0,ts_days,jump/24))
       ts_ends.append(np.shape(xaxis[-1])[0])
-
-   xaxis.append(my_xaxis[count])
-   ts_ends.append(my_ts_ends[count])
 
    da_pred_Temp = iter_ds['Pred_Temp']
    da_Temp_errors = iter_ds['Temp_Errors']
    masked_Pred_Temp = np.where( da_Temp_mask.values==0, np.nan, da_pred_Temp.values )
-   Temp_dict[labels[count]] = masked_Pred_Temp[:my_ts_ends[count]]
-
    da_pred_Eta = iter_ds['Pred_Eta']
    masked_Pred_Eta = np.where( da_Temp_mask.values[0,:,:]==0, np.nan, da_pred_Eta.values )
-   Mass_dict[labels[count]] = np.nansum( masked_Pred_Eta[:my_ts_ends[count]], axis=(1,2) )
-
    da_pred_U = iter_ds['Pred_U']
    masked_Pred_U = np.where( da_U_mask.values==0, np.nan, da_pred_U.values )
    da_pred_V = iter_ds['Pred_V']
    masked_Pred_V = np.where( da_V_mask.values==0, np.nan, da_pred_V.values )
+
+   Temp_dict[labels[count]] = masked_Pred_Temp[:my_ts_ends[count]]
+   Mass_dict[labels[count]] = np.nansum( masked_Pred_Eta[:my_ts_ends[count]], axis=(1,2) )
    TKE_dict[labels[count]] = np.nansum( np.add( np.square(masked_Pred_U[:my_ts_ends[count]]), np.square(masked_Pred_V[:my_ts_ends[count]]) ), axis=(1,2,3) )
 
    colors.append(my_colors[count])
    alphas.append(my_alphas[count])
+   xaxis.append(my_xaxis[count])
+   ts_ends.append(my_ts_ends[count])
    
    Temp_RMS = np.sqrt(np.nanmean( np.square(masked_Pred_Temp[:my_ts_ends[count],:,:,:]-masked_True_Temp[:my_ts_ends[count],:,:,:]), axis=(1,2,3) ))
    RMS_Temp_dict[labels[count]] = Temp_RMS
@@ -244,7 +220,8 @@ if plot_timeseries or plot_rms_timeseries or plot_cc_timeseries or power_spectru
       RMS_xaxis.append(np.arange(0,90,.5))
       RMS_ts_ends.append(np.shape(xaxis[-1])[0])
 
-
+print(ts_ends)
+print(Temp_dict.keys())
 #---------------------------------------
 print('Plotting timeseries at a point')
 #---------------------------------------
@@ -253,11 +230,11 @@ print('Plotting timeseries at a point')
 if plot_timeseries: 
    fig = ChnPlt.plt_timeseries( point, ts_ends, Temp_dict, y_label='Temperature ('+u'\xb0'+'C)', colors=colors, alphas=alphas, myfigsize=(20,8),
                                 x_label='number of days', xaxis=xaxis)
-   if len(dir_names)==1:
+   if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_days)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    else:
-      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
+      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_days)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -267,11 +244,11 @@ print('plotting spatially averaged RMS timeseries')
 if plot_rms_timeseries:
    fig = ChnPlt.plt_timeseries( [], RMS_ts_ends, RMS_Temp_dict, y_label='Temperature\nRMS error ('+u'\xb0'+'C)',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[0,5], x_label='number of days', xaxis=RMS_xaxis )
-   if len(dir_names)==1:
+   if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_RMS_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    else:
-      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_RMS_timeseries_'+str(ts_days)+'.png',
+      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/Temp_RMS_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -281,39 +258,40 @@ print('plotting CC timeseries')
 if plot_cc_timeseries:
    fig = ChnPlt.plt_timeseries( [], RMS_ts_ends, CC_Temp_dict, y_label='Temperature\nCC coeffient ('+u'\xb0'+'C)',
                                 colors=RMS_colors, alphas=RMS_alphas, ylim=[-0.1,1.1], x_label='number of days', xaxis=RMS_xaxis )
-   if len(dir_names)==1:
+   if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_CC_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    else:
-      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_CC_timeseries_'+str(ts_days)+'.png',
+      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/Temp_CC_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
-#---------------------------------------------------------------------------
-print('printing out spatially averaged RMS values for various time points')
-#---------------------------------------------------------------------------
-if print_spatially_av_rms:
-   count=0
-   for model in dir_names:
-      print('')
-      print('')
-      print(labels[count])
-      for time in print_times:
-         print('Temp RMS at time '+str(time)+'; '+str(RMS_Temp_dict[labels[count]][time]))
-      count=count+1
-
-#--------------------------------------------------------------------
-print('Printing out correlation coeficient for various time points')
-#--------------------------------------------------------------------
-if print_cc:
-   count=0
-   for model in dir_names:
-      print('')
-      print('')
-      print(labels[count])
-      for time in print_times:
-         print('Temp CC at time '+str(time)+'; '+str(CC_Temp_dict[labels[count]][time]))
-      count=count+1
+## NEED TO UPDATE PRINTING BITS FOR DIFFERENT TIME STEP RUNS
+##---------------------------------------------------------------------------
+#print('printing out spatially averaged RMS values for various time points')
+##---------------------------------------------------------------------------
+#if print_spatially_av_rms:
+#   count=0
+#   for model in time_jumps:
+#      print('')
+#      print('')
+#      print(labels[count])
+#      for time in print_times:
+#         print('Temp RMS at time '+str(time)+'; '+str(RMS_Temp_dict[labels[count]][time]))
+#      count=count+1
+#
+##--------------------------------------------------------------------
+#print('Printing out correlation coeficient for various time points')
+##--------------------------------------------------------------------
+#if print_cc:
+#   count=0
+#   for model in time_jumps:
+#      print('')
+#      print('')
+#      print(labels[count])
+#      for time in print_times:
+#         print('Temp CC at time '+str(time)+'; '+str(CC_Temp_dict[labels[count]][time]))
+#      count=count+1
 
 #----------------------------
 print('Plot power spectrum')
@@ -362,11 +340,11 @@ if power_spectrum:
    #   plt.ylabel("$P(k)$")
    #   plt.tight_layout()
    #   plt.legend(my_legend)
-   #   if len(dir_names)==1:
+   #   if len(time_jumps)==1:
    #      plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_PowerSpectrum_'+str(time)+'.png',
    #                  bbox_inches = 'tight', pad_inches = 0.1)
    #   else:
-   #      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/Temp_PowerSpectrum_'+str(time)+'.png',
+   #      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/Temp_PowerSpectrum_'+str(time)+'.png',
    #                  bbox_inches = 'tight', pad_inches = 0.1)
    #   plt.close()
   
@@ -377,22 +355,22 @@ if power_spectrum:
 if plot_conserved:
    fig = ChnPlt.plt_timeseries( [], ts_ends, Mass_dict, y_label='Total SSH Anomoly',
                                 colors=colors, alphas=alphas, ylim=[-5000, 5000], yscale='symlog', x_label='number of days', xaxis=xaxis )
-   if len(dir_names)==1:
+   if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_Eta.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    else:
-      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/conservation_Eta.png',
+      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_Eta.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
 
    fig = ChnPlt.plt_timeseries( [], ts_ends, TKE_dict, y_label='Total Kinetic Energy',
                                 colors=colors, alphas=alphas, ylim=[0, 150000], x_label='number of days', xaxis=xaxis)
-   if len(dir_names)==1:
+   if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_TKE.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    else:
-      plt.savefig('../../../Channel_nn_Outputs/MULTIMODEL_PLOTS/conservation_TKE.png',
+      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_TKE.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
    

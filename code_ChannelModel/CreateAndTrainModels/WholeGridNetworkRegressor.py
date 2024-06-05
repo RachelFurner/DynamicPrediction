@@ -93,15 +93,14 @@ if __name__ == "__main__":
     if args.predictionjump == '12hrly':
        for_len = 180    # How long to iteratively predict for
        for_subsample = 1
-    elif args.predictionjump == 'hrly':
-       for_len = 1440   # How long to iteratively predict for
-       for_subsample = 12
-    elif args.predictionjump == '10min':
-       for_len = 8640   # How long to iteratively predict for
-       for_subsample = 72
-    elif args.predictionjump == 'wkly':
-       for_len = 13     # How long to iteratively predict for
-       for_subsample = 1
+    elif args.predictionjump == '24hrly':
+       subsample_rate = int(subsample_rate/2)   #number of time steps to skip over when creating training and test data
+       for_len = int(180/2)  # How many steps to iteratively predict for
+       for_subsample = 1   
+    elif args.predictionjump == '6hrly':
+       subsample_rate = int(subsample_rate*2)   #number of time steps to skip over when creating training and test data
+       for_len = int(2*180)  # How long to iteratively predict for
+       for_subsample = 1 
     start = 0        # Start from zero to fit with perturbed runs
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -166,11 +165,10 @@ if __name__ == "__main__":
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_DiffLandSpits/runs/50yr_Cntrl/'
        else:
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
-    elif args.predictionjump == 'hrly':
-       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
-    elif args.predictionjump == '10min':
-       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
-       subsample_rate = 3*subsample_rate # larger subsample for small timestepping, MITgcm dataset longer so same amount of training/val samples
+    elif args.predictionjump == '24hrly':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_24hr/'
+    elif args.predictionjump == '6hrly':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_6hr/'
 
     ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+ \
                        '_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
@@ -318,30 +316,24 @@ if __name__ == "__main__":
     
        IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, total_epochs,
                           y_dim_used, args.land, args.dim, args.histlen, landvalues, args.iteratemethod, args.iteratesmooth, args.smoothsteps,
-                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, args.seed) 
+                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, args.seed, 'singlepred') 
     
     #------------------
     # Assess the model 
     #------------------
-    #RF_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=False,
-    #                                           num_workers=args.numworkers, pin_memory=True )
-    #RF_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=False, 
-    #                                           num_workers=args.numworkers, pin_memory=True )
-    #RF_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=False, 
-    #                                           num_workers=args.numworkers, pin_memory=True )
     if args.assess:
     
        if not args.test: 
           OutputStats(model_name, args.modelstyle, MITgcm_filename, test_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                      MITgcm_stats_filename, args.seed)
+                      MITgcm_stats_filename, args.seed, 'singlepred')
           OutputStats(model_name, args.modelstyle, MITgcm_filename, val_loader, h, total_epochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'validation', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                      MITgcm_stats_filename, args.seed)
+                      MITgcm_stats_filename, args.seed, 'singlepred')
    
        OutputStats(model_name, args.modelstyle, MITgcm_filename, train_loader, h, total_epochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                   MITgcm_stats_filename, args.seed)
+                   MITgcm_stats_filename, args.seed, 'singlepred')
     
     #----------------------------
     # Plot density scatter plots
@@ -350,12 +342,12 @@ if __name__ == "__main__":
     
        if not args.test: 
           PlotDensScatter( model_name, args.dim, test_loader, h, total_epochs, 'test', args.normmethod, channel_dim, mean_std_file,
-                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_test_samples/args.batchsize) )
+                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_test_samples/args.batchsize), 'singlepred' )
           PlotDensScatter( model_name, args.dim, val_loader, h, total_epochs, 'validation', args.normmethod, channel_dim, mean_std_file,
-                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_val_samples/args.batchsize) )
+                           no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_val_samples/args.batchsize), 'singlepred' )
 
        PlotDensScatter( model_name, args.dim, train_loader, h, total_epochs, 'training', args.normmethod, channel_dim, mean_std_file,
-                        no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_tr_samples/args.batchsize) )
+                        no_out_channels, no_phys_in_channels, z_dim, args.land, args.seed, np.ceil(no_tr_samples/args.batchsize), 'singlepred' )
     
     #------------------------------------------------------
     # Plot fields from various training steps of the model

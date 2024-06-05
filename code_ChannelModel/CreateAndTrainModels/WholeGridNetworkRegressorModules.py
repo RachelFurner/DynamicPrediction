@@ -27,6 +27,8 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import pickle
+import random
+from scipy import stats
 
 def ReadMeanStd(mean_std_file, dim, no_phys_in_channels, no_out_channels, z_dim, seed_value):
 
@@ -82,8 +84,18 @@ def ReadMeanStd(mean_std_file, dim, no_phys_in_channels, no_out_channels, z_dim,
 
    return(inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range)
 
-def mse_loss(output, target):
+def mse_loss(output, target, z_dim):
    loss = torch.mean( (output - target)**2 )
+   return loss
+
+def cons_loss(output, target, z_dim):
+   loss = ( torch.mean( (output - target)**2 )     # MSE over all space and samples
+          + 0.01 * torch.mean( ( torch.nansum(output[:,3*z_dim,:,:], dim=(1,2)) - 
+                               torch.nansum(target[:,3*z_dim,:,:], dim=(1,2)) )**2 )  # MSE in total mass content over samples
+          + 0.01 * torch.mean( ( torch.nansum( torch.add(torch.square(output[:, z_dim:2*z_dim,:,:]),
+                                                       torch.square(output[:, z_dim:2*z_dim,:,:])), dim=(1,2,3) )
+                             - torch.nansum( torch.add(torch.square(output[:,2*z_dim:3*z_dim,:,:]),
+                                                       torch.square(output[:,2*z_dim:3*z_dim,:,:])), dim=(1,2,3) ) )**2 ) ) #TKE MSE over samples
    return loss
 
 def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST, no_tr_samples, no_val_samples, save_freq, train_loader,
@@ -159,7 +171,7 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
       	         
                  # Calculate and update loss values
                  
-                 loss = mse_loss(predicted_batch, target_batch).double()
+                 loss = mse_loss(predicted_batch, target_batch, z_dim).double()
                  losses['train'][-1] = losses['train'][-1] + loss.item() * input_batch.shape[0]
                  torch.cuda.empty_cache()
       
@@ -167,47 +179,47 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
                     if dimension == '2d': 
                        losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
                                                   mse_loss( predicted_batch[:,:z_dim,:,:],
-      	                			    target_batch[:,:z_dim,:,:],
-                                                  ).item() * input_batch.shape[0]
+      	                			            target_batch[:,:z_dim,:,:],
+                                                            z_dim).item() * input_batch.shape[0]
                        losses['train_U'][-1] = losses['train_U'][-1] + \
                                                mse_loss( predicted_batch[:,z_dim:2*z_dim,:,:],
-                                               target_batch[:,z_dim:2*z_dim,:,:],
-                                               ).item() * input_batch.shape[0]
+                                                         target_batch[:,z_dim:2*z_dim,:,:],
+                                                         z_dim).item() * input_batch.shape[0]
                        losses['train_V'][-1] = losses['train_V'][-1] + \
                                                mse_loss( predicted_batch[:,2*z_dim:3*z_dim,:,:],
-                                               target_batch[:,2*z_dim:3*z_dim,:,:],
-                                               ).item() * input_batch.shape[0]
+                                                         target_batch[:,2*z_dim:3*z_dim,:,:],
+                                                         z_dim).item() * input_batch.shape[0]
                        losses['train_Eta'][-1] = losses['train_Eta'][-1] + \
                                                  mse_loss( predicted_batch[:,3*z_dim,:,:],
-                                                 target_batch[:,3*z_dim,:,:],
-                                                 ).item() * input_batch.shape[0]
+                                                           target_batch[:,3*z_dim,:,:],
+                                                           z_dim).item() * input_batch.shape[0]
                  else:  
                     if dimension == '2d': 
                        losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
                                                   mse_loss( predicted_batch[:,:z_dim,:,:],
-                                                  target_batch[:,:z_dim,:,:],
-                                                  ).item() * input_batch.shape[0]
+                                                            target_batch[:,:z_dim,:,:],
+                                                            z_dim).item() * input_batch.shape[0]
                        losses['train_U'][-1] = losses['train_U'][-1] + \
                                                mse_loss( predicted_batch[:,z_dim:2*z_dim,:,:],
-                                               target_batch[:,z_dim:2*z_dim,:,:],
-                                               ).item() * input_batch.shape[0]
+                                                         target_batch[:,z_dim:2*z_dim,:,:],
+                                                         z_dim).item() * input_batch.shape[0]
                        losses['train_V'][-1] = losses['train_V'][-1] + \
                                                mse_loss( predicted_batch[:,2*z_dim:3*z_dim,:,:],
-                                               target_batch[:,2*z_dim:3*z_dim,:,:],
-                                               ).item() * input_batch.shape[0]
+                                                         target_batch[:,2*z_dim:3*z_dim,:,:],
+                                                         z_dim).item() * input_batch.shape[0]
                        losses['train_Eta'][-1] = losses['train_Eta'][-1] + \
                                                  mse_loss( predicted_batch[:,3*z_dim,:,:],
-                                                 target_batch[:,3*z_dim,:,:],
-                                                 ).item() * input_batch.shape[0]
+                                                           target_batch[:,3*z_dim,:,:],
+                                                           z_dim).item() * input_batch.shape[0]
                     elif dimension == '3d': 
                        losses['train_Temp'][-1] = losses['train_Temp'][-1] + \
-                                                  mse_loss( predicted_batch[:,0,:,:,:], target_batch[:,0,:,:,:] ).item() * input_batch.shape[0]
+                                                  mse_loss( predicted_batch[:,0,:,:,:], target_batch[:,0,:,:,:], z_dim ).item() * input_batch.shape[0]
                        losses['train_U'][-1]    = losses['train_U'][-1] + \
-                                                  mse_loss( predicted_batch[:,1,:,:,:], target_batch[:,1,:,:,:] ).item() * input_batch.shape[0]
+                                                  mse_loss( predicted_batch[:,1,:,:,:], target_batch[:,1,:,:,:], z_dim ).item() * input_batch.shape[0]
                        losses['train_V'][-1]    = losses['train_V'][-1] + \
-                                                  mse_loss( predicted_batch[:,2,:,:,:], target_batch[:,2,:,:,:] ).item() * input_batch.shape[0]
+                                                  mse_loss( predicted_batch[:,2,:,:,:], target_batch[:,2,:,:,:], z_dim ).item() * input_batch.shape[0]
                        losses['train_Eta'][-1]  = losses['train_Eta'][-1] + \
-                                                  mse_loss( predicted_batch[:,3,:,:,:], target_batch[:,3,:,:,:] ).item() * input_batch.shape[0]
+                                                  mse_loss( predicted_batch[:,3,:,:,:], target_batch[:,3,:,:,:], z_dim ).item() * input_batch.shape[0]
         
                  # get gradients w.r.t to parameters
                  loss.backward()
@@ -293,7 +305,7 @@ def TrainModel(model_name, model_style, dimension, land, histlen, rolllen, TEST,
           
               # get loss for the predicted_batch output
               losses['val'][-1] = losses['val'][-1] +  \
-                                  mse_loss( predicted_batch, target_batch ).item() * input_batch.shape[0]
+                                  mse_loss( predicted_batch, target_batch, z_dim ).item() * input_batch.shape[0]
    
               del input_batch
               del target_batch
@@ -398,7 +410,7 @@ def LoadModel(model_name, h, optimizer, saved_epoch, tr_inf, losses, best, seed_
 
 
 def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_method, channel_dim, mean_std_file, no_out_channels,
-                    no_phys_in_channels, z_dim, land, seed, no_batches):
+                    no_phys_in_channels, z_dim, land, seed, no_batches, multipredmethod):
 
    logging.info('Making density scatter plots')
    logging.info('No_batches; '+str(no_batches))
@@ -427,12 +439,14 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
             bdy_masks = bdy_masks[:,:,:,:].bool()
    
             # get prediction from the model, given the inputs
-            if isinstance(h, list):
+            if multipredmethod == 'random':
+               pred_batch = h[random.randrange(len(h))]( torch.cat( (input_batch, Tmask, Umask, Vmask), dim=channel_dim) )
+            elif multipredmethod == 'average':
                pred_batch = h[0]( torch.cat( (input_batch, Tmask, Umask, Vmask), dim=channel_dim) ) 
                for i in range(1, len(h)):
                   pred_batch = pred_batch + h[i]( torch.cat( (input_batch, Tmask, Umask, Vmask ), dim=channel_dim) )
                pred_batch = pred_batch / len(h)
-            else:
+            elif multipredmethod == 'singlepred':
                if land == 'ExcLand':
                   pred_batch = h( input_batch ) 
                else:
@@ -444,7 +458,7 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
                                                   dimension, norm_method, seed)
             pred_batch = rr.RF_DeNormalise(pred_batch[:, :no_out_channels, :, :], targets_mean, targets_std, targets_range,
                                                      dimension, norm_method, seed)
-   
+            
             # Mask
             target_batch = np.where( out_masks[0]==1, target_batch, np.nan)
             pred_batch = np.where( out_masks[0]==1, pred_batch, np.nan)
@@ -528,19 +542,19 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
    
    ax_temp.set_xlabel('Truth')
    ax_temp.set_ylabel('Predictions')
-   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+   ax_temp.set_title('Change in Temperature ('+u'\xb0'+'C)')
 
    ax_U.set_xlabel('Truth')
    ax_U.set_ylabel('Predictions')
-   ax_U.set_title('Eastward Velocity (m/s)')
+   ax_U.set_title('Change in Eastward Velocity (m/s)')
 
    ax_V.set_xlabel('Truth')
    ax_V.set_ylabel('Predictions')
-   ax_V.set_title('Northward Velocity (m/s)')
+   ax_V.set_title('Change in Northward Velocity (m/s)')
 
    ax_Eta.set_xlabel('Truth')
    ax_Eta.set_ylabel('Predictions')
-   ax_Eta.set_title('Sea Surface Height (m)')
+   ax_Eta.set_title('Change in Sea Surface Height (m)')
 
    plt.tight_layout()
 
@@ -548,6 +562,35 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
                model_name+'_densescatter_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
+
+   # Plot just Temperature
+   fig_main = plt.figure(figsize=(7 ,7 ))
+   ax_temp  = fig_main.add_subplot(111)
+
+   counts, xedges, yedges, im_temp = \
+              ax_temp.hist2d(targets[:,0,:,:,:].reshape(-1),
+                             predictions[:,0,:,:,:].reshape(-1),
+                             bins=(50, 50),
+                             range=[[min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) )],
+                                    [min( np.nanmin(targets[:,0,:,:,:]), np.nanmin(predictions[:,0,:,:,:]) ),
+                                     max( np.nanmax(targets[:,0,:,:,:]), np.nanmax(predictions[:,0,:,:,:]) )]],
+                             cmap='Blues', norm=colors.LogNorm() )
+   ax_temp.annotate( 'Pearsons Correlation Coefficient: {mystats:.2e}'.format(mystats=stats.pearsonr(
+                                targets[:,0,:,:,:][~np.isnan(targets[:,0,:,:,:])], 
+                                predictions[:,0,:,:,:][~np.isnan(targets[:,0,:,:,:])] )[0]),
+                     xy=(.02, .95), xycoords='axes fraction' ) 
+   ax_temp.set_xlabel('Truth')
+   ax_temp.set_ylabel('Predictions')
+   ax_temp.set_title('Change in Temperature ('+u'\xb0'+'C)')
+   cb=plt.colorbar(im_temp, ax=(ax_temp), shrink=0.9, location='bottom', pad=0.1)
+
+   plt.tight_layout()
+   plt.savefig('../../../Channel_nn_Outputs/'+model_name+'/TRAINING_PLOTS/'+
+               model_name+'_densescatterTemp_epoch'+str(epoch).rjust(3,'0')+'_'+title+'.png',
+               bbox_inches = 'tight', pad_inches = 0.1)
+   plt.close()
+
 
    # PLOT RESULTS FROM SPECIFIC AREAS
    bdy_masks = bdy_masks[0:1,:,:,:]
@@ -606,19 +649,19 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
    
    ax_temp.set_xlabel('Truth')
    ax_temp.set_ylabel('Predictions')
-   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+   ax_temp.set_title('Change in Temperature ('+u'\xb0'+'C)')
 
    ax_U.set_xlabel('Truth')
    ax_U.set_ylabel('Predictions')
-   ax_U.set_title('Eastward Velocity (m/s)')
+   ax_U.set_title('Change in Eastward Velocity (m/s)')
 
    ax_V.set_xlabel('Truth')
    ax_V.set_ylabel('Predictions')
-   ax_V.set_title('Northward Velocity (m/s)')
+   ax_V.set_title('Change in Northward Velocity (m/s)')
 
    ax_Eta.set_xlabel('Truth')
    ax_Eta.set_ylabel('Predictions')
-   ax_Eta.set_title('Sea Surface Height (m)')
+   ax_Eta.set_title('Change in Sea Surface Height (m)')
 
    plt.tight_layout()
 
@@ -680,19 +723,19 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
    
    ax_temp.set_xlabel('Truth')
    ax_temp.set_ylabel('Predictions')
-   ax_temp.set_title('Temperature ('+u'\xb0'+'C)')
+   ax_temp.set_title('Change in Temperature ('+u'\xb0'+'C)')
 
    ax_U.set_xlabel('Truth')
    ax_U.set_ylabel('Predictions')
-   ax_U.set_title('Eastward Velocity (m/s)')
+   ax_U.set_title('Change in Eastward Velocity (m/s)')
 
    ax_V.set_xlabel('Truth')
    ax_V.set_ylabel('Predictions')
-   ax_V.set_title('Northward Velocity (m/s)')
+   ax_V.set_title('Change in Northward Velocity (m/s)')
 
    ax_Eta.set_xlabel('Truth')
    ax_Eta.set_ylabel('Predictions')
-   ax_Eta.set_title('Sea Surface Height (m)')
+   ax_Eta.set_title('Change in Sea Surface Height (m)')
 
    plt.tight_layout()
 
@@ -703,7 +746,7 @@ def PlotDensScatter(model_name, dimension, data_loader, h, epoch, title, norm_me
 
 def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epochs, y_dim_used, dimension, 
                 histlen, land, file_append, norm_method, channel_dim, mean_std_file, no_phys_in_channels,
-                no_out_channels, MITgcm_stats_filename, seed):
+                no_out_channels, MITgcm_stats_filename, seed, multipredmethod):
    #-------------------------------------------------------------
    # Output the rms and correlation coefficients over a dataset
    #-------------------------------------------------------------
@@ -771,12 +814,14 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
 
           bdy_masks = bdy_masks[:,:,:,:].bool().numpy()
           # get prediction from the model, given the inputs
-          if isinstance(h, list):
+          if multipredmethod == 'random':
+             pred_tend_batch = h[random.randrange(len(h))]( torch.cat( (input_batch, Tmask, Umask, Vmask), dim=channel_dim) )
+          elif multipredmethod == 'average':
              pred_tend_batch = h[0]( torch.cat( (input_batch, Tmask, Umask, Vmask), dim=channel_dim) ) 
              for i in range(1, len(h)):
                 pred_tend_batch = pred_tend_batch + h[i]( torch.cat( (input_batch, Tmask, Umask, Vmask ), dim=channel_dim) )
              pred_tend_batch = pred_tend_batch / len(h)
-          else:
+          elif multipredmethod == 'singlepred':
              if land == 'ExcLand':
                 pred_tend_batch = h( input_batch ) 
              else:
@@ -1340,7 +1385,7 @@ def OutputStats(model_name, model_style, MITgcm_filename, data_loader, h, no_epo
 
 def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset, h, start, for_len, no_epochs, y_dim_used,
                        land, dimension, histlen, landvalues, iterate_method, iterate_smooth, smooth_steps, norm_method,
-                       channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, seed):
+                       channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, seed, multipredmethod):
    logging.info('Iterating')
 
    landvalues = torch.tensor(landvalues)
@@ -1442,13 +1487,17 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
       for fortime in range(start+histlen, start+for_len):
          print(fortime)
          # Make prediction, for both multi model ensemble, or single model predictions
-         if isinstance(h, list):
+         if multipredmethod == 'random':
+            rand_model = random.randrange(len(h))
+            print('rand_model '+str(rand_model))
+            predicted = h[rand_model]( torch.cat( (input_sample, Tmask, Umask, Vmask), dim=channel_dim) ).cpu().detach()
+         elif multipredmethod == 'average':
             predicted = h[0]( torch.cat((input_sample, Tmask, Umask, Vmask), dim=channel_dim)).cpu().detach()
             for i in range(1, len(h)):
                predicted = predicted + \
                            h[i]( torch.cat((input_sample, Tmask, Umask, Vmask), dim=channel_dim)).cpu().detach()
             predicted = predicted / len(h)
-         else:
+         elif multipredmethod == 'singlepred':
             if land == 'ExcLand':
                predicted = h( input_sample ).cpu().detach()
             else:
@@ -1474,7 +1523,7 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
                                                  inputs_mean[:4], inputs_std[:4], inputs_range[:4],
                                                  dimension, norm_method, seed)
             else: 
-               next_field = iterared_fields[-1] + (3./2.+.1) * predicted - (1./2.+.1) * old_predicted
+               next_field = iterated_fields[-1] + (3./2.) * predicted - (1./2.) * old_predicted
             old_predicted = predicted
          elif iterate_method == 'AB3':
             if fortime == start+histlen:

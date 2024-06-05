@@ -268,7 +268,7 @@ class MITgcm_Dataset(data.Dataset):
           sample_input  = np.zeros(( self.histlen, self.no_phys_in_channels, self.y_dim, self.x_dim ))
           sample_target = np.zeros(( self.no_out_channels, self.y_dim, self.x_dim ))
           sample_extrafluxes = np.zeros(( 2*self.rolllen, self.y_dim, self.x_dim ))  # For use when iterating for roll out loss, not used here
-
+          
           for time in range(self.histlen):
              sample_input[ time, :self.z_dim, :, : ]  = \
                                              da_T_in[time,:,:,:].reshape(-1,self.y_dim,self.x_dim)
@@ -493,7 +493,7 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_Umask     = out_file.createVariable( 'Umask',     'f4', ('histlen', 'Z', 'Y', 'X') )
           nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', ('histlen', 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
        elif dim == '2d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -505,7 +505,7 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_Umask     = out_file.createVariable( 'Umask',     'f4', ('Z', 'Y', 'X') )
           nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', ('Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
        elif dim == '3d':
           out_file.createDimension('in_channels', no_phys_in_channels*histlen)
           nc_in_channels = out_file.createVariable( 'in_channels', 'i4',  'in_channels')
@@ -517,7 +517,7 @@ def CreateProcDataset( MITgcm_filename, ProcDataFilename, subsample_rate, histle
           nc_Umask     = out_file.createVariable( 'Umask',     'f4', (1, 'Z', 'Y', 'X') )
           nc_Vmask     = out_file.createVariable( 'Vmask',     'f4', (1, 'Z', 'Y', 'X') )
           nc_out_masks = out_file.createVariable( 'out_masks', 'f4', ('out_mask_channels', 'Z', 'Y', 'X') )
-          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_channels', 'Y', 'X') )
+          nc_bdy_masks = out_file.createVariable( 'bdy_masks', 'f4', ('out_mask_channels', 'Y', 'X') )
        out_file.close()
 
     # Fill Dataset

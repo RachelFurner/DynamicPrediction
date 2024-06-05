@@ -21,6 +21,17 @@ class CustomPad2dTransp(nn.Module):
       x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0), mode='circular')
       return x
 
+class CustomPad2dLearnLand(nn.Module):
+   def __init__(self, kern_size):
+      super().__init__()
+      self.kern_size = kern_size
+   def forward(self, x):
+      # apply cyclical padding in x dir
+      x = nn.functional.pad(x, ( int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ), 0, 0 ), mode='circular')
+      # apply const padding in y dir
+      x = nn.functional.pad(x, ( 0, 0, int( (self.kern_size-1)/2 ), int( (self.kern_size-1)/2 ) ), mode='constant', value=0)
+      return x
+
 class CustomPad3dTransp(nn.Module):
    def __init__(self, kern_size):
       super().__init__()
@@ -69,6 +80,8 @@ class UNet2dTransp(nn.Module):
       features = 2**(in_channels-1).bit_length()  # nearest power of two to input channels
       logging.info('No features ; '+str(features)+'\n')
 
+      self.learnland = UNet2dTransp._learn_land(3, 3, padding_type, kern_size, name="learnland")
+
       self.encoder1 = UNet2dTransp._down_block(in_channels, features, padding_type, kern_size, name="enc1")
       self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
       self.encoder2 = UNet2dTransp._down_block(features, features*2, padding_type, kern_size, name="enc2")
@@ -91,6 +104,9 @@ class UNet2dTransp(nn.Module):
       device = 'cuda' if torch.cuda.is_available() else 'cpu'
       x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('input.shape; '+str(x.shape))
+      #learnland = self.learnland(x[:,-3:,:,:])
+      #learnland = torch.cat((x[:,:-3,:,:],learnland), dim=1)  
+      #enc1 = self.encoder1(learnland)
       enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
       enc2 = self.pool1(enc1)
@@ -134,6 +150,40 @@ class UNet2dTransp(nn.Module):
       torch.cuda.empty_cache()
 
       return self.conv(tmp)
+
+   @staticmethod
+   def _learn_land(in_channels, features, padding_type, kern_size, name):
+      return nn.Sequential(
+          OrderedDict(
+              [
+                  ( name + "pad1", CustomPad2dLearnLand(kern_size) ),
+                  (
+                      name + "conv1",
+                      nn.Conv2d(
+                          in_channels=in_channels,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm1", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu1", nn.ReLU(inplace=True)),
+
+                  ( name + "pad2", CustomPad2dLearnLand(kern_size) ),
+                  (
+                      name + "conv2",
+                      nn.Conv2d(
+                          in_channels=features,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm2", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu2", nn.ReLU(inplace=True)),
+              ]
+          )
+      )
 
    @staticmethod
    def _down_block(in_channels, features, padding_type, kern_size, name):

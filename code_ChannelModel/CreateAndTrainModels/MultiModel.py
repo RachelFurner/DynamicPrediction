@@ -3,31 +3,19 @@
 
 # Code to create iterative prediction by combining predictions from mutliple models
 
-#from comet_ml import Experiment
 import sys
 sys.path.append('../Tools')
 import ReadRoutines as rr
-
 sys.path.append('.')
 from WholeGridNetworkRegressorModules import *
 from Models import CreateModel
-
 import numpy as np
 import os
 import xarray as xr
-
 from torch.utils import data
-#import torch.nn as nn
-#from torch.autograd import Variable
-#import torch
-from torchvision import transforms#, utils
-#import torch.autograd.profiler as profiler
-
-#import netCDF4 as nc4
-
+from torchvision import transforms
 import argparse
 import logging
-
 import multiprocessing as mp
 
 def parse_args():
@@ -38,6 +26,7 @@ def parse_args():
     a.add_argument("-na", "--name", default="", action='store')
     a.add_argument("-te", "--test", default=False, type=bool, action='store')
     a.add_argument("-ms", "--modelstyle", default='UNet2dtransp', type=str, action='store')
+    a.add_argument("-mm", "--multipredmethod", default='average', type=str, action='store')
     a.add_argument("-di", "--dim", default='2d', type=str, action='store')
     a.add_argument("-la", "--land", default='Spits', type=str, action='store')
     a.add_argument("-pj", "--predictionjump", default='12hrly', type=str, action='store')
@@ -70,7 +59,7 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     logging.info('Using device: '+device+'\n')
 
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
 
     args = parse_args()
 
@@ -88,9 +77,21 @@ if __name__ == "__main__":
     train_end_ratio = 0.75  # Take training samples from 0 to this far through the dataset
     val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
  
-    for_len = 180    # How long to iteratively predict for
-    for_subsample = 1
-    start = 0  
+    if args.predictionjump == '12hrly':
+       for_len = 180    # How long to iteratively predict for
+       for_subsample = 1
+    elif args.predictionjump == 'hrly':
+       for_len = 1440   # How long to iteratively predict for
+       for_subsample = 12
+    elif args.predictionjump == '10min':
+       for_len = 8640   # How long to iteratively predict for
+       for_subsample = 72
+    elif args.predictionjump == 'wkly':
+       for_len = 13     # How long to iteratively predict for
+       for_subsample = 1
+    start = 0        # Start from zero to fit with perturbed runs
+    if args.test:
+       for_len = 90     # Test dataset is only 100 long
     
     routine_seed=30475
     os.environ['PYTHONHASHSEED'] = str(routine_seed)
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     torch.backends.cuda.matmul.allow_tf32 = True
 
     base_name = args.name+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
-    model_name = 'MultiModel_'+base_name
+    model_name = 'MultiModel_'+args.multipredmethod+'_'+base_name
     model_dir = '../../../Channel_nn_Outputs/'+model_name
     if not os.path.isdir(model_dir):
        os.system("mkdir %s" % (model_dir))
@@ -129,13 +130,22 @@ if __name__ == "__main__":
     elif args.dim == '3d':
        channel_dim = 1
  
-    if args.land == 'Spits':
-       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
-    else:
-       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
-    ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+'_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
+    if args.predictionjump == '12hrly':
+       if args.land == 'Spits':
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+       elif args.land == 'DiffSpits':
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_DiffLandSpits/runs/50yr_Cntrl/'
+       else:
+          MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
+    elif args.predictionjump == 'hrly':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
+    elif args.predictionjump == '10min':
+       MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/10min_output/'
+       subsample_rate = 3*subsample_rate # larger subsample for small timestepping, MITgcm dataset longer so same amount of training/val samples
+
+    ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+ \
+                       '_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
     if args.test: 
-       for_len = min(for_len, 20)
        MITgcm_filename = MITgcm_dir+args.predictionjump+'_small_set.nc'
        ProcDataFilename = ProcDataFilename+'_TEST.nc'
     else:
@@ -158,17 +168,26 @@ if __name__ == "__main__":
     z_dim    = ( ds.isel( T=slice(0) ) ).sizes['Zmd000038']
 
     if args.modelstyle == 'ConvLSTM' or args.modelstyle == 'UNetConvLSTM':
-       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux 
-       no_model_in_channels = no_phys_in_channels + z_dim             # Phys_in channels plus masks
-       no_out_channels = 3*z_dim + 1                                  # Temp, U, V through depth, plus Eta
+       no_phys_in_channels = 3*z_dim + 3                       # Temp, U, V through depth, plus Eta, gTforc and taux 
+       if args.land == 'ExcLand':
+          no_model_in_channels = no_phys_in_channels           # Phys_in channels, no masks for excland version
+       else:
+          no_model_in_channels = no_phys_in_channels + 3*z_dim   # Phys_in channels plus masks
+       no_out_channels = 3*z_dim + 1                           # Temp, U, V through depth, plus Eta
     elif args.dim == '2d':
-       no_phys_in_channels = 3*z_dim + 3                              # Temp, U, V through depth, plus Eta, gTforc and taux
-       no_model_in_channels = args.histlen * no_phys_in_channels + z_dim # Phys_in channels for each past time, plus masks
-       no_out_channels = 3*z_dim+1                                    # Eta, plus Temp, U, V through depth (predict 1 step ahead, even if LF calculated over mutliple steps
+       no_phys_in_channels = 3*z_dim + 3                       # Temp, U, V through depth, plus Eta, gTforc and taux
+       if args.land == 'ExcLand':
+          no_model_in_channels = args.histlen * no_phys_in_channels   # Phys_in channels for each past time, no masks for excland version
+       else:
+          no_model_in_channels = args.histlen * no_phys_in_channels + 3*z_dim # Phys_in channels for each past time, plus masks
+       no_out_channels = 3*z_dim+1                             # Eta, plus Temp, U, V through depth (predict 1 step ahead, even for rolout loss)
     elif args.dim == '3d':
-       no_phys_in_channels = 6                                        # Temp, U, V, Eta, gTforc and taux
-       no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
-       no_out_channels = 4                                            # Temp, U, V, Eta just once
+       no_phys_in_channels = 6                                 # Temp, U, V, Eta, gTforc and taux
+       if args.land == 'ExcLand':
+          no_model_in_channels = args.histlen * no_phys_in_channels  # Phys_in channels for each past time, no masks for Excland case
+       else:
+          no_model_in_channels = args.histlen * no_phys_in_channels + 1  # Phys_in channels for each past time, plus masks
+       no_out_channels = 4                                     # Temp, U, V, Eta just once
 
     inputs_mean, inputs_std, inputs_range, targets_mean, targets_std, targets_range = \
                                           ReadMeanStd(mean_std_file, args.dim, no_phys_in_channels, no_out_channels, z_dim, routine_seed)
@@ -229,25 +248,14 @@ if __name__ == "__main__":
                  'val'       : [] } 
 
        model_i_name = base_name+'_seed'+str(args.modelseeds[i])
+       if args.test:
+          model_i_name = base_name+'_seed'+str(args.modelseeds[i])+'_TEST'
        print(model_i_name)
        LoadModel(model_i_name, h[i], optimizer[i], args.savedepochs, 'inf', losses, args.best, args.modelseeds[i]) 
     
     #-------------------------------
     # Assess the multi-model set up 
     #-------------------------------
-
-    #--------------------
-    # Plot scatter plots
-    #--------------------
-    if args.plotscatter:
-    
-       PlotScatter(model_name, args.dim, train_loader, h, args.savedepochs, 'training', args.normmethod, channel_dim,
-                   mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed)
-       if not args.test: 
-          PlotScatter(model_name, args.dim, val_loader, h, args.savedepochs, 'validation', args.normmethod, channel_dim,
-                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed)
-          PlotScatter(model_name, args.dim, test_loader, h, args.savedepochs, 'test', args.normmethod, channel_dim, 
-                      mean_std_file, no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed)
 
     #---------------------
     # Iteratively predict 
@@ -263,30 +271,35 @@ if __name__ == "__main__":
     
        IterativelyPredict(model_name, args.modelstyle, MITgcm_filename, Iterate_Dataset, h, start, for_len, args.savedepochs,
                           y_dim_used, args.land, args.dim, args.histlen, landvalues, args.iteratemethod, args.iteratesmooth, args.smoothsteps,
-                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, routine_seed) 
+                          args.normmethod, channel_dim, mean_std_file, for_subsample, no_phys_in_channels, no_out_channels, routine_seed, args.multipredmethod) 
     
+    #--------------------
+    # Plot scatter plots
+    #--------------------
+    if args.plotscatter:
+    
+       PlotDensScatter(model_name, args.dim, train_loader, h, args.savedepochs, 'training', args.normmethod, channel_dim, mean_std_file,
+                       no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed, np.ceil(no_tr_samples/args.batchsize), args.multipredmethod)
+       if not args.test: 
+          PlotDensScatter(model_name, args.dim, val_loader, h, args.savedepochs, 'validation', args.normmethod, channel_dim, mean_std_file,
+                          no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed, np.ceil(no_test_samples/args.batchsize), args.multipredmethod)
+          PlotDensScatter(model_name, args.dim, test_loader, h, args.savedepochs, 'test', args.normmethod, channel_dim, mean_std_file,
+                          no_out_channels, no_phys_in_channels, z_dim, args.land, routine_seed, np.ceil(no_test_samples/args.batchsize), args.multipredmethod)
+
     #------------------
     # Assess the model 
     #------------------
     if args.assess:
     
-       stats_train_loader = torch.utils.data.DataLoader(Train_Dataset, batch_size=args.batchsize, shuffle=True,
-                                                  num_workers=args.numworkers, pin_memory=True )
-       if not args.test: 
-          stats_val_loader   = torch.utils.data.DataLoader(Val_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                                  num_workers=args.numworkers, pin_memory=True )
-          stats_test_loader  = torch.utils.data.DataLoader(Test_Dataset,  batch_size=args.batchsize, shuffle=True, 
-                                                  num_workers=args.numworkers, pin_memory=True )
-    
-       OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_train_loader, h, args.savedepochs, y_dim_used, args.dim, 
+       OutputStats(model_name, args.modelstyle, MITgcm_filename, train_loader, h, args.savedepochs, y_dim_used, args.dim, 
                    args.histlen, args.land, 'training', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                   MITgcm_stats_filename, routine_seed)
+                   MITgcm_stats_filename, routine_seed, args.multipredmethod)
     
        if not args.test: 
-          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_val_loader, h, args.savedepochs, y_dim_used, args.dim, 
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, val_loader, h, args.savedepochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'validation', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                      MITgcm_stats_filename, routine_seed)
+                      MITgcm_stats_filename, routine_seed, args.multipredmethod)
     
-          OutputStats(model_name, args.modelstyle, MITgcm_filename, stats_test_loader, h, args.savedepochs, y_dim_used, args.dim, 
+          OutputStats(model_name, args.modelstyle, MITgcm_filename, test_loader, h, args.savedepochs, y_dim_used, args.dim, 
                       args.histlen, args.land, 'test', args.normmethod, channel_dim, mean_std_file, no_phys_in_channels, no_out_channels,
-                      MITgcm_stats_filename, routine_seed) 
+                      MITgcm_stats_filename, routine_seed, args.multipredmethod) 

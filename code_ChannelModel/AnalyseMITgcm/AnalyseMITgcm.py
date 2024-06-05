@@ -16,23 +16,23 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import netCDF4 as nc4
 
-for_jump = '12hrly'
-#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/4.2yr_HrlyOutputting/'
-datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+for_jump = '6hrly'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
+datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_6hr/'
 #datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/700yr_WklyOutputting/'
 data_filename = datadir + for_jump + '_data.nc'
 #data_filename = datadir + for_jump + '_small_set.nc'
 grid_filename = datadir+'grid.nc'
 
-land = 'Spits'
+land = 'IncLand'
 out_filename = datadir+land+'_stats.nc'
 mean_std_file = datadir+land+'_'+for_jump+'_MeanStd.npz'
 
-init=False
+init=True 
 var_range=range(6)
-plotting_histograms = True 
+plotting_histograms = False
 calc_stats = False
-nc_stats = False
+nc_stats = True 
 
 train_split=0.75
 #------------------------
@@ -78,7 +78,7 @@ if init:
    
    if nc_stats:
       ds_inputs = xr.open_dataset(data_filename)
-      ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
+      ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']), 2 ) )
       if land=='ExcLand':
          ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
          ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
@@ -122,7 +122,7 @@ for var in var_range:
    da_mask = ds_grid[MaskVarName[var]]
 
    ds_inputs = xr.open_dataset(data_filename)
-   ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
+   ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']), 2 ) )
    if land=='ExcLand':
       ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
       ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
