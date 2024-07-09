@@ -101,7 +101,7 @@ if __name__ == "__main__":
        subsample_rate = int(subsample_rate*2)   #number of time steps to skip over when creating training and test data
        for_len = int(2*180)  # How long to iteratively predict for
        for_subsample = 1 
-    start = 0        # Start from zero to fit with perturbed runs
+    start = 11  # Start from 10 - give MITgcm perturbations a bit of bedding in time
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
     np.random.seed(args.seed)

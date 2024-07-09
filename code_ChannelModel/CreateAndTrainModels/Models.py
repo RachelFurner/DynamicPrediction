@@ -104,10 +104,10 @@ class UNet2dTransp(nn.Module):
       device = 'cuda' if torch.cuda.is_available() else 'cpu'
       x = x.to(device, non_blocking=True, dtype=torch.float)
       #print('input.shape; '+str(x.shape))
-      #learnland = self.learnland(x[:,-3:,:,:])
-      #learnland = torch.cat((x[:,:-3,:,:],learnland), dim=1)  
-      #enc1 = self.encoder1(learnland)
-      enc1 = self.encoder1(x)
+      learnland = self.learnland(x[:,-3:,:,:])
+      learnland = torch.cat((x[:,:-3,:,:],learnland), dim=1)  
+      enc1 = self.encoder1(learnland)
+      #enc1 = self.encoder1(x)
       #print('enc1.shape; '+str(enc1.shape))
       enc2 = self.pool1(enc1)
       #print('enc2a.shape; '+str(enc2.shape))
@@ -184,6 +184,150 @@ class UNet2dTransp(nn.Module):
               ]
           )
       )
+
+   @staticmethod
+   def _down_block(in_channels, features, padding_type, kern_size, name):
+      return nn.Sequential(
+          OrderedDict(
+              [
+                  ( name + "pad1", CustomPad2dTransp(kern_size) ),
+                  (
+                      name + "conv1",
+                      nn.Conv2d(
+                          in_channels=in_channels,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm1", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu1", nn.ReLU(inplace=True)),
+
+                  ( name + "pad2", CustomPad2dTransp(kern_size) ),
+                  (
+                      name + "conv2",
+                      nn.Conv2d(
+                          in_channels=features,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm2", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu2", nn.ReLU(inplace=True)),
+              ]
+          )
+      )
+
+   @staticmethod
+   def _up_block(in_channels, features, padding_type, kern_size, name):
+      return nn.Sequential(
+          OrderedDict(
+              [
+                  ( name + "pad1", CustomPad2dTransp(kern_size) ),
+                  (
+                      name + "conv1",
+                      nn.ConvTranspose2d(
+                          in_channels=in_channels,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          padding=( 0, int(kern_size-1) ),
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm1", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu1", nn.ReLU(inplace=True)),
+
+                  ( name + "pad2", CustomPad2dTransp(kern_size) ),
+                  (
+                      name + "conv2",
+                      nn.ConvTranspose2d(
+                          in_channels=features,
+                          out_channels=features,
+                          kernel_size=kern_size,
+                          padding=( 0, int(kern_size-1) ),
+                          bias=False,
+                      ),
+                  ),
+                  (name + "norm2", nn.BatchNorm2d(num_features=features)),
+                  (name + "relu2", nn.ReLU(inplace=True)),
+              ]
+          )
+      )
+
+class UNet2dTranspNoLL(nn.Module):
+   def __init__(self, in_channels, out_channels, padding_type, xdim, ydim, kern_size):
+      super(UNet2dTranspNoLL, self).__init__()
+      print('ydim ;'+str(ydim))
+
+      features = 2**(in_channels-1).bit_length()  # nearest power of two to input channels
+      logging.info('No features ; '+str(features)+'\n')
+
+      self.encoder1 = UNet2dTranspNoLL._down_block(in_channels, features, padding_type, kern_size, name="enc1")
+      self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+      self.encoder2 = UNet2dTranspNoLL._down_block(features, features*2, padding_type, kern_size, name="enc2")
+      self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+      self.bottleneck = UNet2dTranspNoLL._down_block(features*2, features*4, padding_type, kern_size, name="bottleneck")
+
+      self.upsample2 = nn.Upsample(size=(int(ydim/2-(kern_size-1)*2),int(xdim/2)), mode='bilinear')
+      self.upconv2 = nn.Conv2d(features*4, features*2, kernel_size=kern_size, stride=1)
+      self.decoder2 = UNet2dTranspNoLL._up_block(features*2*2, features*2, padding_type, kern_size, name="dec1")
+      self.upsample1 = nn.Upsample(size=(int(ydim-(kern_size-1)),int(xdim)), mode='bilinear')
+      self.upconv1 = nn.Conv2d(features*2, features, kernel_size=kern_size, stride=1)
+      self.decoder1 = UNet2dTranspNoLL._up_block(features*2, features, padding_type, kern_size, name="dec1")
+
+      self.conv = nn.Conv2d(in_channels=features, out_channels=out_channels, kernel_size=1)
+
+      self.kern_size = kern_size
+
+   def forward(self, x):
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      x = x.to(device, non_blocking=True, dtype=torch.float)
+      #print('input.shape; '+str(x.shape))
+      enc1 = self.encoder1(x)
+      #print('enc1.shape; '+str(enc1.shape))
+      enc2 = self.pool1(enc1)
+      #print('enc2a.shape; '+str(enc2.shape))
+      enc2 = self.encoder2(enc2)
+      #print('enc2b.shape; '+str(enc2.shape))
+
+      tmp = self.pool2(enc2)
+      #print('bottlenecka.shape; '+str(tmp.shape))
+      tmp = self.bottleneck(tmp)
+      #print('bottleneckb.shape; '+str(tmp.shape))
+
+      tmp = self.upsample2(tmp)
+      #print('tmp.shape; '+str(tmp.shape))
+      cust_pad = CustomPad2dTransp(self.kern_size)
+      tmp = cust_pad.forward(tmp)
+      #print('tmpb.shape; '+str(tmp.shape))
+      tmp = self.upconv2(tmp)
+      #print('tmpc.shape; '+str(tmp.shape))
+      tmp = torch.cat((tmp, enc2), dim=1)
+      #print('tmpd.shape; '+str(tmp.shape))
+      tmp = self.decoder2(tmp)
+      #print('tmpe.shape; '+str(tmp.shape))
+      tmp = self.upsample1(tmp)
+      #print('dec1a.shape; '+str(tmp.shape))
+      tmp = cust_pad.forward(tmp)
+      #print('dec1b.shape; '+str(tmp.shape))
+      tmp = self.upconv1(tmp)
+      #print('dec1c.shape; '+str(tmp.shape))
+      tmp = torch.cat((tmp, enc1), dim=1)
+      #print('dec1d.shape; '+str(tmp.shape))
+      tmp = self.decoder1(tmp)
+      #print('dec1e.shape; '+str(tmp.shape))
+
+      # manually delete as this doesn't seem to be working...
+      del x
+      del enc1
+      del enc2
+      del cust_pad
+      gc.collect()
+      torch.cuda.empty_cache()
+
+      return self.conv(tmp)
 
    @staticmethod
    def _down_block(in_channels, features, padding_type, kern_size, name):
@@ -1254,6 +1398,8 @@ def CreateModel(model_style, no_input_channels, no_target_channels, lr, seed_val
 
    if model_style == 'UNet2dtransp':
       h = UNet2dTransp(no_input_channels, no_target_channels, padding_type, xdim, ydim, kern_size)
+   elif model_style == 'UNet2dtranspNoLL':
+      h = UNet2dTranspNoLL(no_input_channels, no_target_channels, padding_type, xdim, ydim, kern_size)
    elif model_style == 'UNet2dinterp':
       h = UNet2dInterp(no_input_channels, no_target_channels, padding_type, xdim, ydim, kern_size)
    elif model_style == 'UNet3dtransp':

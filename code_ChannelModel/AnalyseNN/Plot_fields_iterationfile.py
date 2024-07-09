@@ -27,12 +27,12 @@ plt.rcParams.update({'font.size': 14})
 #----------------------------
 level = 2
 dir_name = 'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
-dir_name = 'MultiModel_average_IncLand12hrly_UNet2dtransp_histlen1_rolllen1'
+#dir_name = 'MultiModel_average_IncLand12hrly_UNet2dtransp_histlen1_rolllen1'
 epochs = '200'
-iteration_len = 180 
+iteration_len = 180  
 animation_end = 85   
 model_name = dir_name+'_'+epochs+'epochs'
-filename = model_name+'_simple_smth0stps0'
+filename = model_name+'_simple_smth20stps0'
 
 #-----------
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
@@ -79,7 +79,7 @@ for time in range(0,animation_end):
 
    fig = ChnPlt.plot_depth_fld(masked_Pred_Temp[time,level,:,:], 'Temperature',
                                level, da_X.values, da_Y.values, da_Z.values, title=None,
-                               minmax=[0,6.5])
+                               minmax=[0,6.5], extend='max')
    plt.savefig(rootdir+'/ITERATED_FORECAST/PLOTS/predfields_'+filename+'_Temp_level'+str(level)+'_time'+f'{time:03}'+'.png',
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()

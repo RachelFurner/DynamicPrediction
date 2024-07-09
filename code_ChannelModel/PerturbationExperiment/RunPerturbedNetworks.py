@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # Manually set variables for this run
     #-------------------------------------
     perturb=False
-    if perturb == 'True':
+    if perturb == True:
        model_name = 'PerturbationExp_Perturbed'
        start = 0        # Start point - zero if pertubed run, correct location in Control if Control run
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/6mnthPerturbed2593440/'

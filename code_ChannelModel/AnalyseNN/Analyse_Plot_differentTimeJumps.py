@@ -40,27 +40,29 @@ time_jumps = [6, 12, 24]
 labels = ['6 hourly', '12 hourly', '24 hourly']
 epochs = ['200', '200', '200']
 iteration_len = [360, 180, 90]  
+plot_persistence=True
+plot_climatology=True
 
 my_colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'lime', 'brown', 'orange']
 my_alphas = [ 1., 1., 1., 1., 1., 1., 1., 1., 1. ]
-
-my_xaxis = [np.arange(0,70,.25), np.arange(0,90,.5), np.arange(0,90,1)]
-my_ts_ends = [70*4, 90*2, 90]
+my_linestyles = ['solid', 'solid', 'solid', 'solid', 'solid', 'solid', 'solid', 'solid']
+my_xaxis = [np.arange(1,76,.25), np.arange(1,91,.5), np.arange(1,91,1)]
+my_ts_ends = [75*4, 90*2, 90]
 
 plot_timeseries = True   
 plot_rms_timeseries = True 
 print_spatially_av_rms = True 
 print_cc = True 
 plot_cc_timeseries = True 
-make_animation_plots = False 
+make_animation_plots = True  
 power_spectrum = False
 plot_conserved = True 
-animation_end = 6*2*7
+animation_end = 6*2*7+1
 ts_days = 90   
 print_days = [7, 14, 28]  # times to print, in terms of how many days
 
-#pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']
-pert_list = []
+pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']
+#pert_list = []
 
 #---------------------------
 level = point[0]
@@ -75,10 +77,12 @@ RMS_Temp_dict = {}
 CC_Temp_dict = {}
 
 colors = []
+linestyles = []
 alphas = []
 xaxis = []
 ts_ends = []
 RMS_colors = []
+RMS_linestyles = []
 RMS_alphas = []
 RMS_xaxis = []
 RMS_ts_ends = []
@@ -117,15 +121,40 @@ for jump in time_jumps:
    da_V_mask   = iter_ds['V_Mask']
    masked_True_V = np.where( da_V_mask.values==0, np.nan, da_true_V.values )
 
+   if jump == 12:
+      True_Temp_12hrly = masked_True_Temp[:ts_days*int(24/jump)]
+
    if count == 0:
       Temp_dict['MITgcm Temperature'] = masked_True_Temp[:ts_days*int(24/jump)]
       Mass_dict['MITgcm SSH'] = np.nansum( masked_True_Eta[:ts_days*int(24/jump)], axis=(1,2) )
       TKE_dict['MITgcm TKE'] = np.nansum( np.add( np.square(masked_True_U[:ts_days*int(24/jump)]),
                                                           np.square(masked_True_V[:ts_days*int(24/jump)]) ), axis=(1,2,3) )
       colors.append('black')
+      linestyles.append('solid')
       alphas.append(1)
-      xaxis.append(np.arange(0,ts_days,jump/24))
+      xaxis.append(np.arange(1,ts_days+1,jump/24))
       ts_ends.append(np.shape(xaxis[-1])[0])
+      if plot_persistence == True:
+         pers = np.zeros(masked_True_Temp.shape)
+         pers[:,:,:,:] = masked_True_Temp[0,:,:,:]
+         Temp_dict['Persistence'] = pers[:ts_days*2,:,:,:]
+         colors.append('grey')
+         linestyles.append('dashed')
+         alphas.append(1)
+         xaxis.append(np.arange(1,ts_days+1,.5))
+         ts_ends.append(np.shape(xaxis[-1])[0])
+      if plot_climatology == True:
+         stats_filename='/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/IncLand_stats.nc'
+         stats_ds = xr.open_dataset(stats_filename)
+         da_MeanTemp = stats_ds['MeanTemp']
+         clim = np.zeros(masked_True_Temp.shape)
+         clim[:,:,:,:] = da_MeanTemp[:,:,:]
+         Temp_dict['Climatology'] = clim[:ts_days*2]
+         colors.append('grey')
+         linestyles.append('dotted')
+         alphas.append(1)
+         xaxis.append(np.arange(1,ts_days+1,.5))
+         ts_ends.append(np.shape(xaxis[-1])[0])
 
    da_pred_Temp = iter_ds['Pred_Temp']
    da_Temp_errors = iter_ds['Temp_Errors']
@@ -142,10 +171,39 @@ for jump in time_jumps:
    TKE_dict[labels[count]] = np.nansum( np.add( np.square(masked_Pred_U[:my_ts_ends[count]]), np.square(masked_Pred_V[:my_ts_ends[count]]) ), axis=(1,2,3) )
 
    colors.append(my_colors[count])
+   linestyles.append(my_linestyles[count])
    alphas.append(my_alphas[count])
    xaxis.append(my_xaxis[count])
    ts_ends.append(my_ts_ends[count])
    
+   if count==0:
+      if plot_persistence == True:
+         pers_RMS = np.sqrt(np.nanmean( np.square(pers[:ts_days*2,:,:,:]-masked_True_Temp[:ts_days*2,:,:,:]), axis=(1,2,3) ))
+         RMS_Temp_dict['Persistence'] = pers_RMS
+         RMS_colors.append('grey')
+         RMS_linestyles.append('dashed')
+         RMS_alphas.append(1)
+         RMS_xaxis.append(np.arange(1,ts_days+1,.5))
+         RMS_ts_ends.append(np.shape(xaxis[-1])[0])
+         if print_cc or plot_cc_timeseries:
+            CC_Temp_dict['Persistence'] = np.zeros(ts_days*2)
+            for time in range(ts_days*2):
+               CC_Temp_dict['Persistence'][time] = np.corrcoef( np.reshape(pers[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)),
+                                                                np.reshape(masked_True_Temp[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)) )[0,1]
+      if plot_climatology == True:
+         clim_RMS = np.sqrt(np.nanmean( np.square(clim[:ts_days*2,:,:,:]-masked_True_Temp[:ts_days*2,:,:,:]), axis=(1,2,3) ))
+         RMS_Temp_dict['Climatology'] = clim_RMS
+         RMS_colors.append('grey')
+         RMS_linestyles.append('dotted')
+         RMS_alphas.append(1)
+         RMS_xaxis.append(np.arange(1,ts_days+1,.5))
+         RMS_ts_ends.append(np.shape(xaxis[-1])[0])
+         if print_cc or plot_cc_timeseries:
+            CC_Temp_dict['Climatology'] = np.zeros(ts_days*2)
+            for time in range(ts_days*2):
+               CC_Temp_dict['Climatology'][time] = np.corrcoef( np.reshape(clim[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)),
+                                                                np.reshape(masked_True_Temp[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)) )[0,1]
+         
    Temp_RMS = np.sqrt(np.nanmean( np.square(masked_Pred_Temp[:my_ts_ends[count],:,:,:]-masked_True_Temp[:my_ts_ends[count],:,:,:]), axis=(1,2,3) ))
    RMS_Temp_dict[labels[count]] = Temp_RMS
 
@@ -156,6 +214,7 @@ for jump in time_jumps:
                                                           np.reshape(masked_True_Temp[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)) )[0,1]
 
    RMS_colors.append(my_colors[count])
+   RMS_linestyles.append(my_linestyles[count])
    RMS_alphas.append(my_alphas[count])
    RMS_xaxis.append(my_xaxis[count])
    RMS_ts_ends.append(my_ts_ends[count])
@@ -193,13 +252,13 @@ if plot_timeseries or plot_rms_timeseries or plot_cc_timeseries or power_spectru
       da_PertTemp = Pert_ds['THETA']
       masked_PertTemp = np.where( da_Temp_mask.values==0, np.nan, da_PertTemp.values )
       Temp_dict[pert] = masked_PertTemp[:ts_days*2]
-      RMS_Temp_dict[pert] =  np.sqrt(np.nanmean( np.square(masked_PertTemp[:ts_days*2,:,:,:]-masked_True_Temp[:ts_days*2,:,:,:]), axis=(1,2,3) ))
+      RMS_Temp_dict[pert] =  np.sqrt(np.nanmean( np.square(masked_PertTemp[:ts_days*2,:,:,:]-True_Temp_12hrly[:ts_days*2,:,:,:]), axis=(1,2,3) ))
    
       if print_cc or plot_cc_timeseries:
          CC_Temp_dict[pert] = np.zeros(ts_days*2)
          for time in range(ts_days*2):
             CC_Temp_dict[pert][time] = np.corrcoef( np.reshape(masked_PertTemp[time,:,:,:][~np.isnan(masked_PertTemp[time,:,:,:])],(-1)),
-                                                             np.reshape(masked_True_Temp[time,:,:,:][~np.isnan(masked_True_Temp[time,:,:,:])],(-1)) )[0,1]
+                                                             np.reshape(True_Temp_12hrly[time,:,:,:][~np.isnan(True_Temp_12hrly[time,:,:,:])],(-1)) )[0,1]
    
       da_PertEta = Pert_ds['ETAN']
       masked_PertEta = np.where( da_Temp_mask.values[0,:,:]==0, np.nan, da_PertEta.values )
@@ -212,16 +271,27 @@ if plot_timeseries or plot_rms_timeseries or plot_cc_timeseries or power_spectru
       TKE_dict[pert] = np.nansum( np.add( np.square(masked_PertU[:ts_days*2]), np.square(masked_PertV[:ts_days*2]) ), axis=(1,2,3) )
 
       colors.append('grey')
+      linestyles.append('solid')
       alphas.append(0.3)
-      xaxis.append(np.arange(0,90,.5))
+      xaxis.append(np.arange(1,91,.5))
       ts_ends.append(np.shape(xaxis[-1])[0])
       RMS_colors.append('grey')
+      RMS_linestyles.append('solid')
       RMS_alphas.append(0.3)
-      RMS_xaxis.append(np.arange(0,90,.5))
+      RMS_xaxis.append(np.arange(1,91,.5))
       RMS_ts_ends.append(np.shape(xaxis[-1])[0])
 
 print(ts_ends)
 print(Temp_dict.keys())
+print(colors)
+print(alphas)
+print(linestyles)
+for ax in xaxis:
+   print(ax.shape)
+print(RMS_Temp_dict.keys())
+print(CC_Temp_dict.keys())
+for ax in RMS_xaxis:
+   print(ax.shape)
 #---------------------------------------
 print('Plotting timeseries at a point')
 #---------------------------------------
@@ -229,7 +299,7 @@ print('Plotting timeseries at a point')
 
 if plot_timeseries: 
    fig = ChnPlt.plt_timeseries( point, ts_ends, Temp_dict, y_label='Temperature ('+u'\xb0'+'C)', colors=colors, alphas=alphas, myfigsize=(20,8),
-                                x_label='number of days', xaxis=xaxis)
+                                x_label='number of days', xaxis=xaxis, linestyles=linestyles, ylim=[2,5.2])
    if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_days)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
@@ -243,7 +313,7 @@ print('plotting spatially averaged RMS timeseries')
 #---------------------------------------------------
 if plot_rms_timeseries:
    fig = ChnPlt.plt_timeseries( [], RMS_ts_ends, RMS_Temp_dict, y_label='Temperature\nRMS error ('+u'\xb0'+'C)',
-                                colors=RMS_colors, alphas=RMS_alphas, ylim=[0,5], x_label='number of days', xaxis=RMS_xaxis )
+                               colors=RMS_colors, alphas=RMS_alphas, ylim=[0,1.2], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
    if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_RMS_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
@@ -257,7 +327,7 @@ print('plotting CC timeseries')
 #-------------------------------
 if plot_cc_timeseries:
    fig = ChnPlt.plt_timeseries( [], RMS_ts_ends, CC_Temp_dict, y_label='Temperature\nCC coeffient ('+u'\xb0'+'C)',
-                                colors=RMS_colors, alphas=RMS_alphas, ylim=[-0.1,1.1], x_label='number of days', xaxis=RMS_xaxis )
+                                colors=RMS_colors, alphas=RMS_alphas, ylim=[-0.1,1.1], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
    if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_CC_timeseries_'+str(ts_days)+'.png',
                   bbox_inches = 'tight', pad_inches = 0.1)
@@ -349,29 +419,29 @@ if power_spectrum:
    #   plt.close()
   
 
-#----------------------------------------------------------
-# Plot timeseries of total ETA and TKE, summed over domain
-#----------------------------------------------------------
-if plot_conserved:
-   fig = ChnPlt.plt_timeseries( [], ts_ends, Mass_dict, y_label='Total SSH Anomoly',
-                                colors=colors, alphas=alphas, ylim=[-5000, 5000], yscale='symlog', x_label='number of days', xaxis=xaxis )
-   if len(time_jumps)==1:
-      plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_Eta.png',
-                  bbox_inches = 'tight', pad_inches = 0.1)
-   else:
-      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_Eta.png',
-                  bbox_inches = 'tight', pad_inches = 0.1)
-   plt.close()
-
-
-   fig = ChnPlt.plt_timeseries( [], ts_ends, TKE_dict, y_label='Total Kinetic Energy',
-                                colors=colors, alphas=alphas, ylim=[0, 150000], x_label='number of days', xaxis=xaxis)
-   if len(time_jumps)==1:
-      plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_TKE.png',
-                  bbox_inches = 'tight', pad_inches = 0.1)
-   else:
-      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_TKE.png',
-                  bbox_inches = 'tight', pad_inches = 0.1)
-   plt.close()
-   
-   
+##----------------------------------------------------------
+## Plot timeseries of total ETA and TKE, summed over domain
+##----------------------------------------------------------
+#if plot_conserved:
+#   fig = ChnPlt.plt_timeseries( [], ts_ends, Mass_dict, y_label='Total SSH Anomoly',
+#                                colors=colors, alphas=alphas, ylim=[-5000, 5000], yscale='symlog', x_label='number of days', xaxis=xaxis )
+#   if len(time_jumps)==1:
+#      plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_Eta.png',
+#                  bbox_inches = 'tight', pad_inches = 0.1)
+#   else:
+#      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_Eta.png',
+#                  bbox_inches = 'tight', pad_inches = 0.1)
+#   plt.close()
+#
+#
+#   fig = ChnPlt.plt_timeseries( [], ts_ends, TKE_dict, y_label='Total Kinetic Energy',
+#                                colors=colors, alphas=alphas, ylim=[0, 150000], x_label='number of days', xaxis=xaxis)
+#   if len(time_jumps)==1:
+#      plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_conservation_TKE.png',
+#                  bbox_inches = 'tight', pad_inches = 0.1)
+#   else:
+#      plt.savefig('../../../Channel_nn_Outputs/DIFF_TIMEJUMP_PLOTS/conservation_TKE.png',
+#                  bbox_inches = 'tight', pad_inches = 0.1)
+#   plt.close()
+#   
+#   

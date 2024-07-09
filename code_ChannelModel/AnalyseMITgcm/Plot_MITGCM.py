@@ -38,8 +38,9 @@ data_filename=datadir + '12hrly_data.nc'
 #data_filename=datadir + '12hrly_small_set.nc'
 grid_filename=datadir + 'grid.nc'
 mon_file = datadir + 'monitor.nc'
-stats_file = datadir + 'Spits_stats.nc'
-rootdir = '../../../MITGCM_Analysis_Channel/'+time_step+'/'
+land='IncLand'
+stats_file = datadir + land+'_stats.nc'
+rootdir = '../../../MITGCM_Analysis_Channel/'+land+'_'+time_step+'/'
 
 
 #-----------------------------------------------
@@ -106,7 +107,8 @@ for level in range(38):
    fig, ax, im = ChnlPlt.plot_depth_fld(np.where(HFacS[level,:,:]>0., ds_stats['MeanVVel'][level,:,:], np.nan), 'Mean Northward Velocity (m/s)', level,
                                         da_X.values, da_Y.values, da_Z.values,
                                         title=None, cmap='PRGn',
-                                        minmax = [-0.1, 0.1], extend='both')
+                                        minmax = [-0.015, 0.015], extend='both')
+                                        #minmax = [-0.1, 0.1], extend='both')
                                         #minmax = [ -max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) ),
                                         #            max( abs(np.amin(ds_stats['MeanVVel'][level,:,:])), np.amax(ds_stats['MeanVVel'][level,:,:]) ) ]   )
    plt.savefig(rootdir+'PLOTS/MeanVVel_z'+str(level)+'.png', bbox_inches = 'tight', pad_inches = 0.1)

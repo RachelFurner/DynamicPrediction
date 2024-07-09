@@ -2,7 +2,7 @@
 # and animating these to scroll through vertical levels. Also to cat together the 4 subplots
 # of fields themselves for a specific time point
 
-dir=/data/hpcdata/users/racfur/DynamicPrediction/MITGCM_Analysis_Channel/12hrs/PLOTS
+dir=/data/hpcdata/users/racfur/DynamicPrediction/MITGCM_Analysis_Channel/IncLand_12hrs/PLOTS
 timeslice=32405
 
 for level in {0..37}

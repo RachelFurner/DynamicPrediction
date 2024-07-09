@@ -30,10 +30,6 @@ def plot_depth_ax(ax, field, x_labels, y_labels, depth_labels, minmax=None, cmap
        min_value = minmax[0]  # Lowest value
        max_value = minmax[1]  # Highest value
 
-    print('RF in plot_depth_ax')
-    print(min_value)
-    print(max_value)
-
     if norm == 'log':
        im = ax.pcolormesh(field[:,:], norm=colors.LogNorm(vmin=min_value, vmax=max_value), cmap=cmap)
     else:
@@ -363,20 +359,21 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
 
    my_legend=[]
    count=0
+   first_pert=True 
+
    for name, dataset in datasets.items():
 
       if len(point) == 0:
-          print(name)
-          print(dataset.shape)
-          print(colors[count])
-          print(lengths[count])
           ii = np.argwhere(np.isnan(dataset[:]))
           if ii.shape[0]==0:
              end=lengths[count]
           else: 
              end=min(np.nanmin(ii),lengths[count])
-          print(end)
           if colors and alphas and linestyles:
+             print(name)
+             print(end)
+             print(xaxis[count].shape)
+             print(dataset[:end].shape)
              ax.plot(xaxis[count], dataset[:end], color=colors[count], alpha=alphas[count], linestyle=linestyles[count])
           elif colors and alphas:
              ax.plot(xaxis[count], dataset[:end], color=colors[count], alpha=alphas[count])
@@ -393,7 +390,9 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
              end=lengths[count]
           else: 
              end=min(np.nanmin(ii),lengths[count])
-          if colors and alphas:
+          if colors and alphas and linestyles:
+             ax.plot(xaxis[count], dataset[:end, point[0]], color=colors[count], alpha=alphas[count], linestyle=linestyles[count])
+          elif colors and alphas:
              ax.plot(xaxis[count], dataset[:end, point[0]], color=colors[count], alpha=alphas[count])
           elif colors:
              ax.plot(xaxis[count], dataset[:end, point[0]], color=colors[count])
@@ -408,7 +407,9 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
              end=lengths[count]
           else: 
              end=min(np.nanmin(ii),lengths[count])
-          if colors and alphas:
+          if colors and alphas and linestyles:
+             ax.plot(xaxis[count], dataset[:end, point[0], point[1]], color=colors[count], alpha=alphas[count], linestyle=linestyles[count])
+          elif colors and alphas:
              ax.plot(xaxis[count], dataset[:end, point[0], point[1]], color=colors[count], alpha=alphas[count])
           elif colors:
              ax.plot(xaxis[count], dataset[:end, point[0], point[1]], color=colors[count])
@@ -423,7 +424,9 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
              end=lengths[count]
           else: 
              end=min(np.nanmin(ii),lengths[count])
-          if colors and alphas:
+          if colors and alphas and linestyles:
+             ax.plot(xaxis[count], dataset[:end, point[0], point[1], point[2]], color=colors[count], alpha=alphas[count], linestyle=linestyles[count])
+          elif colors and alphas:
              ax.plot(xaxis[count], dataset[:end, point[0], point[1], point[2]], color=colors[count], alpha=alphas[count])
           elif colors:
              ax.plot(xaxis[count], dataset[:end, point[0], point[1], point[2]], color=colors[count])
@@ -434,8 +437,12 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
 
       if '50yr_smooth' not in name and 'pert' not in name:
          my_legend.append(name)
+      elif first_pert:
+         my_legend.append('MITgcm ensemble members')
+         first_pert=False
       count=count+1
 
+   #ax.legend(my_legend, loc='lower right')
    ax.legend(my_legend)
    if y_label:
       ax.set_ylabel(y_label)
@@ -443,6 +450,7 @@ def plt_timeseries_ax(ax, point, lengths, datasets, xaxis, ylim=None, y_label=No
       ax.set_xlabel(x_label)
    if ylim:
       ax.set_ylim(ylim)
+   ax.set_xlim(1,90)
    if yscale:
       ax.set_yscale(yscale)
  

@@ -16,23 +16,30 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import netCDF4 as nc4
 
-for_jump = '6hrly'
-#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
-datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_6hr/'
-#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/700yr_WklyOutputting/'
+# -----------------------------------------------------------------------------------------------------------
+# README!!!!!!!!!!!
+# For standard 12 and 24 hour stuff take every step, but for 6 hour take every 2nd - memory faults otherwise
+# So need to manually adapt lines 83 and 127 with or without the 2 stride in slice command.
+# -----------------------------------------------------------------------------------------------------------
+
+for_jump = '12hrly'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_LandSpits/runs/50yr_Cntrl/'
+datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_6hr/'
+#datadir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_24hr/'
 data_filename = datadir + for_jump + '_data.nc'
 #data_filename = datadir + for_jump + '_small_set.nc'
 grid_filename = datadir+'grid.nc'
 
-land = 'IncLand'
+land = 'IncLand'  
 out_filename = datadir+land+'_stats.nc'
 mean_std_file = datadir+land+'_'+for_jump+'_MeanStd.npz'
 
-init=True 
+init=False
 var_range=range(6)
-plotting_histograms = False
+plotting_histograms = True 
 calc_stats = False
-nc_stats = True 
+nc_stats = False
 
 train_split=0.75
 #------------------------
@@ -50,7 +57,7 @@ def plot_histograms(histogram_inputs, varname, file_varname, mean=None, std=None
    ax1.text(0.03, 0.94, 'Mean: '+str(np.format_float_scientific(mean, precision=3)), transform=ax1.transAxes, fontsize=14)
    ax1.text(0.03, 0.90, 'Standard deviation: '+str(np.format_float_scientific(std, precision=3)), transform=ax1.transAxes,fontsize=14)
    ax1.text(0.03, 0.86, 'Range: '+str(np.format_float_scientific(datarange, precision=3)), transform=ax1.transAxes, fontsize=14)
-   plt.savefig('../../../Channel_nn_Outputs/HISTOGRAMS/'+for_jump+'_histogram_'+file_varname+'.png', 
+   plt.savefig('../../../Channel_nn_Outputs/'+land+'_HISTOGRAMS/'+for_jump+'_histogram_'+file_varname+'.png', 
                bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
@@ -78,7 +85,7 @@ if init:
    
    if nc_stats:
       ds_inputs = xr.open_dataset(data_filename)
-      ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']), 2 ) )
+      ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
       if land=='ExcLand':
          ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
          ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
@@ -122,7 +129,7 @@ for var in var_range:
    da_mask = ds_grid[MaskVarName[var]]
 
    ds_inputs = xr.open_dataset(data_filename)
-   ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']), 2 ) )
+   ds_inputs = ds_inputs.isel( T=slice( 0, int(train_split*ds_inputs.dims['T']) ) )
    if land=='ExcLand':
       ds_inputs = ds_inputs.isel( Y=slice( 3, 101) )
       ds_inputs = ds_inputs.isel( Yp1=slice( 3, 102) )
@@ -202,12 +209,12 @@ for var in var_range:
          targets_std   = mean_std_data['arr_4']
          targets_range = mean_std_data['arr_5']
          plot_histograms( (da.values[1:]-da.values[:-1]).reshape(-1), 'Change in '+VarName[var], ShortVarName[var]+'Targets', 
-                           inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
+                           targets_mean[var], targets_std[var], targets_range[var], no_bins)
          # Also plot normed data
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_std[var] ).reshape(-1),
-                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormStd', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormStd', targets_mean[var], targets_std[var], targets_range[var], no_bins)
          plot_histograms( ( ( (da.values[1:]-da.values[:-1]) - targets_mean[var] )/targets_range[var] ).reshape(-1),
-                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormRange', inputs_mean[var], inputs_std[var], inputs_range[var], no_bins)
+                          'Change in '+VarName[var], ShortVarName[var]+'Targets_NormRange', targets_mean[var], targets_std[var], targets_range[var], no_bins)
 
 mean_std_data = np.load(mean_std_file)
 inputs_mean  = mean_std_data['arr_0']
