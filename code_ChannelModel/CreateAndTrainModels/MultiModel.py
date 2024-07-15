@@ -78,8 +78,8 @@ if __name__ == "__main__":
     val_end_ratio = 0.9     # Take validation samples from train_end_ratio to this far through the dataset
  
     if args.predictionjump == '12hrly':
-       #for_len = 180    # How long to iteratively predict for
-       for_len = 500    # How long to iteratively predict for
+       for_len = 180    # How long to iteratively predict for
+       #for_len = 500    # How long to iteratively predict for
        for_subsample = 1
     elif args.predictionjump == 'hrly':
        for_len = 1440   # How long to iteratively predict for
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     elif args.predictionjump == 'wkly':
        for_len = 13     # How long to iteratively predict for
        for_subsample = 1
-    start = 0        # Start from zero to fit with perturbed runs
+    start = 10    
     if args.test:
        for_len = 90     # Test dataset is only 100 long
     

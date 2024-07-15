@@ -93,15 +93,17 @@ if __name__ == "__main__":
     if args.predictionjump == '12hrly':
        for_len = 180    # How long to iteratively predict for
        for_subsample = 1
+       start = 10  # Start from 10 - give MITgcm perturbations a bit of bedding in time
     elif args.predictionjump == '24hrly':
        subsample_rate = int(subsample_rate/2)   #number of time steps to skip over when creating training and test data
        for_len = int(180/2)  # How many steps to iteratively predict for
        for_subsample = 1   
+       start = 5  #  12hr start time / 2
     elif args.predictionjump == '6hrly':
        subsample_rate = int(subsample_rate*2)   #number of time steps to skip over when creating training and test data
        for_len = int(2*180)  # How long to iteratively predict for
        for_subsample = 1 
-    start = 10  # Start from 10 - give MITgcm perturbations a bit of bedding in time
+       start = 20 #  12hr start time * 2
     
     os.environ['PYTHONHASHSEED'] = str(args.seed)
     np.random.seed(args.seed)
@@ -164,12 +166,15 @@ if __name__ == "__main__":
        elif args.land == 'DiffSpits':
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_DiffLandSpits/runs/50yr_Cntrl/'
        else:
+          #MITgcm_dir = '/data/hpcflash/users/racfur/50yr_Cntrl/'
           MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_Cntrl/'
     elif args.predictionjump == '24hrly':
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_24hr/'
     elif args.predictionjump == '6hrly':
        MITgcm_dir = '/data/hpcdata/users/racfur/MITgcm/verification/MundayChannelConfig10km_noSpits/runs/50yr_6hr/'
 
+    #ProcDataFilename = '/data/hpcflash/users/racfur/Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+ \
+    #                   '_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
     ProcDataFilename = MITgcm_dir+'Dataset_'+args.land+args.predictionjump+'_'+args.modelstyle+ \
                        '_histlen'+str(args.histlen)+'_rolllen'+str(args.rolllen)
     if args.test: 

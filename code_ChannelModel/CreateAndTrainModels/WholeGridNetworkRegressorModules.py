@@ -1489,7 +1489,6 @@ def IterativelyPredict(model_name, model_style, MITgcm_filename, Iterate_Dataset
          # Make prediction, for both multi model ensemble, or single model predictions
          if multipredmethod == 'random':
             rand_model = random.randrange(len(h))
-            print('rand_model '+str(rand_model))
             predicted = h[rand_model]( torch.cat( (input_sample, Tmask, Umask, Vmask), dim=channel_dim) ).cpu().detach()
          elif multipredmethod == 'average':
             predicted = h[0]( torch.cat((input_sample, Tmask, Umask, Vmask), dim=channel_dim)).cpu().detach()
