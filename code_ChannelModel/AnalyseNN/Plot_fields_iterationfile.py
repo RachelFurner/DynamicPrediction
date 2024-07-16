@@ -26,13 +26,13 @@ plt.rcParams.update({'font.size': 14})
 # Set variables for this run
 #----------------------------
 level = 2
-dir_name = 'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475'
-#dir_name = 'MultiModel_average_IncLand12hrly_UNet2dtransp_histlen1_rolllen1'
+dir_name = 'IncLand12hrly_UNet2dtransp_histlen1_rolllen3_seed30475'
+#dir_name = 'MultiModel_random_IncLand12hrly_UNet2dtransp_histlen1_rolllen1'
 epochs = '200'
-iteration_len = 180  
+iteration_len = 180
 animation_end = 85   
 model_name = dir_name+'_'+epochs+'epochs'
-filename = model_name+'_simple_smth20stps0'
+filename = model_name+'_simple_smth0stps0'
 
 #-----------
 rootdir = '../../../Channel_nn_Outputs/'+dir_name
@@ -71,7 +71,7 @@ masked_Pred_Eta  = np.where( da_Eta_mask.values==0, np.nan, da_pred_Eta.values )
 #-------------------------------
 # Plot spatial plots to animate
 #-------------------------------
-for time in range(0,animation_end):
+for time in range(0,animation_end,14):
 
    #-----------------------
    # Plot predicted fields

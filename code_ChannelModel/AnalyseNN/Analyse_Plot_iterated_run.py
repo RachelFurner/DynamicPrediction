@@ -53,36 +53,19 @@ smooth_levels = ['0', '0', '0', '0',
                  '20', '0', '0', '0']
 smooth_steps = '0'
 iteration_len = [180, 180, 180, 180, 180, 180, 180, 180]  
-ts_days = 14  
+ts_days = 90  
 my_xaxis = [np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5),
             np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5)]
 my_ts_ends = [ts_days*2, ts_days*2, ts_days*2, ts_days*2, ts_days*2, ts_days*2, ts_days*2, ts_days*2]
 
-dir_names = ['IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'IncLand12hrly_UNetConvLSTM_histlen3_rolllen1_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475',
-             'IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475']
-labels = ['Standard UNet', 'ConvLSTM', 
-          'Smoothed UNet', 'AB2 iterated UNet']
-epochs = ['200', '200', '200', '200']
-iteration_methods = ['simple', 'simple',
-                     'simple', 'AB2']
-smooth_levels = ['0', '0', 
-                 '20', '0']
-smooth_steps = '0'
-iteration_len = [180, 180, 180, 180]  
-ts_days = 90  
-my_xaxis = [np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5), np.arange(1,ts_days+1,.5)]
-my_ts_ends = [ts_days*2, ts_days*2, ts_days*2, ts_days*2]
-
-#dir_names = ['IncLand12hrly_UNet2dtransp_histlen1_rolllen1_seed30475']
-#labels = ['Standard UNet']
+#dir_names = ['MultiModel_average_IncLand12hrly_UNet2dtransp_histlen1_rolllen1']
+#labels = ['Multi-model average']
 #epochs = ['200']
 #iteration_methods = ['simple']
 #smooth_levels = ['0']
 #smooth_steps = '0'
-#iteration_len = [180]  
-#ts_days = 90  
+#iteration_len = [500]  
+#ts_days = 250 
 #my_xaxis = [np.arange(1,ts_days+1,.5)]
 #my_ts_ends = [ts_days*2]
 
@@ -92,10 +75,10 @@ my_linestyles = ['solid', 'solid', 'solid', 'solid', 'solid', 'solid', 'solid', 
 
 plot_timeseries = True   
 plot_rms_timeseries = True 
-print_spatially_av_rms = False
-print_cc = False
+print_spatially_av_rms = True 
+print_cc = True 
 plot_cc_timeseries = True 
-make_animation_plots = False 
+make_animation_plots = False # Plots for thesis come from the other plotting routine.
 power_spectrum = False
 plot_conserved = False
 animation_end = 6*2*7+1
@@ -103,8 +86,8 @@ print_times = [28, 56, 84, 112]  # times to print, in terms of how many 12 hour 
 
 plot_persistence=True 
 plot_climatology=True 
-pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']
-#pert_list = []
+#pert_list = ['50yr_smooth20', '50yr_smooth40', '50yr_smooth60', '50yr_smooth80', '50yr_smooth100', '50yr_smooth125', '50yr_smooth150']
+pert_list = []
 
 #---------------------------
 level = point[0]
@@ -285,7 +268,7 @@ if plot_timeseries or plot_rms_timeseries or plot_cc_timeseries or power_spectru
    for pert in pert_list:
       print(pert)
       pert_file =  pert_main_dir+pert+pert_filename
-      Pert_ds = xr.open_dataset(pert_file).isel( T=slice( 10, int(ts_days*2)+10 ) )
+      Pert_ds = xr.open_dataset(pert_file).isel( T=slice( 11, int(ts_days*2)+11 ) )
    
       da_PertTemp = Pert_ds['THETA']
       masked_PertTemp = np.where( da_Temp_mask.values==0, np.nan, da_PertTemp.values )
@@ -329,7 +312,8 @@ print('Plotting timeseries at a point')
 
 if plot_timeseries: 
    fig = ChnPlt.plt_timeseries( point, ts_ends, Temp_dict, y_label='Temperature ('+u'\xb0'+'C)', colors=colors, alphas=alphas, myfigsize=(20,8),
-                                x_label='number of days', xaxis=xaxis, ylim=[2., 5.2], linestyles=linestyles)
+                                x_label='number of days', xaxis=xaxis, ylim=[1., 6.5], linestyles=linestyles)
+                                #x_label='number of days', xaxis=xaxis, ylim=[2., 5.2], linestyles=linestyles)
                                 #x_label='number of days', xaxis=xaxis, ylim=[2.9,4.0], linestyles=linestyles) #manually force xlim in Channel_model_plotting
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
@@ -344,7 +328,8 @@ print('plotting spatially averaged RMS timeseries')
 #---------------------------------------------------
 if plot_rms_timeseries:
    fig = ChnPlt.plt_timeseries( [], RMS_ts_ends, RMS_Temp_dict, y_label='Temperature\nRMS error ('+u'\xb0'+'C)',
-                                colors=RMS_colors, alphas=RMS_alphas, ylim=[0,1.2], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
+                                colors=RMS_colors, alphas=RMS_alphas, ylim=[0,4.5], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
+                                #colors=RMS_colors, alphas=RMS_alphas, ylim=[0,1.2], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
                                 #colors=RMS_colors, alphas=RMS_alphas, ylim=[0,.5], x_label='number of days', xaxis=RMS_xaxis, linestyles=RMS_linestyles )
    if len(dir_names)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_RMS_timeseries_'+str(ts_days)+'.png',

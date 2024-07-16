@@ -54,7 +54,7 @@ plot_rms_timeseries = True
 print_spatially_av_rms = True 
 print_cc = True 
 plot_cc_timeseries = True 
-make_animation_plots = True  
+make_animation_plots = False # snapshots for thesis come from different script
 power_spectrum = False
 plot_conserved = True 
 animation_end = 6*2*7+1
@@ -247,7 +247,7 @@ if plot_timeseries or plot_rms_timeseries or plot_cc_timeseries or power_spectru
    for pert in pert_list:
       print(pert)
       pert_file =  pert_main_dir+pert+pert_filename
-      Pert_ds = xr.open_dataset(pert_file).isel( T=slice( 0, int(ts_days*2) ) )
+      Pert_ds = xr.open_dataset(pert_file).isel( T=slice( 11, int(ts_days*2)+11 ) )
    
       da_PertTemp = Pert_ds['THETA']
       masked_PertTemp = np.where( da_Temp_mask.values==0, np.nan, da_PertTemp.values )
@@ -299,7 +299,7 @@ print('Plotting timeseries at a point')
 
 if plot_timeseries: 
    fig = ChnPlt.plt_timeseries( point, ts_ends, Temp_dict, y_label='Temperature ('+u'\xb0'+'C)', colors=colors, alphas=alphas, myfigsize=(20,8),
-                                x_label='number of days', xaxis=xaxis, linestyles=linestyles, ylim=[2,5.2])
+                                x_label='number of days', xaxis=xaxis, linestyles=linestyles, ylim=[1,6.5])
    if len(time_jumps)==1:
       plt.savefig(rootdir+'/ITERATED_FORECAST/'+model_name+'_Temp_timeseries_z'+str(point[0])+'y'+str(point[1])+'x'+str(point[2])+
                   '_'+str(ts_days)+'.png', bbox_inches = 'tight', pad_inches = 0.1)
@@ -322,6 +322,14 @@ if plot_rms_timeseries:
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
+   count=0
+   for jump in time_jumps:
+      print('')
+      print('')
+      print(labels[count])
+      print( 'Temp RMS exceeds 0.5 at point; '+str( np.argmax( RMS_Temp_dict[labels[count]] > .5 ) ) )
+      print( 'Temp RMS exceeds 3 at point; '+str( np.argmax( RMS_Temp_dict[labels[count]] > 3. ) ) )
+      count=count+1
 #-------------------------------
 print('plotting CC timeseries')
 #-------------------------------
@@ -336,6 +344,14 @@ if plot_cc_timeseries:
                   bbox_inches = 'tight', pad_inches = 0.1)
    plt.close()
 
+   count=0
+   for jump in time_jumps:
+      print('')
+      print('')
+      print(labels[count])
+      print( 'Temp CC drops below .95 at point; '+str( np.argmax( CC_Temp_dict[labels[count]] < .95 ) ) )
+      print( 'Temp CC drops below .8 at point; '+str( np.argmax( CC_Temp_dict[labels[count]] < .8 ) ) )
+      count=count+1
 ## NEED TO UPDATE PRINTING BITS FOR DIFFERENT TIME STEP RUNS
 ##---------------------------------------------------------------------------
 #print('printing out spatially averaged RMS values for various time points')

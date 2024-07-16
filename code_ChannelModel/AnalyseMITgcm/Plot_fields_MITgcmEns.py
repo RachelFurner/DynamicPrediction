@@ -30,7 +30,7 @@ smooth_levels = ['20', '40', '60', '80', '100', '125', '150']
 level = 2
 iteration_len = 180 
 animation_end = 85   
-times = [14, 28, 56, 84]
+times = [11+14, 11+28, 11+56, 11+84]
 
 plotdir = '/data/hpcdata/users/racfur/DynamicPrediction/MITGCM_Analysis_Channel/PertPlots'
 #------------------------

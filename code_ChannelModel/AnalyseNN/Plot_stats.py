@@ -22,7 +22,7 @@ plt.rcParams.update({'font.size': 14})
 # Set variables for this run
 #----------------------------
 epochs = '200'
-part_dir_name = 'IncLand12hrly_UNet2dtransp_histlen1_rolllen1' 
+part_dir_name = 'IncLand12hrly_UNet2dtransp_histlen1_rolllen3' 
 dir_name = part_dir_name+'_seed30475'
 #dir_name = 'MultiModel_Spits12hrly_UNet2dtransp_histlen1_rolllen1'
 model_name = dir_name+'_'+epochs+'epochs'
